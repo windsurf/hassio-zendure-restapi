@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Enter the IP address of the Zendure device. {note}",
+        "data": {
+          "host": "IP address",
+          "port": "HTTP port"
+        }
+      },
+      "confirm": {
+        "title": "Zendure device found",
+        "description": "Add {model} at {host} (serial {sn})?"
+      }
+    },
+    "error": {
+      "cannot_connect": "No response from the device. Check the IP address and confirm the local API is enabled (add HEMS in the Zendure app, then exit).",
+      "no_identity": "The device answered but reported neither a serial number nor a device id."
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "cannot_connect": "The device did not respond.",
+      "no_identity": "The device reported neither a serial number nor a device id."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling interval",
+        "data": {
+          "scan_interval": "Seconds between polls (1-60)"
+        }
+      }
+    }
+  }
+}
