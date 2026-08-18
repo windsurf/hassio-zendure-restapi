@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
-from .const import CONF_MODEL, DOMAIN, OPT_METER_INVERT, OPT_SOC_PROTECTION
+from .const import CONF_MODEL, DOMAIN, OPT_SOC_PROTECTION
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
 from .settings import ZendureSettings
@@ -104,12 +104,6 @@ SETTING_SWITCHES: tuple[tuple[SwitchEntityDescription, str], ...] = (
         icon="mdi:shield-battery-outline",
         entity_category=EntityCategory.CONFIG,
     ), OPT_SOC_PROTECTION),
-    (SwitchEntityDescription(
-        key="meter_invert",
-        name="Invert meter sign",
-        icon="mdi:plus-minus-variant",
-        entity_category=EntityCategory.CONFIG,
-    ), OPT_METER_INVERT),
 )
 
 
