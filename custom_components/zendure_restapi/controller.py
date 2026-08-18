@@ -43,9 +43,10 @@ from .const import (
     OPT_CHARGE_BUFFER,
     OPT_DISCHARGE_BUFFER,
     OPT_MANUAL_POWER,
+    OPT_MIN_CHARGE_POWER,
+    OPT_MIN_DISCHARGE_POWER,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
-    OPT_METER_INVERT,
     OPT_OPERATION_MODE,
     OPT_SOC_PROTECTION,
     OPT_START_CHARGE_BELOW,
@@ -75,6 +76,7 @@ class ControllerState:
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
 
 
 # Keys through which the device publishes its own power ceiling.
@@ -314,25 +316,56 @@ class ZendureController:
             )
             return
 
+        # A direction the mode forbids is wound down rather than continued.
+        # Adopting whatever the device was doing is what lets a running
+        # direction be reduced to zero; it must not also keep that direction
+        # alive in a mode that rules it out. Observed as smart_charge_only
+        # discharging at 200 W because the device happened to be discharging
+        # when the mode was selected.
+        forbidden = (
+            (self._last_direction == "discharge" and not allow_discharge)
+            or (self._last_direction == "charge" and not allow_charge)
+        )
+        if forbidden:
+            await self._write("inputLimit", 0, data)
+            await self._write("outputLimit", 0, data)
+            self._owns_limits = False
+            released = self._last_direction
+            self._last_direction = "none"
+            self._set_state(
+                "released",
+                f"{released} is not allowed in {mode}, limits cleared",
+                direction="none",
+            )
+            return
+
         # A direction that is already running keeps being balanced, whatever the
         # grid does. The start thresholds gate *starting* a direction, not
         # continuing one — otherwise a load that disappears would leave the
         # battery discharging into the grid, with the controller waiting for an
         # idle state that can never arrive because nothing winds the limit down.
         if self._last_direction == "discharge" and not idle:
-            await self._smart_step(data, charging=False, grid=grid, own=own, idle=idle)
+            await self._smart_step(
+                data, charging=False, grid=grid, own=own, idle=idle,
+            )
             return
         if self._last_direction == "charge" and not idle:
-            await self._smart_step(data, charging=True, grid=grid, own=own, idle=idle)
+            await self._smart_step(
+                data, charging=True, grid=grid, own=own, idle=idle,
+            )
             return
 
         if idle and self._last_direction != "none":
             self._last_direction = "none"
 
         if grid > start_discharge and allow_discharge:
-            await self._smart_step(data, charging=False, grid=grid, own=own, idle=idle)
+            await self._smart_step(
+                data, charging=False, grid=grid, own=own, idle=idle,
+            )
         elif grid < start_charge and allow_charge:
-            await self._smart_step(data, charging=True, grid=grid, own=own, idle=idle)
+            await self._smart_step(
+                data, charging=True, grid=grid, own=own, idle=idle,
+            )
         else:
             self._set_state(
                 "tracking",
@@ -441,6 +474,17 @@ class ZendureController:
 
         target = int(_clamp(raw, 0, cap))
 
+        # A floor may raise the target above what the meter asks for, in every
+        # smart mode. Note what that means for smart_matching: with a discharge
+        # floor of 200 W and a 90 W house, the battery supplies 200 W and the
+        # remainder goes to the grid. Zero-on-the-meter therefore only holds
+        # while both floors are at 0, which is the default.
+        floor = self.settings.get_int(
+            OPT_MIN_CHARGE_POWER if charging else OPT_MIN_DISCHARGE_POWER
+        )
+        if floor > 0 and target < floor:
+            target = int(min(floor, cap))
+
         key = "inputLimit" if charging else "outputLimit"
         current = data.get(key)
         try:
@@ -494,7 +538,12 @@ class ZendureController:
     # ── Readings ─────────────────────────────────────────────────────────
 
     def _meter_power(self) -> float | None:
-        """Signed grid power from the linked meter: positive is import."""
+        """Signed grid power from the linked meter: positive is import.
+
+        The sign is taken as reported. Verified against a second meter on the
+        same connection: 2088 W on the Zendure against 2059 W on the YouLess,
+        both positive while importing.
+        """
         if self.meter is None:
             return None
         if self.meter.last_update_success is False:
@@ -508,8 +557,6 @@ class ZendureController:
         except (TypeError, ValueError):
             return None
 
-        if self.settings.get_bool(OPT_METER_INVERT):
-            power = -power
         return power
 
     def _battery_power(self, data: dict[str, Any]) -> float:
