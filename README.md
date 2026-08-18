@@ -82,7 +82,7 @@ single `select` entity, `Operation mode`:
 
 | Mode | Behaviour |
 |---|---|
-| `standby` | Both limits at zero; after the standby delay, storage drops back to flash |
+| `standby` | Hands off. Reads and reports, writes nothing |
 | `manual` | Follows the `Manual power` number; its sign picks charge or discharge |
 | `smart_matching` | Tracks the grid meter towards zero exchange, both directions |
 | `smart_charge_only` | Absorbs surplus only; never discharges |
@@ -90,7 +90,26 @@ single `select` entity, `Operation mode`:
 | `quick_charge` | Charges at the configured maximum, ignoring the meter |
 | `quick_discharge` | Discharges at the configured maximum, ignoring the meter |
 
-The default is `standby`, so nothing moves until a mode is chosen deliberately.
+The default is `standby`, which reads the device and writes nothing.
+
+### Why standby writes nothing
+
+A zero is still a command. Earlier versions had `standby` write zeros to both limits, and on a
+device running its own energy manager — Zendure's HEMS in self-consumption mode, for instance
+— that produces a fight: the manager sets a discharge limit to cover the house, the
+integration overwrites it with zero on the next poll, the manager sets it back. Measured on
+hardware as a square wave in grid power at the polling interval, with `smartMode` flipping
+between RAM and flash along with it.
+
+`standby` now issues no writes at all. It is checked before SOC protection, because a
+protection that still writes would make "hands off" a lie, and the device guards its own floor
+regardless.
+
+The single exception is on entering `standby`: a limit is cleared once, and only if this
+controller set it. Leaving it behind would not be restraint, it would be abandoning a command
+mid-flight. A limit set by the device's own manager is never touched.
+
+The controller status carries a `writes_enabled` attribute so this is visible at a glance.
 
 ### How the controller runs
 
@@ -103,8 +122,18 @@ The polling interval is therefore also the control interval.
 ### The smart control loop
 
 ```
-target = clamp( (grid_error - battery_power - buffer) * factor , 0 , max_power )
+charging:    target = clamp( (-grid - battery + charge_buffer)    * factor , 0 , max_power )
+discharging: target = clamp( ( grid + battery - discharge_buffer) * factor , 0 , max_power )
 ```
+
+Both buffers mean the same thing: how many watts of grid **import** to aim for. The default is
+5 W on each side, so the loop settles just on the consuming side of zero rather than exactly on
+it. That is deliberate — the two ways of being wrong do not cost the same. Overshooting into
+import wastes the difference between the import tariff and the value of the stored energy;
+undershooting into export gives away energy worth the import tariff for the feed-in rate,
+roughly a third of it. Erring towards a little consumption is about three times cheaper.
+
+Keep each start threshold further from zero than its buffer, or the direction never starts.
 
 Three details do the real work:
 
@@ -112,9 +141,30 @@ Three details do the real work:
 is not yet known, so committing the full correction invites overshoot. Once the direction
 holds, the controller balances at 1.00.
 
-**A new direction only starts from idle**, and only after a two-cycle hold following a
-direction change. Without that, a reading that still contains the old direction gets treated
+**Whether a step is a direction change is read from the device, not from memory.** The
+controller's own record of the last direction is empty after a restart, a reload or a mode
+switch, while the device carries on with the limit it was last given. Treating that as "no
+direction" makes the next cycle look like a fresh start, which then waits for an idle state
+the device cannot reach while it is still executing that very limit. The direction is
+therefore derived from which limit is currently non-zero.
+
+**A new direction only starts from idle**, and only after a settling period following a
+direction change. That period is ten seconds, converted to whole polls at the current
+interval — what matters is how long the device has had to respond, which does not change when
+the polling interval does.
+
+The settling period is abandoned the moment grid power crosses zero against the running
+direction. It exists so a reading that still contains the old direction is not mistaken for a
+fresh deviation; it is not a reason to keep pushing power the wrong way across the meter while
+the load that justified it has gone. Without that, a reading that still contains the old direction gets treated
 as a fresh deviation.
+
+"Idle" is decided primarily by whether the controller is commanding anything, not by measured
+power. An inverter draws its own standby power continuously, so the pack never reads zero: a
+3000 Mix AC+ idles at roughly 41 W of discharge. Testing measured power alone against a small
+band reads that as "still running" forever, and no direction can ever start. When both limits
+are at zero the controller is commanding nothing, so a direction change is safe whatever the
+pack is doing on its own.
 
 **Start thresholds gate starting, not continuing.** A direction that is already running keeps
 being balanced whatever the grid does, so it winds down to zero when the load disappears. If
@@ -154,11 +204,54 @@ tens of thousands of limit writes a year, which is exactly why they must not rea
 | `select` | AC mode (charge/discharge), off-grid mode, reverse flow control, grid standard |
 | `switch` | Skip flash write, forced fan, SOC protection, invert meter sign |
 | `select` (controller) | Operation mode |
-| `number` (controller) | Manual power, max charge/discharge power, start thresholds, buffers, standby delay |
+| `number` (controller) | Manual power, max charge/discharge power, start thresholds, buffers |
 | `sensor` (controller) | Controller status, with the reasoning as attributes |
+| `sensor` (energy) | Energy charged and discharged in kWh; on a meter, imported and exported |
 | `sensor` (P1 meter) | Total power, per-phase apparent power, meter type, protocol type |
 
 ---
+
+## The Energy dashboard
+
+The device reports instantaneous power only. Every payload observed on hardware carries watts
+and no cumulative counter, so the kilowatt-hour totals the Energy dashboard needs are
+integrated here.
+
+| Entity | Source | Feeds |
+|---|---|---|
+| Energy charged | `outputPackPower` | Home battery storage, energy in |
+| Energy discharged | `packInputPower` | Home battery storage, energy out |
+| PV energy | `solarInputPower` | Solar production, if PV is wired to the device |
+| Energy imported / exported | meter `total_power` | Grid consumption and return |
+
+Integration is trapezoidal: each interval uses the average of the previous and current
+reading. With a ten second poll and a load that steps, a left-hand rectangle would attribute
+the whole interval to the old value and a right-hand one to the new; the average splits the
+difference and is exact for any linear ramp. Gaps longer than five minutes are skipped rather
+than bridged, since interpolating across a restart would invent energy that was never
+measured.
+
+All sources are **AC-side** fields — the side the meter shares a connection point with, and
+the side the Energy dashboard reasons about. DC pack readings are deliberately not used here:
+they differ from the AC side by whatever the converter spends on itself, so DC-based counters
+would quietly absorb the conversion loss instead of leaving it visible as the gap between the
+grid figures and the battery figures.
+
+### Conversion efficiency
+
+Two diagnostic sensors surface that loss directly rather than letting it disappear between
+counters. `Charge efficiency` is DC over AC — what reached the cells against what came off the
+grid. `Discharge efficiency` is AC over DC — what reached the house against what left the
+cells. Only packs in the matching state contribute, so a mixed bank does not dilute the ratio
+with cells that are idle.
+
+Expect roughly 94–95% at meaningful power. The figure drops sharply at low power, because the
+converter's own consumption is close to constant: at 122 W of output it costs around 41 W, so
+efficiency falls to about 75%. That is not an error in the measurement, it is the reason
+trickle-discharging is expensive.
+
+Totals persist across restarts and are never reset on reload — the Energy dashboard reads a
+drop as a meter replacement and would double-count the difference.
 
 ## Notes on correctness
 
@@ -179,9 +272,15 @@ values of 1000 and 100 mean 100.0% and 10.0%.
 nothing observed contradicts it — but treat that bound as unverified, since the document has
 already proven wrong about the neighbouring field.
 
-**Power ceilings** are read from the device rather than hard-coded: `chargeMaxLimit` bounds
-the charge limit and `inverseMaxPower` bounds the output limit. On the 3000 Mix AC+ both are
-800 W.
+**Power ceilings** come in two layers, and they are not duplicates.
+
+| | Where it lives | What it bounds |
+|---|---|---|
+| `Charge power limit`, `Inverter power limit` | on the device, same values the Zendure app sets | everything, including whatever the app or an on-device manager does |
+| `Max charge power`, `Max discharge power` | controller settings in the config entry | only what this integration writes |
+
+The controller uses the lower of the two. Both device ceilings are writable, so the app is not
+needed to change them.
 
 **Pack current** (`batcur`) is a 16-bit two's complement value in deciampere. Read as an
 unsigned integer it turns every discharge into roughly 6500 A. The integration converts to
@@ -218,6 +317,87 @@ and the properties can be mapped in the next release.
 ---
 
 ## Changelog
+
+### v0.5.4
+
+- **The settling period no longer blocks winding down.** Observed on hardware: a 2200 W load
+  switched on, the controller correctly set a matching discharge limit, the load then
+  disappeared, and the battery pushed 2200 W into the grid for twenty seconds because the
+  controller was holding and did nothing at all. The hold is now abandoned as soon as grid
+  power crosses zero against the running direction. A hold protects against acting on a stale
+  reading; it should never protect against reacting to the load disappearing.
+
+### v0.5.3
+
+- **Fixed a nonsensical status message.** The direction hold decremented its counter before
+  reporting it, so the final waiting cycle announced "0 cycles left" while still skipping that
+  cycle. It now reports before counting down, and gets the singular right.
+- **The hold is now measured in seconds, not cycles.** Two cycles was inherited from a
+  reference implementation polling every 5 seconds. At a 10 second interval that silently
+  became 20 seconds of doing nothing after every direction change. The settling time is 10
+  seconds, converted to whole polls at whatever interval is configured.
+
+### v0.5.2
+
+- **Removed the `passive` mode.** With `standby` no longer writing anything, the two were
+  nearly identical, and the difference favoured `standby`: switching from a smart mode into
+  `passive` left the controller's own limit running indefinitely, with nothing left to adjust
+  it. `standby` releases that limit once and is then equally hands-off.
+- A stored operation mode that no longer exists falls back to the default rather than leaving
+  the select showing a value it cannot offer.
+
+### v0.5.1
+
+- **Fixed: smart modes deadlocked after any restart.** Whether a step counted as a direction
+  change was decided from the controller's internal memory. That memory is empty after a
+  Home Assistant restart, an integration reload or a mode switch, while the device carries on
+  discharging. Every cycle then looked like a fresh start and waited for an idle state that
+  could not arrive, because the device's own draw exceeded the deadband precisely while
+  executing the limit it had been given. Direction is now derived from which limit is
+  non-zero on the device.
+- On adopting a running direction, the controller also claims ownership of that limit, so
+  switching to `standby` still releases it.
+- `smartMode` is now set to 1 at the top of every smart cycle rather than only inside the
+  write path. The device reverts it to 0 across a reboot, and the deadlock above meant the
+  write path was never reached, so limit writes were landing in flash.
+
+### v0.5.0
+
+- **New `passive` mode, and it is now the default.** Reads the device and issues no writes at
+  all. It is evaluated before every other branch, including SOC protection, so nothing can
+  break the read-only guarantee.
+- Rationale: no previous mode left the device alone. `standby` wrote zeros to both limits and
+  released `smartMode` to flash, and `manual` at 0 W wrote zeros too. A zero is a command. On
+  a device running its own energy manager that produced a sustained fight — the manager
+  setting a discharge limit, this integration zeroing it a poll later, repeatedly — visible as
+  a square wave in grid power and as `smartMode` flipping between RAM and flash.
+- `standby` keeps its meaning: an active stop that overrides whatever else is driving.
+- Controller status gained a `writes_enabled` attribute.
+
+### v0.4.2
+
+- **Fixed: stale readings outside the smart modes.** Meter and battery power were refreshed
+  only on the smart path, so `quick`, `manual` and `standby` kept showing whatever the loop
+  last saw. A stale negative battery power reads as "charging" while the device is discharging,
+  which is worse than showing nothing. Both are now read every cycle, in every mode.
+- **The power ceiling is now the lower of the setting and the device.** With a max discharge
+  setting of 3600 W against an `inverseMaxPower` of 2400 W, the reported target was a number
+  the hardware could never reach. Charge is capped by `chargeMaxLimit`, discharge by
+  `inverseMaxPower`.
+
+### v0.4.1
+
+- **Fixed: discharging never started.** The idle test compared measured pack power against a
+  30 W band, but the inverter's own standby draw is around 41 W, so the battery never read as
+  idle and no direction could begin. Idle is now decided primarily by whether the controller
+  is commanding anything: both limits at zero means a direction change is safe regardless of
+  standby draw. The measured-power band is kept as a secondary test and widened to 60 W.
+- Charging appeared to work only because SOC protection bypasses the idle test entirely, so
+  the visible behaviour was protection charging at maximum, not the control loop.
+- The opposite limit is now cleared before `acMode` switches, so the device is never briefly
+  holding a limit belonging to the direction it just left.
+- Controller status gained `idle`, `commanded_limit` and `last_direction` attributes, which is
+  what made this diagnosable from a single report.
 
 ### v0.4.0
 
