@@ -50,8 +50,8 @@ from .const import (
     OPT_MIN_DISCHARGE_POWER,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
-    OPT_START_CHARGE_BELOW,
-    OPT_START_DISCHARGE_ABOVE,
+    OPT_START_CHARGE_AT,
+    OPT_START_DISCHARGE_AT,
 )
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
@@ -270,8 +270,8 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         icon="mdi:battery-arrow-down-outline",
     ), OPT_MAX_DISCHARGE_POWER),
     (ZendureNumberDescription(
-        key="start_discharge_above",
-        name="Start discharging above",
+        key="start_discharge_at",
+        name="Start discharging at import",
         native_unit_of_measurement=UnitOfPower.WATT,
         native_min_value=0,
         native_max_value=1000,
@@ -279,18 +279,18 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
         icon="mdi:transmission-tower-import",
-    ), OPT_START_DISCHARGE_ABOVE),
+    ), OPT_START_DISCHARGE_AT),
     (ZendureNumberDescription(
-        key="start_charge_below",
-        name="Start charging below",
+        key="start_charge_at",
+        name="Start charging at export",
         native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=-1000,
-        native_max_value=0,
+        native_min_value=0,
+        native_max_value=1000,
         native_step=5,
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
         icon="mdi:transmission-tower-export",
-    ), OPT_START_CHARGE_BELOW),
+    ), OPT_START_CHARGE_AT),
     (ZendureNumberDescription(
         key="min_charge_power",
         name="Min charge power",
