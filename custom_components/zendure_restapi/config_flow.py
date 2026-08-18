@@ -200,13 +200,23 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class ZendureOptionsFlow(config_entries.OptionsFlow):
-    """Adjust the polling interval without removing the device."""
+    """Adjust the polling interval without removing the device.
+
+    The entry options hold more than this form shows: the controller keeps its
+    operation mode, power ceilings, thresholds and buffers there too. An
+    options flow replaces the entire options dict rather than merging into it,
+    so submitting this form with only the interval in it would silently reset
+    every controller setting to its default, including dropping the operation
+    mode back to standby. Everything not on the form is therefore carried
+    forward explicitly.
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            merged = {**self.config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=merged)
 
         current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         schema = vol.Schema(
