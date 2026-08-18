@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "0.4.0"
+INTEGRATION_VERSION = "0.9.2"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -77,6 +77,10 @@ OPERATION_MODES = (
     MODE_QUICK_DISCHARGE,
 )
 
+# The mode that writes nothing at all. Anything that touches the device, even
+# writing a zero, is a command, and a device with its own energy manager will
+# fight it. Passive is the only genuinely read-only state.
+
 # Modes in which the closed-loop controller tracks the meter.
 SMART_MODES = frozenset({MODE_SMART_MATCHING, MODE_SMART_DISCHARGE, MODE_SMART_CHARGE})
 
@@ -93,20 +97,18 @@ OPT_START_DISCHARGE_ABOVE = "start_discharge_above"
 OPT_START_CHARGE_BELOW = "start_charge_below"
 OPT_CHARGE_BUFFER = "charge_buffer"
 OPT_DISCHARGE_BUFFER = "discharge_buffer"
-OPT_STANDBY_DELAY = "standby_delay"
 OPT_SOC_PROTECTION = "soc_protection"
 OPT_METER_INVERT = "meter_invert"
 
 DEFAULTS = {
-    OPT_OPERATION_MODE: MODE_STANDBY,   # nothing moves until explicitly chosen
+    OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
     OPT_MANUAL_POWER: 0,
     OPT_MAX_CHARGE_POWER: 800,
     OPT_MAX_DISCHARGE_POWER: 800,
     OPT_START_DISCHARGE_ABOVE: 30,      # W of import before discharging starts
     OPT_START_CHARGE_BELOW: -50,        # W of export before charging starts
-    OPT_CHARGE_BUFFER: 50,              # leave this much import while charging
-    OPT_DISCHARGE_BUFFER: 5,            # leave this much import while discharging
-    OPT_STANDBY_DELAY: 5,               # minutes of idling before full standby
+    OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
+    OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
     OPT_SOC_PROTECTION: True,
     OPT_METER_INVERT: False,
 }
@@ -118,14 +120,22 @@ DEFAULTS = {
 CONTROL_FACTOR_START = 0.75
 CONTROL_FACTOR_BALANCE = 1.00
 
-# Only start a new direction while the battery is genuinely idle.
-CONTROL_DEADBAND = 30           # W
+# Only start a new direction while the battery is genuinely idle. The measured
+# power is the weaker of the two tests: an inverter draws its own standby power
+# continuously, so the pack never reads zero. A 3000 Mix AC+ idles at roughly
+# 41 W of discharge, which a 30 W band reads as "still running" forever.
+# The primary test is therefore whether the controller is commanding anything.
+CONTROL_DEADBAND = 60           # W
 
 # Ignore adjustments smaller than this, to avoid pointless writes.
 CONTROL_MIN_STEP = 10           # W
 
-# Cycles to wait after a direction change before acting again.
-CONTROL_DIRECTION_HOLD = 2
+# Settling time after a direction change, before the controller acts again.
+# Expressed in seconds rather than cycles: the reading that matters is how long
+# the device has had to respond, which does not change when the polling
+# interval does. Counting cycles instead made the wait 10 s at a 5 s interval
+# and 20 s at a 10 s interval, for no reason related to the hardware.
+CONTROL_DIRECTION_HOLD_SECONDS = 10
 
 # Meter data older than this is not trusted for closed-loop control.
 METER_MAX_AGE = 60              # seconds
