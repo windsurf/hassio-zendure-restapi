@@ -7,6 +7,11 @@ against a live SolarFlow 3000 Mix AC+:
   percent. Live values were 1000 and 100, meaning 100.0% and 10.0%. The
   document lists the ranges as 70-100 and 0-50, which would have put both
   readings far outside the entity range.
+* Two ceilings exist per direction and they are not duplicates. ``chargeMaxLimit`` and
+  ``inverseMaxPower`` live on the device and are what the Zendure app sets; they persist and
+  bound everything, including whatever the app or an on-device manager does. ``Max charge
+  power`` and ``Max discharge power`` are controller settings and bound only what this
+  integration writes. The controller uses the lower of the two.
 * Power ceilings are device specific. Rather than hard-coding one, the maximum
   is read from the device where it publishes one: ``chargeMaxLimit`` for the
   charge side and ``inverseMaxPower`` for the discharge side. On the 3000 Mix
@@ -39,7 +44,6 @@ from .const import (
     OPT_MANUAL_POWER,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
-    OPT_STANDBY_DELAY,
     OPT_START_CHARGE_BELOW,
     OPT_START_DISCHARGE_ABOVE,
 )
@@ -86,6 +90,18 @@ NUMBERS: tuple[ZendureNumberDescription, ...] = (
         mode=NumberMode.BOX,
         icon="mdi:battery-arrow-down",
         max_key="inverseMaxPower",
+    ),
+    ZendureNumberDescription(
+        key="chargeMaxLimit",
+        name="Charge power limit",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
+        native_min_value=0,
+        native_max_value=3600,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:speedometer",
     ),
     ZendureNumberDescription(
         key="inverseMaxPower",
@@ -273,33 +289,26 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         key="charge_buffer",
         name="Charge buffer",
         native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=200,
         native_step=5,
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
+        icon="mdi:target",
     ), OPT_CHARGE_BUFFER),
     (ZendureNumberDescription(
         key="discharge_buffer",
         name="Discharge buffer",
         native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=200,
         native_step=5,
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
+        icon="mdi:target",
     ), OPT_DISCHARGE_BUFFER),
-    (ZendureNumberDescription(
-        key="standby_delay",
-        name="Standby delay",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
-        native_min_value=0,
-        native_max_value=120,
-        native_step=1,
-        mode=NumberMode.BOX,
-        entity_category=EntityCategory.CONFIG,
-        icon="mdi:sleep",
-    ), OPT_STANDBY_DELAY),
 )
 
 
