@@ -711,3 +711,4 @@ class ZendureEfficiencySensor(ZendureEntity, SensorEntity):
         # Discharging: the house receives less than the cells gave up.
         ratio = (dc / ac) if description.pack_state == 1 else (ac / dc)
         return round(min(100.0, max(0.0, ratio * 100.0)), 1)
+
