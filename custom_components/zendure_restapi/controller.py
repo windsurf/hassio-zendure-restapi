@@ -29,7 +29,7 @@ from .const import (
     AC_MODE_CHARGE,
     AC_MODE_DISCHARGE,
     CONTROL_DEADBAND,
-    CONTROL_DIRECTION_HOLD,
+    CONTROL_DIRECTION_HOLD_SECONDS,
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
@@ -48,7 +48,6 @@ from .const import (
     OPT_METER_INVERT,
     OPT_OPERATION_MODE,
     OPT_SOC_PROTECTION,
-    OPT_STANDBY_DELAY,
     OPT_START_CHARGE_BELOW,
     OPT_START_DISCHARGE_ABOVE,
     SMART_MODES,
@@ -78,6 +77,10 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+# Keys through which the device publishes its own power ceiling.
+DEVICE_CAP_KEY = {True: "chargeMaxLimit", False: "inverseMaxPower"}
+
+
 class ZendureController:
     """Turns an operation mode into device writes."""
 
@@ -93,6 +96,11 @@ class ZendureController:
 
         self._busy = False
         self._hold = 0
+        self._idle_flag = True
+        self._commanded = 0
+        # Whether the limit currently on the device was set by this controller.
+        # Only what we set ourselves may be cleared on the way to standby.
+        self._owns_limits = False
         self._last_direction = "none"
         self._idle_since: Any = None
 
@@ -134,6 +142,14 @@ class ZendureController:
 
         mode = self.settings.get(OPT_OPERATION_MODE)
 
+
+        # Refresh the readings on every cycle, in every mode. Updating them only
+        # on the smart path left quick, manual and standby showing whatever the
+        # loop last saw, which is worse than showing nothing: a stale negative
+        # battery power reads as "charging" while the device is discharging.
+        self.state.meter_power = self._meter_power()
+        self.state.battery_power = self._battery_power(data)
+
         # SOC protection outranks every mode: a pack below its own floor is
         # charged regardless of what the strategy would prefer.
         if await self._handle_soc_protection(data, mode):
@@ -161,6 +177,10 @@ class ZendureController:
         if mode in (MODE_QUICK_DISCHARGE, MODE_MANUAL):
             # Explicit user intent; protection would fight the operator.
             return False
+        if mode == MODE_STANDBY:
+            # Standby means hands off, and a protection that still writes would
+            # make that a lie. The device guards its own floor regardless.
+            return False
 
         soc = data.get("electricLevel")
         floor = data.get("minSoc")
@@ -173,7 +193,7 @@ class ZendureController:
         except (TypeError, ValueError):
             return False
 
-        limit = self.settings.get_int(OPT_MAX_CHARGE_POWER)
+        limit = self._cap(data, charging=True)
         await self._write_direction(data, AC_MODE_CHARGE, limit)
         self._set_state(
             "protecting",
@@ -186,24 +206,27 @@ class ZendureController:
     # ── Modes ────────────────────────────────────────────────────────────
 
     async def _apply_standby(self, data: dict[str, Any]) -> None:
-        """Zero both limits, then drop to flash after the idle delay."""
-        await self._write("inputLimit", 0, data)
-        await self._write("outputLimit", 0, data)
+        """Hands off. The controller reads and reports, and writes nothing.
 
-        delay = self.settings.get_int(OPT_STANDBY_DELAY)
-        now = dt_util.utcnow()
-        if self._idle_since is None:
-            self._idle_since = now
+        This matters when the device runs its own energy manager. A standby
+        that keeps forcing both limits to zero does not stand by at all: it
+        overrules the on-device manager on every poll, the manager restores its
+        setpoint a second later, and the pair oscillate at the polling period.
 
-        idle_minutes = (now - self._idle_since).total_seconds() / 60.0
-        if delay > 0 and idle_minutes >= delay and data.get("smartMode") == 1:
-            # Leaving RAM mode lets the device settle its own state and cuts
-            # standby draw. Writes are rare here, so flash wear is not a worry.
-            await self._write("smartMode", 0, data)
-            self._set_state("standby", f"idle {int(idle_minutes)} min, storage to flash")
+        The one exception is a single cleanup on entering standby, and only for
+        a limit this controller set itself. Leaving that behind would not be
+        restraint, it would be abandoning a command mid-flight.
+        """
+        if self._owns_limits:
+            await self._write("inputLimit", 0, data)
+            await self._write("outputLimit", 0, data)
+            self._owns_limits = False
+            self._last_direction = "none"
+            self._set_state("standby", "released own limits, now passive")
             return
 
-        self._set_state("standby", "limits at zero")
+        self._set_state("standby", "passive, writing nothing")
+
 
     async def _apply_manual(self, data: dict[str, Any]) -> None:
         """Follow the manual power setpoint; its sign picks the direction."""
@@ -215,9 +238,7 @@ class ZendureController:
             return
 
         charging = power > 0
-        cap = self.settings.get_int(
-            OPT_MAX_CHARGE_POWER if charging else OPT_MAX_DISCHARGE_POWER
-        )
+        cap = self._cap(data, charging)
         limit = int(_clamp(abs(power), 0, cap))
         await self._write_direction(
             data, AC_MODE_CHARGE if charging else AC_MODE_DISCHARGE, limit
@@ -231,9 +252,7 @@ class ZendureController:
 
     async def _apply_quick(self, data: dict[str, Any], charging: bool) -> None:
         """Charge or discharge at the configured maximum, ignoring the meter."""
-        cap = self.settings.get_int(
-            OPT_MAX_CHARGE_POWER if charging else OPT_MAX_DISCHARGE_POWER
-        )
+        cap = self._cap(data, charging)
         await self._write_direction(
             data, AC_MODE_CHARGE if charging else AC_MODE_DISCHARGE, cap
         )
@@ -255,8 +274,18 @@ class ZendureController:
             return
 
         own = self._battery_power(data)
-        self.state.meter_power = grid
-        self.state.battery_power = own
+
+        # Adopt whatever the device is already doing before deciding anything.
+        if self._last_direction == "none":
+            adopted = self._device_direction(data)
+            if adopted != "none":
+                self._last_direction = adopted
+                self._owns_limits = True
+
+        # Frequent limit writes are coming; keep them out of flash. The device
+        # reverts smartMode to 0 across a reboot, so this cannot be assumed.
+        if data.get("smartMode") != 1:
+            await self._write("smartMode", 1, data)
 
         allow_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
         allow_discharge = mode in (MODE_SMART_MATCHING, MODE_SMART_DISCHARGE)
@@ -264,10 +293,25 @@ class ZendureController:
         start_discharge = self.settings.get_int(OPT_START_DISCHARGE_ABOVE)
         start_charge = self.settings.get_int(OPT_START_CHARGE_BELOW)
 
-        idle = abs(own) < CONTROL_DEADBAND
+        idle = self._is_idle(data, own)
+
+        # The settling period exists so a reading that still contains the old
+        # direction is not treated as a fresh deviation. It is not a reason to
+        # ignore the grid swinging hard the other way: that is not noise, it is
+        # the load disappearing, and every cycle spent holding is a cycle spent
+        # pushing power the wrong way across the meter.
+        if self._hold > 0 and self._wrong_way(grid):
+            self._hold = 0
+
         if self._hold > 0:
+            # Report first, then count down. The other order announces "0 left"
+            # on a cycle it still skips, which reads as a contradiction.
+            remaining = self._hold
             self._hold -= 1
-            self._set_state("holding", f"direction hold, {self._hold} cycles left")
+            unit = "cycle" if remaining == 1 else "cycles"
+            self._set_state(
+                "holding", f"settling after direction change, {remaining} {unit} to go"
+            )
             return
 
         # A direction that is already running keeps being balanced, whatever the
@@ -296,6 +340,63 @@ class ZendureController:
                 direction="none",
             )
 
+    def _wrong_way(self, grid: float) -> bool:
+        """Whether the grid has crossed zero against the running direction."""
+        if self._last_direction == "discharge":
+            return grid < 0
+        if self._last_direction == "charge":
+            return grid > 0
+        return False
+
+    def _hold_cycles(self) -> int:
+        """How many polls make up the settling time, at the current interval."""
+        interval = self.coordinator.update_interval
+        seconds = interval.total_seconds() if interval else 10.0
+        if seconds <= 0:
+            return 1
+        return max(1, round(CONTROL_DIRECTION_HOLD_SECONDS / seconds))
+
+    def _device_direction(self, data: dict[str, Any]) -> str:
+        """Which direction the device is actually set to, right now.
+
+        Internal memory of the last direction is not the same thing. After a
+        Home Assistant restart, an integration reload or a mode switch, that
+        memory is empty while the device carries on with the limit it was last
+        given. Treating that as "no direction" makes the next cycle look like a
+        fresh start, which then waits for an idle state the device cannot reach
+        while it is still executing that very limit.
+        """
+        def as_int(key: str) -> int:
+            try:
+                return int(data.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        if as_int("outputLimit") > 0:
+            return "discharge"
+        if as_int("inputLimit") > 0:
+            return "charge"
+        return "none"
+
+    def _is_idle(self, data: dict[str, Any], own: float) -> bool:
+        """Whether a direction change is safe right now.
+
+        Two tests, and the first one carries the weight. If both limits are at
+        zero the controller is not commanding anything, so whatever the pack is
+        doing is its own standby behaviour and a direction change cannot
+        conflict with an outstanding command. Only when a limit is actually set
+        does the measured power decide.
+        """
+        commanded = 0
+        for key in ("inputLimit", "outputLimit"):
+            try:
+                commanded = max(commanded, int(data.get(key) or 0))
+            except (TypeError, ValueError):
+                pass
+        self._commanded = commanded
+        self._idle_flag = commanded == 0 or abs(own) < CONTROL_DEADBAND
+        return self._idle_flag
+
     async def _smart_step(
         self,
         data: dict[str, Any],
@@ -306,7 +407,9 @@ class ZendureController:
     ) -> None:
         """Compute and apply one correction."""
         direction = "charge" if charging else "discharge"
-        starting = self._last_direction != direction
+        # Whether this is a genuine direction change is a property of the
+        # device, not of what this controller remembers doing.
+        starting = self._device_direction(data) != direction
 
         if starting and not idle:
             # A direction change while the battery is still moving power would
@@ -321,15 +424,19 @@ class ZendureController:
         buffer = self.settings.get_int(
             OPT_CHARGE_BUFFER if charging else OPT_DISCHARGE_BUFFER
         )
-        cap = self.settings.get_int(
-            OPT_MAX_CHARGE_POWER if charging else OPT_MAX_DISCHARGE_POWER
-        )
+        cap = self._cap(data, charging)
 
+        # Both buffers mean the same thing: how many watts of grid import to
+        # aim for. Earlier versions subtracted the buffer in both branches,
+        # which made the charging side aim for that many watts of *export*
+        # instead, under the same name. A little import is the cheaper way to
+        # be wrong: exported energy earns the feed-in rate, while the same
+        # energy kept in the battery is worth the import tariff.
         if charging:
-            # grid is negative (export); soak up the surplus minus the buffer.
-            raw = (-grid - own - buffer) * factor
+            # grid is negative (export); soak up the surplus, leaving buffer.
+            raw = (-grid - own + buffer) * factor
         else:
-            # grid is positive (import); cover it minus the buffer.
+            # grid is positive (import); cover it down to buffer.
             raw = (grid + own - buffer) * factor
 
         target = int(_clamp(raw, 0, cap))
@@ -355,7 +462,7 @@ class ZendureController:
         )
 
         if starting:
-            self._hold = CONTROL_DIRECTION_HOLD
+            self._hold = self._hold_cycles()
         self._last_direction = direction if target > 0 else "none"
         self._idle_since = None
 
@@ -365,6 +472,24 @@ class ZendureController:
             target=target,
             direction=direction,
         )
+
+    def _cap(self, data: dict[str, Any], charging: bool) -> int:
+        """Effective power ceiling: the lower of the setting and the device.
+
+        Writing a limit the hardware cannot honour is not harmful — the device
+        clamps it — but it makes the reported target a number that can never be
+        reached, which is misleading when reading the dashboard.
+        """
+        setting = self.settings.get_int(
+            OPT_MAX_CHARGE_POWER if charging else OPT_MAX_DISCHARGE_POWER
+        )
+        try:
+            device = int(data.get(DEVICE_CAP_KEY[charging]) or 0)
+        except (TypeError, ValueError):
+            device = 0
+        if device > 0:
+            return min(setting, device)
+        return setting
 
     # ── Readings ─────────────────────────────────────────────────────────
 
@@ -388,13 +513,30 @@ class ZendureController:
         return power
 
     def _battery_power(self, data: dict[str, Any]) -> float:
-        """Signed battery power: positive while discharging into the house.
+        """Signed battery power as the grid sees it: positive while discharging.
 
-        Measured on the DC side, because the AC-side fields have been observed
-        to mirror the setpoint rather than the actual flow. That costs a few
-        percent of conversion loss in the estimate, which the closed loop
-        corrects on the following cycle.
+        Read on the AC side, because that is the side the meter shares a
+        connection point with. The DC pack reading is larger by the converter's
+        own consumption, and folding that into the loop leaves a permanent
+        offset: the controller subtracts watts that never reached the house, so
+        it settles with the grid exporting by roughly the conversion loss
+        instead of importing by the buffer.
+
+        Observed on hardware: pack power 163 W while the house received 122 W
+        and the grid sat at -4 W. The 41 W difference is the converter running
+        itself, and it does not belong in a grid-referenced calculation.
+
+        The DC pack reading remains the fallback for a device that does not
+        report the AC fields.
         """
+        home = data.get("outputHomePower")
+        grid_in = data.get("gridInputPower")
+        if home is not None or grid_in is not None:
+            try:
+                return float(home or 0) - float(grid_in or 0)
+            except (TypeError, ValueError):
+                pass
+
         power = data.get("pack1.power")
         current = data.get("pack1.batcur")
         try:
@@ -412,6 +554,7 @@ class ZendureController:
 
         return -magnitude if charging else magnitude
 
+
     # ── Writes ───────────────────────────────────────────────────────────
 
     async def _write_direction(
@@ -426,15 +569,20 @@ class ZendureController:
         if data.get("smartMode") != 1:
             await self._write("smartMode", 1, data)
 
-        if data.get("acMode") != ac_mode:
-            await self._write("acMode", ac_mode, data)
-
         target_key = key or ("inputLimit" if ac_mode == AC_MODE_CHARGE else "outputLimit")
         other_key = "outputLimit" if target_key == "inputLimit" else "inputLimit"
 
+        # Clear the opposite limit before switching direction, so the device is
+        # never briefly holding a limit that belongs to the direction it just
+        # left.
         if data.get(other_key) not in (0, "0"):
             await self._write(other_key, 0, data)
+
+        if data.get("acMode") != ac_mode:
+            await self._write("acMode", ac_mode, data)
+
         await self._write(target_key, limit, data)
+        self._owns_limits = limit > 0
 
     async def _write(self, key: str, value: Any, data: dict[str, Any]) -> None:
         """Write one property, skipping no-ops."""
@@ -470,4 +618,8 @@ class ZendureController:
             "battery_power": self.state.battery_power,
             "hold_cycles": self._hold,
             "mode": self.settings.get(OPT_OPERATION_MODE),
+            "idle": self._idle_flag,
+            "commanded_limit": self._commanded,
+            "last_direction": self._last_direction,
+            "writes_enabled": self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY,
         }
