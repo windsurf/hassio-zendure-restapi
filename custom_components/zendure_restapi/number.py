@@ -1,22 +1,26 @@
 """Number platform for the Zendure RestAPI integration.
 
-Two corrections relative to the zenSDK document, both found by comparing it
-against a live SolarFlow 3000 Mix AC+:
+Three things the zenSDK document gets wrong or leaves out, all found by
+comparing it against a live SolarFlow 3000 Mix AC+.
 
-* ``socSet`` and ``minSoc`` are stored in tenths of a percent, not whole
-  percent. Live values were 1000 and 100, meaning 100.0% and 10.0%. The
-  document lists the ranges as 70-100 and 0-50, which would have put both
-  readings far outside the entity range.
-* Two ceilings exist per direction and they are not duplicates. ``chargeMaxLimit`` and
-  ``inverseMaxPower`` live on the device and are what the Zendure app sets; they persist and
-  bound everything, including whatever the app or an on-device manager does. ``Max charge
-  power`` and ``Max discharge power`` are controller settings and bound only what this
-  integration writes. The controller uses the lower of the two.
-* Power ceilings are device specific. Rather than hard-coding one, the maximum
-  is read from the device where it publishes one: ``chargeMaxLimit`` for the
-  charge side and ``inverseMaxPower`` for the discharge side. On the 3000 Mix
-  AC+ both report 800 W, so a fixed 3600 W ceiling would have offered settings
-  the hardware cannot honour.
+**Scaling.** ``socSet`` and ``minSoc`` are stored in tenths of a percent, not
+whole percent: live values of 1000 and 100 mean 100.0% and 10.0%. The document
+also gives ``minSoc`` a range of 0-50, which a second sample reading 800 (80%)
+disproved. The range used here is 0-100.
+
+**Two ceilings per direction, and they are not duplicates.** ``chargeMaxLimit``
+and ``inverseMaxPower`` live on the device and are what the Zendure app sets.
+They persist and bound everything, including whatever the app or an on-device
+manager does. ``Max charge power`` and ``Max discharge power`` are controller
+settings and bound only what this integration writes. The controller uses the
+lower of the two, which is why both are kept: the device ceiling remains a hard
+limit at moments when this integration is not running.
+
+**Ceilings are read from the device, not hard-coded.** ``chargeMaxLimit`` bounds
+the charge side and ``inverseMaxPower`` the discharge side. Both are writable,
+so the app is not needed to change them. Their values differ per device and per
+configuration — on one installation they were observed at 800 W and later at
+3000 and 2400 W — which is exactly why a fixed figure would be wrong.
 """
 
 from __future__ import annotations
@@ -42,6 +46,8 @@ from .const import (
     OPT_CHARGE_BUFFER,
     OPT_DISCHARGE_BUFFER,
     OPT_MANUAL_POWER,
+    OPT_MIN_CHARGE_POWER,
+    OPT_MIN_DISCHARGE_POWER,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
     OPT_START_CHARGE_BELOW,
@@ -285,6 +291,30 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         entity_category=EntityCategory.CONFIG,
         icon="mdi:transmission-tower-export",
     ), OPT_START_CHARGE_BELOW),
+    (ZendureNumberDescription(
+        key="min_charge_power",
+        name="Min charge power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
+        native_min_value=0,
+        native_max_value=1000,
+        native_step=10,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:arrow-collapse-up",
+    ), OPT_MIN_CHARGE_POWER),
+    (ZendureNumberDescription(
+        key="min_discharge_power",
+        name="Min discharge power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
+        native_min_value=0,
+        native_max_value=1000,
+        native_step=10,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:arrow-collapse-down",
+    ), OPT_MIN_DISCHARGE_POWER),
     (ZendureNumberDescription(
         key="charge_buffer",
         name="Charge buffer",
