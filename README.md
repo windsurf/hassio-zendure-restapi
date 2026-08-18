@@ -140,6 +140,12 @@ import wastes the difference between the import tariff and the value of the stor
 undershooting into export gives away energy worth the import tariff for the feed-in rate,
 roughly a third of it. Erring towards a little consumption is about three times cheaper.
 
+Both start thresholds are a distance from zero, expressed as a positive number of watts. Which
+side of zero they sit on is in the name rather than in the sign: `Start discharging at import`
+counts import, `Start charging at export` counts export. That keeps the pair readable and, on a
+slider, comparable — a negative range put the useful values hard against the right-hand end,
+where a full bar meant the smallest possible threshold.
+
 Keep each start threshold further from zero than its buffer, or the direction never starts.
 
 ### Minimum power
@@ -230,7 +236,7 @@ tens of thousands of limit writes a year, which is exactly why they must not rea
 | `sensor` (diagnostic) | IoT connection state, OTA state, LCN state, Bind state, Factory mode state, Voltage wake-up, Legacy mode, Phase switch, Grid HD status, Off-grid state, Powerhub status, Slave address, Write response, Device timestamp, Report timestamp, Message id, Timezone, Timezone offset, HV battery voltage (raw), Activation voltage |
 | `binary_sensor` | Grid connected, Error, Data ready, Pass-through, Reverse flow, Heating, Fan, Lamp, Dry contact, PV-AC coupling, SOC compensation, HV battery control |
 | `number` (device) | Charge limit (AC), Discharge limit, Charge power limit, Inverter power limit, Upper SOC limit, Lower SOC limit, Calibration interval |
-| `number` (controller) | Manual power, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging above, Start charging below, Charge buffer, Discharge buffer |
+| `number` (controller) | Manual power, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer |
 | `select` (device) | Converter mode, Backup mode, PV export, Grid standard, Fan speed mode |
 | `select` (controller) | Operation mode |
 | `switch` (device) | Skip flash write, Fan forced on |
@@ -344,6 +350,16 @@ and the properties can be mapped in the next release.
 ---
 
 ## Changelog
+
+### v0.9.9
+
+- **Renamed both start thresholds and made them positive.** `Start charging below` ran from
+  -1000 to 0, so a typical setting of -5 sat hard against the right-hand end of the slider and
+  showed a full bar for the smallest possible threshold. It is now `Start charging at export`,
+  0 to 1000, and its counterpart is `Start discharging at import`. Which side of zero a
+  threshold sits on is in the name rather than in the sign.
+- Both settings fall back to their defaults after upgrading, 30 W import and 5 W export. Set
+  them again from the dashboard if you were running different values.
 
 ### v0.9.8
 
