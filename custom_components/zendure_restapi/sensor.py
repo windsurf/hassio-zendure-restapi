@@ -20,14 +20,17 @@ from homeassistant.const import (
     UnitOfApparentPower,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_MODEL, DOMAIN, PACK_PREFIX
+from .const import CONF_MODEL, DEVICE_TYPE_METER, DOMAIN, PACK_PREFIX
+from .energy import EnergyAccumulator, split_signed
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
 from .properties import (
@@ -96,7 +99,6 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     _power("solarPower4", "PV string 4"),
     _power("solarPower5", "PV string 5"),
     _power("solarPower6", "PV string 6"),
-    _power("chargeMaxLimit", "Charge power limit (device)", entity_category=EntityCategory.DIAGNOSTIC),
     ZendureSensorDescription(
         key="remainOutTime",
         name="Remaining discharge time",
@@ -384,8 +386,35 @@ async def async_setup_entry(
             )
         )
 
+    entities += _energy_sensors(coordinator, device_id, model)
+    entities += _efficiency_sensors(coordinator, device_id, model)
+
     _LOGGER.debug("Adding %d sensors (%d packs)", len(entities), coordinator.pack_count)
     async_add_entities(entities)
+
+
+def _energy_sensors(
+    coordinator: ZendureCoordinator, device_id: str, model: str
+) -> list[SensorEntity]:
+    """Energy counters, so the device can feed the Energy dashboard.
+
+    The device publishes no cumulative counters of its own, so these are
+    integrated from power. Sources are AC-side fields: that is the side the
+    meter shares a connection point with, and the side the Energy dashboard
+    reasons about. Conversion loss is therefore visible as the gap between the
+    grid figures and the battery figures, rather than absorbed into them.
+    """
+    data = coordinator.data or {}
+    descriptions = (
+        METER_ENERGY_SENSORS
+        if coordinator.device_type == DEVICE_TYPE_METER
+        else BATTERY_ENERGY_SENSORS
+    )
+    return [
+        ZendureEnergySensor(coordinator, d, device_id, model)
+        for d in descriptions
+        if d.source in data
+    ]
 
 
 class ZendureSensor(ZendureEntity, SensorEntity):
@@ -469,3 +498,216 @@ class ZendureControllerSensor(ZendureSensor):
     @property
     def extra_state_attributes(self):
         return self._controller.state.attributes
+
+
+# ── Energy counters ──────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZendureEnergyDescription(SensorEntityDescription):
+    """An energy counter integrated from a power reading.
+
+    ``source`` is the coordinator key holding the watts; ``positive`` picks
+    which side of a signed reading this counter accumulates, and is ignored
+    for sources that are already one-directional.
+    """
+
+    source: str
+    positive: bool = True
+
+
+def _energy(key: str, name: str, source: str, positive: bool, icon: str) -> ZendureEnergyDescription:
+    return ZendureEnergyDescription(
+        key=key,
+        name=name,
+        source=source,
+        positive=positive,
+        icon=icon,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+    )
+
+
+BATTERY_ENERGY_SENSORS: tuple[ZendureEnergyDescription, ...] = (
+    _energy("energy_charged", "Energy charged", "outputPackPower", True, "mdi:battery-plus-variant"),
+    _energy("energy_discharged", "Energy discharged", "packInputPower", True, "mdi:battery-minus-variant"),
+    _energy("energy_pv", "PV energy", "solarInputPower", True, "mdi:solar-power-variant"),
+)
+
+METER_ENERGY_SENSORS: tuple[ZendureEnergyDescription, ...] = (
+    _energy("energy_imported", "Energy imported", "total_power", True, "mdi:transmission-tower-import"),
+    _energy("energy_exported", "Energy exported", "total_power", False, "mdi:transmission-tower-export"),
+)
+
+
+class ZendureEnergySensor(ZendureEntity, SensorEntity, RestoreEntity):
+    """A kWh counter built by integrating a power reading over time."""
+
+    entity_description: ZendureEnergyDescription
+
+    def __init__(
+        self,
+        coordinator: ZendureCoordinator,
+        description: ZendureEnergyDescription,
+        device_id: str,
+        model: str,
+    ) -> None:
+        super().__init__(coordinator, description, device_id, model)
+        self._accumulator = EnergyAccumulator()
+
+    async def async_added_to_hass(self) -> None:
+        """Pick up where the previous run left off."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state not in (None, "unknown", "unavailable"):
+            try:
+                self._accumulator.restore(float(last.state))
+            except (TypeError, ValueError):
+                _LOGGER.debug("Could not restore %s from %r", self.entity_id, last.state)
+        # Fold in the reading that is already present, so the first poll after a
+        # restart does not start from a blank previous value.
+        self._accumulate()
+
+    @property
+    def available(self) -> bool:
+        # Not backed by a single coordinator key, so the base check does not apply.
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float:
+        return round(self._accumulator.total_kwh, 6)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._accumulate()
+        super()._handle_coordinator_update()
+
+    def _accumulate(self) -> None:
+        watts = self._current_power()
+        if watts is not None:
+            self._accumulator.add(watts)
+
+    def _current_power(self) -> float | None:
+        """The magnitude, in watts, that this counter accumulates.
+
+        Sources are AC-side properties, matching the side the meter is on and
+        the side the Energy dashboard reasons about. The DC pack reading is
+        deliberately not used here: it differs from the AC side by the
+        converter's own consumption, so DC-based counters would quietly absorb
+        the conversion loss instead of leaving it visible between the two.
+
+        The loss is surfaced separately, as an efficiency percentage.
+        """
+        data = self.coordinator.data or {}
+        description = self.entity_description
+
+        raw = data.get(description.source)
+        if raw is None:
+            return None
+
+        # A signed source (the meter) splits into two counters by direction;
+        # an unsigned one (the device's own power fields) is taken as is.
+        if description.source == "total_power":
+            return split_signed(raw, description.positive)
+
+        try:
+            return max(0.0, float(raw))
+        except (TypeError, ValueError):
+            return None
+
+
+# ── Conversion efficiency ────────────────────────────────────────────────
+# The AC and DC readings differ by whatever the converter spends on itself and
+# on conversion. Rather than let that vanish between two counters, it is shown
+# as a percentage. Charging compares what reached the cells against what came
+# off the grid; discharging compares what reached the house against what left
+# the cells.
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZendureEfficiencyDescription(SensorEntityDescription):
+    """Ratio of two power readings, expressed as a percentage."""
+
+    ac_key: str
+    pack_state: int
+
+
+EFFICIENCY_SENSORS: tuple[ZendureEfficiencyDescription, ...] = (
+    ZendureEfficiencyDescription(
+        key="charge_efficiency",
+        name="Charge efficiency",
+        ac_key="outputPackPower",
+        pack_state=1,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:percent-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureEfficiencyDescription(
+        key="discharge_efficiency",
+        name="Discharge efficiency",
+        ac_key="packInputPower",
+        pack_state=2,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:percent-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+
+def _efficiency_sensors(
+    coordinator: ZendureCoordinator, device_id: str, model: str
+) -> list[SensorEntity]:
+    """Efficiency needs both an AC field and pack data to compare."""
+    data = coordinator.data or {}
+    if coordinator.device_type == DEVICE_TYPE_METER or "pack1.power" not in data:
+        return []
+    return [
+        ZendureEfficiencySensor(coordinator, d, device_id, model)
+        for d in EFFICIENCY_SENSORS
+        if d.ac_key in data
+    ]
+
+
+class ZendureEfficiencySensor(ZendureEntity, SensorEntity):
+    """Conversion efficiency for one direction, in percent."""
+
+    entity_description: ZendureEfficiencyDescription
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data or {}
+        description = self.entity_description
+
+        try:
+            ac = float(data.get(description.ac_key) or 0)
+        except (TypeError, ValueError):
+            return None
+
+        # Only packs in the matching state contribute, so a mixed bank does not
+        # dilute the ratio with cells that are doing nothing.
+        dc = 0.0
+        for index in range(1, self.coordinator.pack_count + 1):
+            if data.get(f"{PACK_PREFIX}{index}.state") != description.pack_state:
+                continue
+            try:
+                dc += abs(float(data.get(f"{PACK_PREFIX}{index}.power") or 0))
+            except (TypeError, ValueError):
+                continue
+
+        if ac <= 0 or dc <= 0:
+            return None
+
+        # Charging: the cells receive less than the grid delivered.
+        # Discharging: the house receives less than the cells gave up.
+        ratio = (dc / ac) if description.pack_state == 1 else (ac / dc)
+        return round(min(100.0, max(0.0, ratio * 100.0)), 1)
