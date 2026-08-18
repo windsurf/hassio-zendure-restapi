@@ -49,8 +49,8 @@ from .const import (
     OPT_MAX_DISCHARGE_POWER,
     OPT_OPERATION_MODE,
     OPT_SOC_PROTECTION,
-    OPT_START_CHARGE_BELOW,
-    OPT_START_DISCHARGE_ABOVE,
+    OPT_START_CHARGE_AT,
+    OPT_START_DISCHARGE_AT,
     SMART_MODES,
 )
 from .coordinator import ZendureCoordinator
@@ -292,8 +292,12 @@ class ZendureController:
         allow_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
         allow_discharge = mode in (MODE_SMART_MATCHING, MODE_SMART_DISCHARGE)
 
-        start_discharge = self.settings.get_int(OPT_START_DISCHARGE_ABOVE)
-        start_charge = self.settings.get_int(OPT_START_CHARGE_BELOW)
+        # Both thresholds are a distance from zero, expressed as a positive
+        # number of watts. Which side of zero is in the name, not in the sign:
+        # one counts import, the other export. Keeping both positive makes the
+        # pair read alike and, on a slider, look alike.
+        start_discharge = self.settings.get_int(OPT_START_DISCHARGE_AT)
+        start_charge = -self.settings.get_int(OPT_START_CHARGE_AT)
 
         idle = self._is_idle(data, own)
 
