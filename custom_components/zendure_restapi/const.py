@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "0.9.2"
+INTEGRATION_VERSION = "0.9.8"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -95,10 +95,11 @@ OPT_MAX_CHARGE_POWER = "max_charge_power"
 OPT_MAX_DISCHARGE_POWER = "max_discharge_power"
 OPT_START_DISCHARGE_ABOVE = "start_discharge_above"
 OPT_START_CHARGE_BELOW = "start_charge_below"
+OPT_MIN_CHARGE_POWER = "min_charge_power"
+OPT_MIN_DISCHARGE_POWER = "min_discharge_power"
 OPT_CHARGE_BUFFER = "charge_buffer"
 OPT_DISCHARGE_BUFFER = "discharge_buffer"
 OPT_SOC_PROTECTION = "soc_protection"
-OPT_METER_INVERT = "meter_invert"
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -107,10 +108,11 @@ DEFAULTS = {
     OPT_MAX_DISCHARGE_POWER: 800,
     OPT_START_DISCHARGE_ABOVE: 30,      # W of import before discharging starts
     OPT_START_CHARGE_BELOW: -50,        # W of export before charging starts
+    OPT_MIN_CHARGE_POWER: 0,            # floor in every smart mode, 0 = off
+    OPT_MIN_DISCHARGE_POWER: 0,         # floor in every smart mode, 0 = off
     OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
     OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
     OPT_SOC_PROTECTION: True,
-    OPT_METER_INVERT: False,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────
@@ -139,3 +141,4 @@ CONTROL_DIRECTION_HOLD_SECONDS = 10
 
 # Meter data older than this is not trusted for closed-loop control.
 METER_MAX_AGE = 60              # seconds
+
