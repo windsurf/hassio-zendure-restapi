@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DEFAULTS
+from .const import DEFAULTS, OPERATION_MODES, OPT_OPERATION_MODE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,8 +26,21 @@ class ZendureSettings:
         self._entry = entry
 
     def get(self, key: str) -> Any:
-        """Return a setting, falling back to its default."""
-        return self._entry.options.get(key, DEFAULTS[key])
+        """Return a setting, falling back to its default.
+
+        A stored operation mode that no longer exists falls back to the
+        default rather than leaving the select on a value it cannot offer.
+        This is what an entry saved under an older version looks like after a
+        mode is withdrawn.
+        """
+        value = self._entry.options.get(key, DEFAULTS[key])
+        if key == OPT_OPERATION_MODE and value not in OPERATION_MODES:
+            _LOGGER.info(
+                "Stored operation mode '%s' no longer exists, falling back to '%s'",
+                value, DEFAULTS[key],
+            )
+            return DEFAULTS[key]
+        return value
 
     def get_int(self, key: str) -> int:
         try:
