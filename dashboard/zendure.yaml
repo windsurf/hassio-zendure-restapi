@@ -1,0 +1,469 @@
+# ============================================================
+# ZENDURE DASHBOARD - v1.0.0 | August 2026
+# ============================================================
+#
+# One view for the larger management dashboard, covering the
+# SolarFlow 3000 Mix AC+ and the Zendure P1 meter, read through
+# the zendure_restapi custom integration v1.0.0.
+#
+# ENTITY IDS:
+#   Battery  - sensor./number./select./switch.
+#              zendure_solarflow_3000_mix_ac_*
+#   P1 meter - sensor.zendure_p1_meter_3_phase_*
+#
+#   These were derived from the device name "Zendure SolarFlow
+#   3000 Mix AC+" and the entity names in the integration. Home
+#   Assistant deviates on a name clash (suffix _2) or after the
+#   device is renamed. Verify under Developer tools -> States,
+#   filtered on "zendure".
+#
+#   The IDs below belong to an installation created on v0.4.0 or
+#   later. An upgrade keeps existing IDs; a fresh install derives
+#   them again from the entity names.
+#
+# NO NAME OVERRIDES:
+#   Cards carry no name: key on purpose, so every label comes
+#   from the integration itself. Renaming an entity in Home
+#   Assistant therefore changes the dashboard along with it, and
+#   the two cannot drift apart.
+#
+# NOT INCLUDED:
+#   PV string 3 to 6, Fan level and Fan - the zenSDK document
+#   lists fanSpeed and fanSwitch, but this device reports only
+#   Fanspeed and Fanmode, so those entities are never created.
+#   29 diagnostic entities that ship disabled, such as Grid
+#   standard, Calibration interval and the timestamps. Enable
+#   them in the entity registry first if you want them.
+#
+# INSTALL:
+#   Step 1: paste this view under views: in the main dashboard
+#   Step 2: verify the entity IDs (see above)
+#
+# ============================================================
+
+title: Zendure
+path: zendure
+icon: mdi:home-battery
+type: sections
+max_columns: 4
+sections:
+- type: grid
+  column_span: 4
+  cards:
+  - type: heading
+    heading: Zendure Home Battery
+    heading_style: title
+    icon: mdi:home-battery
+    badges:
+    - type: entity
+      entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+    - type: entity
+      entity: sensor.zendure_solarflow_3000_mix_ac_battery_state
+    - type: entity
+      entity: select.zendure_solarflow_3000_mix_ac_converter_mode
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+    icon: mdi:battery-charging
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_power
+    icon: mdi:flash
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_state
+    icon: mdi:battery-sync
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_soc_limit_status
+    icon: mdi:battery-alert-variant-outline
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_remaining_discharge_time
+    icon: mdi:battery-clock
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_error
+    icon: mdi:alert-circle-outline
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Operation mode
+    heading_style: title
+    icon: mdi:state-machine
+    badges:
+    - type: entity
+      entity: select.zendure_solarflow_3000_mix_ac_operation_mode
+    - type: entity
+      entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+  - type: tile
+    entity: select.zendure_solarflow_3000_mix_ac_operation_mode
+    icon: mdi:state-machine
+    features_position: bottom
+    features:
+    - type: select-options
+    grid_options:
+      columns: 12
+      rows: 2
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+    icon: mdi:cog-sync-outline
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_manual_power
+    icon: mdi:hand-back-right-outline
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: markdown
+    content: '{% set s = states(''sensor.zendure_solarflow_3000_mix_ac_controller_status'') %}
+
+      {% set a = state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''reason'') %}
+
+
+      **Status** {{ s }} - {{ a }}
+
+
+      **Direction** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''direction'')
+      }} | **Target** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''target_power'')
+      }} W
+
+
+      **Grid** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''meter_power'')
+      }} W | **Battery** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''battery_power'')
+      }} W
+
+      '
+    grid_options:
+      columns: full
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Controller settings
+    heading_style: title
+    icon: mdi:tune
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_max_charge_power
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_max_discharge_power
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_direction_change_delay
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_min_charge_power
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_min_discharge_power
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_start_discharging_at_import
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_start_charging_at_export
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_charge_buffer
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_discharge_buffer
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Device control
+    heading_style: title
+    icon: mdi:tune-variant
+  - type: tile
+    entity: select.zendure_solarflow_3000_mix_ac_converter_mode
+    icon: mdi:swap-vertical-bold
+    features_position: bottom
+    features:
+    - type: select-options
+  - type: tile
+    entity: switch.zendure_solarflow_3000_mix_ac_skip_flash_write
+    icon: mdi:flash-off
+    features_position: bottom
+    features:
+    - type: toggle
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_charge_limit_ac
+    icon: mdi:battery-arrow-up
+    features:
+    - type: numeric-input
+      style: slider
+    features_position: bottom
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_discharge_limit
+    icon: mdi:battery-arrow-down
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_lower_soc_limit
+    icon: mdi:battery-low
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_upper_soc_limit
+    icon: mdi:battery-charging-high
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: switch.zendure_solarflow_3000_mix_ac_soc_protection
+    features_position: bottom
+    features:
+    - type: toggle
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Power flow
+    heading_style: title
+    icon: mdi:transmission-tower
+  - type: gauge
+    entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+    min: 0
+    max: 3000
+    needle: true
+    severity:
+      green: 0
+      yellow: 2010
+      red: 2670
+    grid_options:
+      columns: 6
+      rows: auto
+  - type: gauge
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_power
+    min: 0
+    max: 3000
+    needle: true
+    severity:
+      green: 0
+      yellow: 2010
+      red: 2670
+    grid_options:
+      columns: 6
+      rows: auto
+  - type: gauge
+    entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+    min: 0
+    max: 2000
+    needle: true
+    severity:
+      green: 660
+      yellow: 220
+      red: 0
+    grid_options:
+      columns: 6
+      rows: auto
+  - type: gauge
+    entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+    min: 0
+    max: 2400
+    needle: true
+    severity:
+      green: 0
+      yellow: 1608
+      red: 2136
+    grid_options:
+      columns: 6
+      rows: auto
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_pv_string_1
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_pv_string_2
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_backup_output_power
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_backup_output_power_2
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Energy
+    heading_style: title
+    icon: mdi:chart-donut
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_energy_charged
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_energy_discharged
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_energy_imported
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_energy_exported
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_pv_energy
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_charge_efficiency
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Device power
+    heading_style: title
+    icon: mdi:flash-outline
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_charge_power
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_discharge_power
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Zendure P1 Meter
+    heading_style: title
+    icon: mdi:meter-electric
+    badges:
+    - type: entity
+      entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+    icon: mdi:transmission-tower
+    features_position: bottom
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_phase_a_apparent_power
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_phase_b_apparent_power
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_phase_c_apparent_power
+  - type: tile
+    entity: sensor.zendure_p1_meter_3_phase_meter_type
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Battery 1
+    heading_style: title
+    icon: mdi:battery-high
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_state_of_charge
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_state
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_voltage
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_current
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_temperature
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_max_cell_voltage
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_serial_number
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: System status
+    heading_style: title
+    icon: mdi:cog-outline
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_grid_connected
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_data_ready
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_ac_state
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_dc_state
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_pv_state
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_pass_through
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_reverse_flow
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Diagnostics
+    heading_style: title
+    icon: mdi:stethoscope
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_fault_level
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_enclosure_temperature
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_signal_strength
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_ac_coupling_status
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_dc_bus_voltage
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_module_count
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_soc_calibration_status
+  - type: tile
+    entity: sensor.zendure_solarflow_3000_mix_ac_fan_speed_step
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_heating
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_lamp
+  - type: tile
+    entity: binary_sensor.zendure_solarflow_3000_mix_ac_dry_contact
+- type: grid
+  column_span: 2
+  cards:
+  - type: heading
+    heading: Configuration
+    heading_style: title
+    icon: mdi:wrench-outline
+  - type: tile
+    entity: select.zendure_solarflow_3000_mix_ac_backup_mode
+    features_position: bottom
+    features:
+    - type: select-options
+  - type: tile
+    entity: select.zendure_solarflow_3000_mix_ac_pv_export
+    features_position: bottom
+    features:
+    - type: select-options
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_charge_power_limit
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_inverter_power_limit
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
