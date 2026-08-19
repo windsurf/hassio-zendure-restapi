@@ -312,6 +312,18 @@ either direction, gives wrong answers at the other end of the range.
 
 ## Changelog
 
+### v1.0.1 — Stale direction
+
+- **Fixed a deadlock between two sources of truth.** The wind-down branches trusted the
+  controller's remembered direction while `_smart_step` derived "is this a direction change"
+  from the device. When the two disagreed, the first called for a discharge step and the second
+  read it as a reversal and waited for an idle state that nothing was winding down. Observed as
+  *waiting for idle before discharge* while the battery charged at 3 kW, for nine minutes and
+  counting.
+- The remembered direction is now reconciled against the device on every cycle, not only when
+  it is empty. The device is the single source of truth.
+- If you are stuck on an earlier version: switching to `standby` and back clears it.
+
 ### v1.0.0 — First stable release
 
 Adds a `LICENSE` file. The README claimed MIT but no licence file existed, which leaves the
