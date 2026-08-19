@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "0.9.9"
+INTEGRATION_VERSION = "1.0.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -95,6 +95,7 @@ OPT_MAX_CHARGE_POWER = "max_charge_power"
 OPT_MAX_DISCHARGE_POWER = "max_discharge_power"
 OPT_START_DISCHARGE_AT = "start_discharge_at"
 OPT_START_CHARGE_AT = "start_charge_at"
+OPT_DIRECTION_DELAY = "direction_change_delay"
 OPT_MIN_CHARGE_POWER = "min_charge_power"
 OPT_MIN_DISCHARGE_POWER = "min_discharge_power"
 OPT_CHARGE_BUFFER = "charge_buffer"
@@ -108,6 +109,7 @@ DEFAULTS = {
     OPT_MAX_DISCHARGE_POWER: 800,
     OPT_START_DISCHARGE_AT: 30,         # W of import before discharging starts
     OPT_START_CHARGE_AT: 5,             # W of export before charging starts
+    OPT_DIRECTION_DELAY: 10,            # s to pause between directions, 0 = off
     OPT_MIN_CHARGE_POWER: 0,            # floor in every smart mode, 0 = off
     OPT_MIN_DISCHARGE_POWER: 0,         # floor in every smart mode, 0 = off
     OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
