@@ -11,6 +11,12 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 > **Actively tested with:** Zendure SolarFlow 3000 Mix AC+ (`solarFlow3000MixAC+`) and the Zendure P1 meter (three-phase, meterType 3)
 
+![Zendure dashboard](images/dashboard.png)
+
+*The example dashboard, showing `smart_matching` holding the grid at zero: the house draws
+175 W, the battery supplies it, and the meter reads 0 W. A ready-made view is included — see
+[Dashboard](#dashboard).*
+
 ---
 
 ## Before you start
@@ -60,6 +66,24 @@ Model naming prefers the `product` field in the report payload, which is authori
 ### The P1 meter
 
 The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity therefore falls back to `deviceId`, and no writable entities are created because writes require a serial. It is read-only by nature.
+
+---
+
+## Dashboard
+
+`dashboard/zendure.yaml` is the view in the screenshot above: twelve sections covering
+operation, controller settings, power flow, energy, the P1 meter, per-battery detail,
+diagnostics and device configuration.
+
+Paste it under `views:` in a dashboard in YAML mode, or open **Edit dashboard → three-dot menu
+→ Raw configuration editor** and add it there.
+
+Cards carry no `name:` override on purpose, so every label comes from the integration. Renaming
+an entity in Home Assistant changes the dashboard along with it and the two cannot drift apart.
+
+Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000 Mix AC+*.
+Home Assistant deviates on a name clash — appending `_2` — or after the device is renamed, so
+verify under **Developer tools → States** filtered on `zendure` if cards come up empty.
 
 ---
 
