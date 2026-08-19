@@ -294,12 +294,22 @@ class ZendureController:
 
         own = self._battery_power(data)
 
-        # Adopt whatever the device is already doing before deciding anything.
-        if self._last_direction == "none":
-            adopted = self._device_direction(data)
-            if adopted != "none":
-                self._last_direction = adopted
-                self._owns_limits = True
+        # The device is the single source of truth for which direction is
+        # running. Adopting it only when the controller has no memory left a
+        # gap: a stale record could disagree with the device, and the two are
+        # read by different pieces of logic. The wind-down branches below trust
+        # the record, while _smart_step derives "is this a direction change"
+        # from the device, so a disagreement deadlocked them against each
+        # other — observed as waiting for idle before discharge while the
+        # battery was charging at 3 kW, indefinitely.
+        adopted = self._device_direction(data)
+        if adopted != "none" and adopted != self._last_direction:
+            _LOGGER.debug(
+                "adopting device direction %s over remembered %s",
+                adopted, self._last_direction,
+            )
+            self._last_direction = adopted
+            self._owns_limits = True
 
         # Frequent limit writes are coming; keep them out of flash. The device
         # reverts smartMode to 0 across a reboot, so this cannot be assumed.
