@@ -314,6 +314,9 @@ either direction, gives wrong answers at the other end of the range.
 
 ### v1.0.0 — First stable release
 
+Adds a `LICENSE` file. The README claimed MIT but no licence file existed, which leaves the
+legal status of a public repository unclear regardless of what the README says.
+
 Adds `Direction change delay`, a pause between opposite directions, defaulting to 10 seconds to
 match the default polling interval. Also adds `DEBUG` logging of every controller decision:
 writes with their previous value, skipped no-ops, reversal pauses and the state that followed. The smart modes already wound a direction down before
@@ -436,4 +439,4 @@ This integration writes directly to a grid-connected battery inverter. Provided 
 
 ## Licence
 
-MIT
+[MIT](LICENSE)
