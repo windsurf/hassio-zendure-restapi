@@ -1,11 +1,15 @@
-# Zendure RestAPI
+# Zendure RestAPI – Home Assistant Integration
 
-Home Assistant integration for local control of Zendure devices through the
-[zenSDK](https://github.com/Zendure/zenSDK) HTTP API. Supports SolarFlow batteries and the
-Zendure P1 meter.
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
 
-No cloud account. No MQTT broker. No Bluetooth pairing. The device runs an HTTP server on
-your LAN and this integration talks to it directly.
+> **Disclaimer:** This software is not affiliated with or endorsed by Zendure in any way. It is provided "as-is" without warranty or support, for the educational use of developers and enthusiasts. Use at your own risk.
+
+Local monitoring and control of Zendure SolarFlow batteries and the Zendure P1 meter over the zenSDK HTTP API. No cloud account, no MQTT broker, no Bluetooth pairing — the device runs a plain JSON REST server on your LAN and this integration talks to it directly.
+
+Beyond reading the device, the integration runs an **operation-mode controller**: seven strategies that turn a price decision made elsewhere into charge and discharge limits, tracking a linked meter towards zero grid exchange.
+
+> **Actively tested with:** Zendure SolarFlow 3000 Mix AC+ (`solarFlow3000MixAC+`) and the Zendure P1 meter (three-phase, meterType 3)
 
 ---
 
@@ -15,77 +19,53 @@ Under EN 18031 the local HTTP API is **disabled by default**. Enable it first:
 
 > Zendure app → add **HEMS** → exit the app to apply.
 
-Verify from a terminal before configuring the integration:
+Verify from a terminal before configuring anything:
 
 ```bash
 curl -X GET "http://<device-ip>/properties/report"
 ```
 
-If that returns JSON, the integration will work. If it returns nothing, the local API is
-still disabled and no amount of configuration will help.
+If that returns JSON, the integration will work. If it returns nothing, the local API is still off and no amount of configuration will help.
 
 ---
 
-## Brand images
+## Installation via HACS
 
-The integration ships its own icon and logo in `custom_components/zendure_restapi/brand/`.
-Home Assistant 2026.3 and later picks these up directly, taking priority over the brands CDN;
-older versions ignore the folder and fall back to the default placeholder. No submission to the
-`home-assistant/brands` repository is needed.
-
-## Installation
-
-### HACS (recommended)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=windsurf&repository=hassio-zendure-restapi&category=integration)
 
 1. HACS → Integrations → three-dot menu → Custom repositories
 2. Add `https://github.com/windsurf/hassio-zendure-restapi`, category **Integration**
 3. Install **Zendure RestAPI**, then restart Home Assistant
 
-### Manual
+## Manual Installation
 
-Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custom_components/`
-directory and restart.
-
----
-
-## Configuration
-
-Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them by
-itself and offers them under Settings → Devices & Services. If discovery does not fire, add
-the integration manually and enter the device IP address.
-
-The polling interval is configurable from 1 to 60 seconds under the integration's
-**Configure** button. The default is 10 seconds.
+Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custom_components/` directory and restart. A full restart is required — a reload leaves stale bytecode in `__pycache__`.
 
 ---
 
-## Device support
+## Setup
 
-Entity creation is driven by the properties the device actually reports, not by a hard-coded
-model list. Every SolarFlow device shares one generic property set, so an unlisted or
-brand-new model still gets full entity coverage. It is simply labelled
-`SolarFlow (generic)` until its name is added to `registry.py`.
+Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
-Model naming prefers the `product` field in the report payload, which is authoritative;
-the mDNS service name is only a fallback.
+Add the battery and the meter as **separate entries**. The controller links to the meter automatically when exactly one is present.
 
-Verified on hardware: **SolarFlow 3000 Mix AC+** (`solarFlow3000MixAC+`, firmware 3) and the
-**P1 meter** (meterType 3, three-phase). Listed in the registry but not yet hardware-verified:
-SolarFlow 800, 800 Plus, 800 Pro, 1600 AC+, 2400 AC, 2400 AC+, 2400 Pro, Smart Meter 3CT.
-Other models are accepted and will work if they answer on `/properties/report`.
+The polling interval is configurable from 1 to 60 seconds under **Configure**. The default is 10 seconds, and it doubles as the control interval.
+
+### Device support
+
+Entity creation is driven by the properties the device actually reports, not by a hard-coded model list. Every SolarFlow device shares one generic property set, so an unlisted or brand-new model still gets full entity coverage; it is simply labelled `SolarFlow (generic)` until its name is added to `registry.py`.
+
+Model naming prefers the `product` field in the report payload, which is authoritative. The mDNS service name is only a fallback.
 
 ### The P1 meter
 
-The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity
-therefore falls back to `deviceId`, and no writable entities are created because writes
-require a serial. It is read-only by nature. Add it as a second device with its own IP.
+The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity therefore falls back to `deviceId`, and no writable entities are created because writes require a serial. It is read-only by nature.
 
 ---
 
-## Operation modes
+## How the controller works
 
-A battery entry runs a controller that turns a strategy into device writes. The strategy is a
-single `select` entity, `Operation mode`:
+The strategy is a single `select` entity, `Operation mode`:
 
 | Mode | Behaviour |
 |---|---|
@@ -97,412 +77,338 @@ single `select` entity, `Operation mode`:
 | `quick_charge` | Charges at the configured maximum, ignoring the meter |
 | `quick_discharge` | Discharges at the configured maximum, ignoring the meter |
 
-The default is `standby`, which reads the device and writes nothing.
+The default is `standby`, so nothing moves until a mode is chosen deliberately.
+
+### Once per poll, not on a timer
+
+The controller runs at the end of each coordinator refresh. That matters: a separate timer would sooner or later apply a correction based on readings from the previous cycle, correcting twice for one deviation. That is how oscillation gets built.
 
 ### Why standby writes nothing
 
-A zero is still a command. Earlier versions had `standby` write zeros to both limits, and on a
-device running its own energy manager — Zendure's HEMS in self-consumption mode, for instance
-— that produces a fight: the manager sets a discharge limit to cover the house, the
-integration overwrites it with zero on the next poll, the manager sets it back. Measured on
-hardware as a square wave in grid power at the polling interval, with `smartMode` flipping
-between RAM and flash along with it.
+A zero is still a command. Earlier versions had `standby` write zeros to both limits, and on a device running its own energy manager that produces a fight: the manager sets a discharge limit to cover the house, the integration overwrites it with zero on the next poll, the manager sets it back. Measured on hardware as a square wave in grid power at the polling interval.
 
-`standby` now issues no writes at all. It is checked before SOC protection, because a
-protection that still writes would make "hands off" a lie, and the device guards its own floor
-regardless.
-
-The single exception is on entering `standby`: a limit is cleared once, and only if this
-controller set it. Leaving it behind would not be restraint, it would be abandoning a command
-mid-flight. A limit set by the device's own manager is never touched.
-
-The controller status carries a `writes_enabled` attribute so this is visible at a glance.
-
-### How the controller runs
-
-Once per coordinator poll, not on its own timer. That matters: a separate timer would sooner
-or later apply a correction based on readings from the previous cycle, correcting twice for
-one deviation. That is how charge/discharge oscillation gets built.
-
-The polling interval is therefore also the control interval.
+The single exception is on entering `standby`: a limit is cleared once, and only if this controller set it. A limit set by the device's own manager is never touched.
 
 ### The smart control loop
 
 ```
-charging:    target = clamp( (-grid - battery + charge_buffer)    * factor , 0 , max_power )
-discharging: target = clamp( ( grid + battery - discharge_buffer) * factor , 0 , max_power )
+charging:    target = clamp( (-grid - battery + charge_buffer)    * factor , floor , max )
+discharging: target = clamp( ( grid + battery - discharge_buffer) * factor , floor , max )
 ```
 
-Both buffers mean the same thing: how many watts of grid **import** to aim for. The default is
-5 W on each side, so the loop settles just on the consuming side of zero rather than exactly on
-it. That is deliberate — the two ways of being wrong do not cost the same. Overshooting into
-import wastes the difference between the import tariff and the value of the stored energy;
-undershooting into export gives away energy worth the import tariff for the feed-in rate,
-roughly a third of it. Erring towards a little consumption is about three times cheaper.
+Four details do the real work.
 
-Both start thresholds are a distance from zero, expressed as a positive number of watts. Which
-side of zero they sit on is in the name rather than in the sign: `Start discharging at import`
-counts import, `Start charging at export` counts export. That keeps the pair readable and, on a
-slider, comparable — a negative range put the useful values hard against the right-hand end,
-where a full bar meant the smallest possible threshold.
+**The first step is undershot** (factor 0.75 rather than 1.00). The device's actual response is not yet known, so committing the full correction invites overshoot. Once the direction holds, the controller balances at 1.00.
+
+**Direction is read from the device, not from memory.** The controller's own record is empty after a restart, a reload or a mode switch, while the device carries on with the limit it was last given. Deriving direction from which limit is non-zero avoids waiting for an idle state that cannot arrive.
+
+**Start thresholds gate starting, not continuing.** A direction already running keeps being balanced whatever the grid does, so it winds down to zero when the load disappears. A direction the mode forbids is cleared and released.
+
+**Idle is decided by what is commanded**, not by measured power. An inverter draws its own standby power continuously — a 3000 Mix AC+ idles at roughly 41 W — so the pack never reads zero. Both limits at zero means a direction change is safe regardless.
+
+### Buffers and thresholds
+
+Both buffers mean the same thing: how many watts of grid **import** to aim for. The default is 5 W on each side, so the loop settles just on the consuming side of zero. That is deliberate — overshooting into import wastes the difference between the import tariff and the value of the stored energy, while undershooting into export gives away energy worth the import tariff for the feed-in rate, roughly a third of it.
+
+Both start thresholds are a distance from zero, expressed as a positive number of watts. Which side of zero they sit on is in the name: `Start discharging at import` counts import, `Start charging at export` counts export.
 
 Keep each start threshold further from zero than its buffer, or the direction never starts.
 
 ### Minimum power
 
-`Min charge power` and `Min discharge power` raise the target above what the meter asks for,
-in every smart mode. Both default to 0, which disables the floor.
+`Min charge power` and `Min discharge power` raise the target above what the meter asks for, in every smart mode. Both default to 0, which disables the floor.
 
-Note what that means for `smart_matching`: with a discharge floor of 200 W and a 90 W house,
-the battery supplies 200 W and the remaining 110 W goes to the grid. Zero-on-the-meter
-therefore only holds while both floors are at 0.
+With a 400 W charge floor and 100 W of surplus, the device charges 400 W: 100 from the surplus, 300 bought from the grid. That is the point — the energy is cheap now and worth more later. Note that zero-on-the-meter only holds while both floors are at 0.
 
-The one-directional modes exist because a price layer has already decided that this is a moment
-to charge or to discharge. The floor decides how hard. With a 400 W charge floor and 100 W of
-surplus the device charges 400 W: 100 from the surplus, 300 bought from the grid. That is
-deliberate — the energy is cheap now and worth more later.
+The two directions are not symmetric in value. Overcharging is compared against the future import tariff, the full retail price; overdischarging exports at the feed-in rate. Setting the charge floor is usually worthwhile, setting the discharge floor rarely is.
 
-The two directions are not symmetric in value. Overcharging is compared against the future
-import tariff, which is the full retail price. Overdischarging exports at the feed-in rate,
-roughly a third of it, so it only pays at an unusually wide spread. Setting the charge floor is
-usually worthwhile; setting the discharge floor rarely is.
+### Reversing direction
 
-Three details do the real work:
+`Direction change delay` pauses between opposite directions: the current limit is cleared, the
+configured number of seconds elapses, then the new direction is written. It defaults to 10
+seconds, matching the default polling interval; set it to 0 to reverse immediately.
 
-**The first step is undershot** (factor 0.75 rather than 1.00). The device's actual response
-is not yet known, so committing the full correction invites overshoot. Once the direction
-holds, the controller balances at 1.00.
+The smart modes already wind a direction down before starting the other one, but `quick_charge`,
+`quick_discharge` and `manual` write their target straight away — so a mode switch could take
+several kilowatts from full charge to full discharge inside one cycle. A 3000 Mix AC+ handles
+that; an older or smaller inverter may not.
 
-**Whether a step is a direction change is read from the device, not from memory.** The
-controller's own record of the last direction is empty after a restart, a reload or a mode
-switch, while the device carries on with the limit it was last given. Treating that as "no
-direction" makes the next cycle look like a fresh start, which then waits for an idle state
-the device cannot reach while it is still executing that very limit. The direction is
-therefore derived from which limit is currently non-zero.
+The pause is timed rather than counted in polls, and the clock starts when the opposite limit
+is actually cleared rather than when the mode changed, so it cannot elapse while the old
+direction is still running. A pause already under way outranks the device state — clearing the
+limits is the first thing it does, and reading the resulting "no direction" as nothing to
+reverse from would end the pause on the next cycle. Controller status shows `reversing` with
+the seconds remaining.
 
-**A new direction only starts from idle**, and only after a settling period following a
-direction change. That period is ten seconds, converted to whole polls at the current
-interval — what matters is how long the device has had to respond, which does not change when
-the polling interval does.
+At a polling interval coarser than the delay the pause lasts one full cycle: it is never
+shorter than configured, only longer.
 
-The settling period is abandoned the moment grid power crosses zero against the running
-direction. It exists so a reading that still contains the old direction is not mistaken for a
-fresh deviation; it is not a reason to keep pushing power the wrong way across the meter while
-the load that justified it has gone. Without that, a reading that still contains the old direction gets treated
-as a fresh deviation.
+### Safety
 
-"Idle" is decided primarily by whether the controller is commanding anything, not by measured
-power. An inverter draws its own standby power continuously, so the pack never reads zero: a
-3000 Mix AC+ idles at roughly 41 W of discharge. Testing measured power alone against a small
-band reads that as "still running" forever, and no direction can ever start. When both limits
-are at zero the controller is commanding nothing, so a direction change is safe whatever the
-pack is doing on its own.
+If the meter stops reporting, both limits go to zero — a closed loop without feedback is worse than no loop. Below the lower SOC bound the battery is charged back regardless of strategy, except in `manual` and `quick_discharge` where the operator's intent is explicit; switchable off.
 
-**Start thresholds gate starting, not continuing.** A direction that is already running keeps
-being balanced whatever the grid does, so it winds down to zero when the load disappears. If
-the thresholds also gated continuation, a load that vanished would leave the battery
-discharging into the grid while the controller waited for an idle state that nothing could
-produce.
-
-### Smart modes need a meter
-
-The grid reading comes from a Zendure meter configured as its own entry. The controller links
-to it automatically when exactly one is present. If the meter stops reporting, both limits go
-to zero: a closed loop without feedback is worse than no loop.
-
-### SOC protection
-
-Below the lower SOC bound the battery is charged back regardless of strategy, except in
-`manual` and `quick_discharge` where the operator's intent is explicit. Switchable off.
-
-### Flash wear
-
-The controller sets `smartMode` to 1 before writing limits, so frequent adjustments stay in
-RAM. Only on entering standby does it drop back to flash. At a 10-second interval that is
-tens of thousands of limit writes a year, which is exactly why they must not reach flash.
+`smartMode` is set to RAM before writing limits, so frequent adjustments never reach flash. At a ten second interval that is tens of thousands of limit writes a year.
 
 ---
 
-## Entities
+## Supported Entities
 
-| Platform | Entities |
-|---|---|
-| `sensor` | State of charge, Battery state, Battery charge power, Battery discharge power, Home output power, Grid input power, PV input power, PV string 1-6, Backup output power, Backup output power 2, Remaining discharge time, DC bus voltage, Enclosure temperature, Signal strength, AC state, DC state, PV state, SOC limit status, SOC calibration status, AC coupling status, Fault level, Battery module count, Charge power limit, Fan speed step, Fan level |
-| `sensor` (per battery) | State of charge, Power, State, Temperature, Voltage, Current, Max cell voltage, Min cell voltage, Serial number, Firmware version, Pack type |
-| `sensor` (energy) | Energy charged, Energy discharged, PV energy; on a meter entry Energy imported and Energy exported |
-| `sensor` (efficiency) | Charge efficiency, Discharge efficiency |
-| `sensor` (controller) | Controller status, carrying the reasoning as attributes |
-| `sensor` (meter entry) | Grid power total, Phase A/B/C apparent power, Meter type, Protocol type |
-| `sensor` (diagnostic) | IoT connection state, OTA state, LCN state, Bind state, Factory mode state, Voltage wake-up, Legacy mode, Phase switch, Grid HD status, Off-grid state, Powerhub status, Slave address, Write response, Device timestamp, Report timestamp, Message id, Timezone, Timezone offset, HV battery voltage (raw), Activation voltage |
-| `binary_sensor` | Grid connected, Error, Data ready, Pass-through, Reverse flow, Heating, Fan, Lamp, Dry contact, PV-AC coupling, SOC compensation, HV battery control |
-| `number` (device) | Charge limit (AC), Discharge limit, Charge power limit, Inverter power limit, Upper SOC limit, Lower SOC limit, Calibration interval |
-| `number` (controller) | Manual power, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer |
-| `select` (device) | Converter mode, Backup mode, PV export, Grid standard, Fan speed mode |
-| `select` (controller) | Operation mode |
-| `switch` (device) | Skip flash write, Fan forced on |
-| `switch` (controller) | SOC protection |
+| Group | Count | Entities |
+|---|---|---|
+| **Sensor** | 49 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
+| **Per battery** | 11 | Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
+| **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
+| **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
+| **Binary sensor** | 12 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
+| **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
+| **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
+| **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
+| **Controller** | 13 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, SOC protection |
+| **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
+
+Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
 ---
 
 ## The Energy dashboard
 
-The device reports instantaneous power only. Every payload observed on hardware carries watts
-and no cumulative counter, so the kilowatt-hour totals the Energy dashboard needs are
-integrated here.
+The device publishes no cumulative counters, so kilowatt-hours are integrated here.
 
 | Entity | Source | Feeds |
 |---|---|---|
 | Energy charged | `outputPackPower` | Home battery storage, energy in |
 | Energy discharged | `packInputPower` | Home battery storage, energy out |
-| PV energy | `solarInputPower` | Solar production, if PV is wired to the device |
+| PV energy | `solarInputPower` | Solar production, DC-connected panels only |
 | Energy imported / exported | meter `total_power` | Grid consumption and return |
 
-Integration is trapezoidal: each interval uses the average of the previous and current
-reading. With a ten second poll and a load that steps, a left-hand rectangle would attribute
-the whole interval to the old value and a right-hand one to the new; the average splits the
-difference and is exact for any linear ramp. Gaps longer than five minutes are skipped rather
-than bridged, since interpolating across a restart would invent energy that was never
-measured.
+Integration is trapezoidal: each interval uses the average of the previous and current reading, which is exact for any linear ramp. Gaps beyond five minutes are skipped rather than bridged, and readings that are negative or above 20 kW are ignored. Totals persist across restarts and are never reset on reload — the Energy dashboard reads a drop as a meter replacement and would double-count.
 
-All sources are **AC-side** fields — the side the meter shares a connection point with, and
-the side the Energy dashboard reasons about. DC pack readings are deliberately not used here:
-they differ from the AC side by whatever the converter spends on itself, so DC-based counters
-would quietly absorb the conversion loss instead of leaving it visible as the gap between the
-grid figures and the battery figures.
+All sources are AC-side fields, matching the side the meter is on. Conversion loss therefore stays visible as the gap between the grid figures and the battery figures rather than being absorbed into them.
 
 ### Conversion efficiency
 
-Two diagnostic sensors surface that loss directly rather than letting it disappear between
-counters. `Charge efficiency` is DC over AC — what reached the cells against what came off the
-grid. `Discharge efficiency` is AC over DC — what reached the house against what left the
-cells. Only packs in the matching state contribute, so a mixed bank does not dilute the ratio
-with cells that are idle.
+Two diagnostic sensors surface that loss. `Charge efficiency` is DC over AC, `Discharge efficiency` is AC over DC. Only packs in the matching state contribute.
 
-Expect roughly 94–95% at meaningful power. The figure drops sharply at low power, because the
-converter's own consumption is close to constant: at 122 W of output it costs around 41 W, so
-efficiency falls to about 75%. That is not an error in the measurement, it is the reason
-trickle-discharging is expensive.
-
-Totals persist across restarts and are never reset on reload — the Energy dashboard reads a
-drop as a meter replacement and would double-count the difference.
-
-## Notes on correctness
-
-The zenSDK document is wrong or incomplete in several places. Each correction below was
-found by comparing it against a live SolarFlow 3000 Mix AC+ and is cross-checked, not guessed.
-
-**Temperatures** are stored in tenths of a Kelvin. The integration applies
-`(raw - 2731) / 10` before publishing degrees Celsius.
-
-**Pack voltage** (`totalVol`) is in centivolts despite the document listing whole volts. A
-raw 2688 is 26.88 V, not 2688 V.
-
-**SOC setpoints** (`socSet`, `minSoc`) are in tenths of a percent, not whole percent. Live
-values of 1000 and 100 mean 100.0% and 10.0%.
-
-**The document's `minSoc` range (0-50) is also wrong.** A second sample reported 800, meaning
-80.0%, so the range is 0-100. `socSet` keeps its documented 70-100 lower bound because
-nothing observed contradicts it — but treat that bound as unverified, since the document has
-already proven wrong about the neighbouring field.
-
-**Power ceilings** come in two layers, and they are not duplicates.
-
-| | Where it lives | What it bounds |
-|---|---|---|
-| `Charge power limit`, `Inverter power limit` | on the device, same values the Zendure app sets | everything, including whatever the app or an on-device manager does |
-| `Max charge power`, `Max discharge power` | controller settings in the config entry | only what this integration writes |
-
-The controller uses the lower of the two. Both device ceilings are writable, so the app is not
-needed to change them.
-
-**Pack current** (`batcur`) is a 16-bit two's complement value in deciampere. Read as an
-unsigned integer it turns every discharge into roughly 6500 A. The integration converts to
-signed, so the sign correctly distinguishes charging from discharging.
-
-Three independent checks confirm the voltage and current scales, across two samples taken at
-very different power levels:
-
-| Check | Sample 1 | Sample 2 |
-|---|---|---|
-| `totalVol` x `batcur` vs reported pack power | 26.88 V x 22.8 A = 613 W vs 612 W | 26.80 V x 1.7 A = 45.6 W vs 46 W |
-| Cell voltage x 8 vs `totalVol` | 3.36 V x 8 = 26.88 V | 3.35 V x 8 = 26.80 V |
-
-The cell-count agreement also identifies the pack as 8S LFP.
-
-**Smart mode** controls whether written parameters are persisted to flash. With
-`smartMode = 1` they are not, and the device restores its previous flash values after a
-reboot. Keep it enabled whenever an automation writes charge or discharge limits on a short
-cycle; otherwise every write hits the flash.
-
-**One property per write.** The local API caps its receive buffer at 512 bytes. The
-integration issues one property per POST and verifies the encoded body length beforehand,
-because a body that truncates silently is effectively undebuggable.
+Expect 94–95% at meaningful power. The figure drops sharply at low power because the converter's own consumption is nearly constant: at 122 W of output it costs around 41 W, so efficiency falls to about 75%. That is not a measurement error — it is why trickle-discharging is expensive.
 
 ---
 
+## Notes on correctness
+
+The zenSDK document is wrong or incomplete in several places. Each correction below was found by comparing it against live hardware.
+
+**Temperatures** are stored in tenths of a Kelvin: `(raw - 2731) / 10`.
+
+**Pack voltage** (`totalVol`) is in centivolts despite the document listing whole volts. A raw 2688 is 26.88 V.
+
+**SOC setpoints** (`socSet`, `minSoc`) are in tenths of a percent. The document's `minSoc` range of 0–50 is also wrong; a live sample read 800, meaning 80.0%.
+
+**Pack current** (`batcur`) is a 16-bit two's complement value in deciampere. Read unsigned, every discharge becomes roughly 6500 A.
+
+**`gridReverse`** value 2 forbids PV export and 1 allows it. The document offers no labels; reading 2 as `auto` would be permissive on a device that is actually blocking export.
+
+**The key is `oldMode`,** not `OldMode` as documented.
+
+Three independent checks confirm the voltage and current scales, across samples at very different power levels:
+
+| Check | Sample 1 | Sample 2 |
+|---|---|---|
+| `totalVol` × `batcur` vs reported pack power | 26.88 V × 22.8 A = 613 W vs 612 W | 26.80 V × 1.7 A = 45.6 W vs 46 W |
+| Cell voltage × 8 vs `totalVol` | 3.36 V × 8 = 26.88 V | 3.35 V × 8 = 26.80 V |
+
+The cell-count agreement also identifies the pack as 8S LFP.
+
+---
+
+## Brand images
+
+The integration ships its own icon and logo in `custom_components/zendure_restapi/brand/`. Home Assistant 2026.3 and later picks these up directly, taking priority over the brands CDN; older versions ignore the folder and fall back to the default placeholder. No submission to `home-assistant/brands` is needed.
+
+---
+
+## Debug logging
+
+The controller logs every decision it makes at `DEBUG`: which property is written and what it
+held before, which writes are skipped because the device already holds the value, why a
+reversal pause started and how long remains, and the resulting state with the readings behind
+it.
+
+```yaml
+# configuration.yaml
+logger:
+  default: warning
+  logs:
+    custom_components.zendure_restapi: debug
+```
+
+A typical reversal reads:
+
+```
+write inputLimit: 3000 -> 0
+skip outputLimit=0, device already holds it
+reversal charge -> discharge: cleared both limits, pausing 10s
+reversing | pausing 10s before discharge | dir=none target=0W grid=0.0W battery=-3000.0W
+reversing | pausing 5s before discharge  | dir=none target=0W grid=0.0W battery=-3000.0W
+reversal pause elapsed, discharge may start
+write acMode: 1 -> 2
+write outputLimit: 0 -> 3000
+quick | discharging at maximum | dir=discharge target=3000W grid=0.0W battery=-3000.0W
+```
+
+The status sensor shows the outcome; this shows the reasoning that led there, which is what you
+need when a mode does something unexpected three steps into a sequence.
+
 ## Reporting an unsupported property
 
-The integration logs every reported key it has no entity for, once each, at `INFO` level.
-For a complete picture, download diagnostics from the device page: the file contains the
-untouched device report plus the full list of unrecognised keys. Attach it to a GitHub issue
-and the properties can be mapped in the next release.
+The integration logs every reported key it has no entity for, once each, at `INFO` level. For a complete picture, download diagnostics from the device page: the file contains the device report plus the full list of unrecognised keys.
+
+Diagnostics files end up attached to public issues, so identifying values are stripped first. That covers both the plain keys and their flattened per-pack form — `pack1.sn` is redacted along with `sn`, which an exact-match filter would miss. The MQTT status is summarised rather than copied, because its contents are undocumented and may carry a broker address or device key.
+
+---
+
+## Known limitations
+
+**No failsafe if Home Assistant stops.** A limit written before the outage keeps executing —
+the device has no watchdog that returns it to zero. Keep `Max charge power` and
+`Max discharge power` at values you would accept running unattended.
+
+**Standby draw cannot be switched off.** The inverter spends roughly 40 W monitoring the grid,
+continuously, because a grid-tied inverter must stay able to detect grid state under
+VDE-AR-N 4105 and UL 1741. Limits at zero do not stop it. Over a day that is around 0.9 kWh,
+which matters when weighing whether to hold charge for a later price peak.
+
+**`acCouplingState` bit 15 is undocumented.** It is set on every sample from a 3000 Mix AC+ and
+its meaning is unknown. Reported as-is.
+
+**Efficiency is not constant.** The converter's overhead has a fixed part and a proportional
+one: around 41 W at 122 W of throughput, but 157 W at 3 kW. Treating it as a constant, in
+either direction, gives wrong answers at the other end of the range.
 
 ---
 
 ## Changelog
 
-### v0.9.9
+### v1.0.0 — First stable release
 
-- **Renamed both start thresholds and made them positive.** `Start charging below` ran from
-  -1000 to 0, so a typical setting of -5 sat hard against the right-hand end of the slider and
-  showed a full bar for the smallest possible threshold. It is now `Start charging at export`,
-  0 to 1000, and its counterpart is `Start discharging at import`. Which side of zero a
-  threshold sits on is in the name rather than in the sign.
-- Both settings fall back to their defaults after upgrading, 30 W import and 5 W export. Set
-  them again from the dashboard if you were running different values.
+Adds `Direction change delay`, a pause between opposite directions, defaulting to 10 seconds to
+match the default polling interval. Also adds `DEBUG` logging of every controller decision:
+writes with their previous value, skipped no-ops, reversal pauses and the state that followed. The smart modes already wound a direction down before
+starting the other one, but the quick and manual modes wrote their target immediately, so a
+mode switch could reverse several kilowatts within a single cycle. Otherwise no functional
+change over v0.9.9. The version marks the point at which every defect found
+against live hardware has been fixed and the remaining unknowns are documented rather than
+suspected.
 
-### v0.9.8
+What the 0.x series established, all of it observed on a SolarFlow 3000 Mix AC+ rather than
+taken from the specification:
 
-- Added brand images in `brand/`: `icon.png` and `logo.png` at 256px, with `@2x` variants at
-  512px. Home Assistant 2026.3 and later reads these from the integration directory; older
-  versions ignore them.
+- Six errors in the zenSDK document, each cross-checked against a second measurement
+- A control loop that holds the grid at its setpoint without oscillating, verified over
+  multi-hour runs at 5 and 10 second polling
+- Eight defects that only surfaced on hardware: a standby that fought the device's own energy
+  manager, a deadlock after every restart, an options flow that silently wiped every setting,
+  a buffer whose sign was inverted, battery power read on the wrong side of the converter,
+  a mode that kept running a direction it forbids, a timing constant expressed in the wrong
+  unit, and a serial number leaking into diagnostics
 
-### v0.9.7
+### v0.9.9 — Positive start thresholds
 
-- **Removed `Invert meter sign`.** The meter's sign convention was verified against a second
-  meter on the same connection — 2088 W on the Zendure against 2059 W on the YouLess, both
-  positive while importing — so the setting had nothing left to correct. It will be left
-  orphaned in the entity registry after upgrading.
+- Fixed a diagnostics leak: the battery serial travelled in `flat_data` as `pack1.sn`, which the exact-match redaction did not cover. Flattened per-pack forms of every sensitive key are now redacted too.
+- The MQTT status is summarised rather than copied into diagnostics; the RPC response is undocumented and may carry a broker address or device key.
 
-### v0.9.6
+- Renamed both start thresholds and made them positive. `Start charging below` ran from -1000 to 0, so a typical setting of -5 sat hard against the right-hand end of the slider and showed a full bar for the smallest possible threshold. Now `Start charging at export` and `Start discharging at import`, both 0 to 1000.
+- Which side of zero a threshold sits on is carried in the name rather than in the sign.
 
-- README rebuilt. The changelog had silently stopped at v0.5.4 — a version that was never
-  released — because each edit searched for the previous heading and failed quietly when it
-  had moved. Everything from v0.6.0 onward was missing.
-- The entity table is now generated from the source rather than maintained by hand, so it
-  cannot drift again. It still listed pre-v0.3.0 names such as `AC charge limit` and
-  `Target SOC`.
-- `hacs.json` minimum Home Assistant version raised to 2024.10.0, matching the selectors and
-  `RestoreEntity` usage actually relied on.
+### v0.9.8 — Brand images
 
-### v0.9.5
+- Added `brand/icon.png` and `brand/logo.png` at 256px with `@2x` variants at 512px, picked up directly by Home Assistant 2026.3 and later.
 
-- Fixed: a mode could keep running a direction it forbids. Adopting whatever the device was
-  already doing allows a running direction to be wound down, but it also kept that direction
-  alive in a mode that ruled it out — observed as `smart_charge_only` discharging at 200 W. A
-  forbidden direction is now cleared and released.
+### v0.9.7 — Remove meter sign inversion
+
+- Removed `Invert meter sign`. The convention was verified against a second meter on the same connection — 2088 W on the Zendure against 2059 W on the YouLess, both positive while importing — so the setting had nothing left to correct.
+
+### v0.9.6 — README and hacs.json
+
+- Changelog rebuilt; it had silently stopped at a version that was never released, because each edit searched for the previous heading and failed quietly once it moved.
+- Entity table generated from the source rather than maintained by hand.
+- Minimum Home Assistant version raised to 2024.10.0.
+
+### v0.9.5 — Forbidden direction, floor scope
+
+- Fixed: a mode could keep running a direction it forbids. Observed as `smart_charge_only` discharging at 200 W because the device happened to be discharging when the mode was selected. A forbidden direction is now cleared and released.
 - The minimum power floors apply in every smart mode, including `smart_matching`.
 
-### v0.9.4
+### v0.9.4 — Minimum power becomes a floor
 
-- `Min charge power` and `Min discharge power` became floors instead of gates: they raise the
-  target above what the meter asks for rather than declining to act below it.
-- The half-floor hysteresis was removed along with the gate.
+- `Min charge power` and `Min discharge power` raise the target above what the meter asks for, rather than declining to act below it. The half-floor hysteresis went with the gate.
 
-### v0.9.3
+### v0.9.3 — Minimum power floors
 
 - Added `Min charge power` and `Min discharge power` as gates, reworked in v0.9.4.
 
-### v0.9.2
+### v0.9.2 — AC energy counters and efficiency
 
-- Energy counters integrate AC-side fields rather than the DC pack reading, matching the side
-  the meter is on and the reference implementation.
-- Added `PV energy`, `Charge efficiency` and `Discharge efficiency`. Efficiency runs 94-95% at
-  meaningful power and falls to roughly 75% at 122 W of output, because the converter's own
-  consumption is nearly constant.
+- Energy counters integrate AC-side fields rather than the DC pack reading, matching the side the meter is on.
+- Added `PV energy`, `Charge efficiency` and `Discharge efficiency`.
 
-### v0.9.1
+### v0.9.1 — Read battery power on the AC side
 
-- Fixed a permanent offset: battery power was read on the DC side, which is larger than the AC
-  side by the converter's own consumption. The loop settled with the grid exporting by roughly
-  that loss instead of importing by the buffer.
+- Fixed a permanent offset: battery power was read on the DC side, which is larger than the AC side by the converter's own consumption. The loop settled with the grid exporting by roughly that loss instead of importing by the buffer.
 
-### v0.9.0
+### v0.9.0 — Charge buffer sign
 
-- Fixed the sign of `Charge buffer`. The two buffers carried opposite meanings under the same
-  name: discharge aimed at import, charge aimed at export.
-- Both now mean watts of grid import to aim for, range 0 to 200 W.
+- Fixed the sign of `Charge buffer`. The two buffers carried opposite meanings under the same name: discharge aimed at import, charge aimed at export. Both now mean watts of grid import, range 0 to 200 W.
 
-### v0.8.0
+### v0.8.0 — Writable device charge ceiling
 
 - `chargeMaxLimit` is writable as `Charge power limit`, matching `Inverter power limit`.
 
-### v0.7.1
+### v0.7.0–v0.7.1 — Energy dashboard
 
-- Fixed: changing the polling interval reset every controller setting, because an options flow
-  replaces the entire options dict rather than merging into it.
+- v0.7.1: fixed the options flow resetting every controller setting, because it replaces the entire options dict rather than merging into it.
+- v0.7.0: energy counters integrated trapezoidally from power, restoring across a restart. Gaps beyond five minutes are skipped and implausible readings ignored.
 
-### v0.7.0
+### v0.6.0 — Consolidation
 
-- Energy counters for the Energy dashboard, integrated trapezoidally from power since the
-  device publishes no cumulative counters. Totals restore across a restart.
-- Gaps beyond five minutes are skipped rather than interpolated across, and readings that are
-  negative or above 20 kW are ignored rather than accumulated.
+- Version aligned across the integration, release script, dashboard and session reports.
 
-### v0.6.0
+### v0.5.0–v0.5.3 — Standby, direction and timing
 
-- Consolidation release, aligning the integration, release script, dashboard and session
-  reports on one version number.
+- v0.5.3: settling period measured in seconds rather than polling cycles, and a contradictory status message fixed.
+- v0.5.2: removed the `passive` mode; with `standby` no longer writing, the difference favoured `standby`.
+- v0.5.1: smart modes deadlocked after any restart. Direction is now read from the device rather than from the controller's memory.
+- v0.5.0: `standby` writes nothing at all. It previously forced both limits to zero on every poll, which on a device running its own energy manager produced a square wave at the polling period.
 
-### v0.5.3
+### v0.4.0–v0.4.2 — Operation-mode controller
 
-- Fixed a contradictory status message, and made the settling period after a direction change
-  a number of seconds rather than a number of polling cycles.
+- v0.4.2: fixed stale readings outside the smart modes, and made the power ceiling the lower of setting and device.
+- v0.4.1: discharging never started, because the idle test compared measured pack power against a 30 W band while the inverter's own draw is around 41 W.
+- v0.4.0: seven operation modes executed once per poll. Corrected `gridReverse`.
 
-### v0.5.2
+### v0.1.0–v0.3.0 — Foundation
 
-- Removed the `passive` mode. With `standby` no longer writing anything the two were nearly
-  identical, and the difference favoured `standby`.
-
-### v0.5.1
-
-- Fixed: smart modes deadlocked after any restart. Direction is now read from the device rather
-  than from the controller's own memory, which is empty after a restart.
-- `smartMode` is set at the top of every smart cycle; the device reverts it across a reboot.
-
-### v0.5.0
-
-- `standby` is genuinely passive: zero writes. It previously forced both limits to zero on
-  every poll, which on a device running its own energy manager meant overruling that manager
-  continuously, producing a square wave at the polling period.
-- SOC protection no longer acts in `standby`.
-
-### v0.4.2
-
-- Fixed stale readings outside the smart modes, and made the power ceiling the lower of the
-  configured setting and what the device publishes.
-
-### v0.4.1
-
-- Fixed: discharging never started. The idle test compared measured pack power against a 30 W
-  band, but the inverter's own standby draw is around 41 W.
-
-### v0.4.0
-
-- Operation-mode controller inside the integration: seven modes executed once per poll, so the
-  controller always acts on readings from that same cycle.
-- Corrected `gridReverse`: 2 forbids PV export, it is not `auto`.
-
-### v0.3.0
-
-- Clearer entity names throughout. Existing installations keep their entity IDs.
-
-### v0.2.1
-
-- Corrected the `minSoc` range from the documented 0-50 to 0-100.
-
-### v0.2.0
-
-- P1 meter support: flat payloads with `deviceId` and no serial number.
-- Corrected `socSet` and `minSoc` scaling to tenths of a percent, `totalVol` to centivolts, and
-  the key `OldMode` to `oldMode`.
-
-### v0.1.0
-
-- Initial release. Local HTTP client, mDNS discovery, dynamic entity creation driven by the
-  keys the device actually reports.
+- v0.3.0: clearer entity names throughout.
+- v0.2.1: corrected the `minSoc` range from the documented 0-50 to 0-100.
+- v0.2.0: P1 meter support; corrected `socSet`, `minSoc` and `totalVol` scaling and the `oldMode` key.
+- v0.1.0: local HTTP client, mDNS discovery, dynamic entity creation driven by the keys the device actually reports.
 
 ---
+
+## Inspiration & Acknowledgements
+
+| Resource | Used for |
+|---|---|
+| [Zendure/zenSDK](https://github.com/Zendure/zenSDK) | Local HTTP API and SolarFlow property reference |
+| Zendure SolarFlow FAQ | Grid-monitoring standby behaviour under VDE-AR-N 4105 and UL 1741 |
+| Community zenSDK automation | Control-loop structure: undershot first step, idle gating, direction hold |
+
+---
+
+## Disclaimer
+
+This software is **not affiliated with or endorsed by Zendure** in any way. The Zendure name and product names are trademarks of Zendure.
+
+This integration writes directly to a grid-connected battery inverter. Provided **"as-is"** without warranty. The authors accept no liability for any damage, loss of data, or service disruption.
 
 ## Licence
 
