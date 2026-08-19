@@ -18,6 +18,8 @@ Three ideas from the community zenSDK automation are kept deliberately:
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -42,6 +44,7 @@ from .const import (
     MODE_STANDBY,
     OPT_CHARGE_BUFFER,
     OPT_DISCHARGE_BUFFER,
+    OPT_DIRECTION_DELAY,
     OPT_MANUAL_POWER,
     OPT_MIN_CHARGE_POWER,
     OPT_MIN_DISCHARGE_POWER,
@@ -103,6 +106,10 @@ class ZendureController:
         # Whether the limit currently on the device was set by this controller.
         # Only what we set ourselves may be cleared on the way to standby.
         self._owns_limits = False
+        # When a reversal may complete. Held as a moment rather than a countdown
+        # of polls: what the inverter needs is time, and a number of polls means
+        # something different at every interval.
+        self._reverse_until: datetime | None = None
         self._last_direction = "none"
         self._idle_since: Any = None
 
@@ -195,6 +202,9 @@ class ZendureController:
         except (TypeError, ValueError):
             return False
 
+        if await self._reverse_guard(data, "charge"):
+            return True
+
         limit = self._cap(data, charging=True)
         await self._write_direction(data, AC_MODE_CHARGE, limit)
         self._set_state(
@@ -227,6 +237,7 @@ class ZendureController:
             self._set_state("standby", "released own limits, now passive")
             return
 
+        self._reverse_until = None
         self._set_state("standby", "passive, writing nothing")
 
 
@@ -240,6 +251,9 @@ class ZendureController:
             return
 
         charging = power > 0
+        if await self._reverse_guard(data, "charge" if charging else "discharge"):
+            return
+
         cap = self._cap(data, charging)
         limit = int(_clamp(abs(power), 0, cap))
         await self._write_direction(
@@ -254,6 +268,9 @@ class ZendureController:
 
     async def _apply_quick(self, data: dict[str, Any], charging: bool) -> None:
         """Charge or discharge at the configured maximum, ignoring the meter."""
+        if await self._reverse_guard(data, "charge" if charging else "discharge"):
+            return
+
         cap = self._cap(data, charging)
         await self._write_direction(
             data, AC_MODE_CHARGE if charging else AC_MODE_DISCHARGE, cap
@@ -393,6 +410,58 @@ class ZendureController:
             return 1
         return max(1, round(CONTROL_DIRECTION_HOLD_SECONDS / seconds))
 
+    async def _reverse_guard(self, data: dict[str, Any], wanted: str) -> bool:
+        """Hold a reversal for the configured time. True means: wait.
+
+        Some inverters dislike going straight from full charge to full
+        discharge. The smart modes already wind a direction down before
+        starting the other one, but the quick and manual modes write their
+        target immediately, so a mode switch could reverse several kilowatts
+        within a single cycle.
+
+        The pause is timed rather than counted in polls, and it starts when the
+        opposite limit is actually cleared rather than when the mode changes —
+        otherwise it would elapse while the old direction is still running.
+        """
+        delay = self.settings.get_int(OPT_DIRECTION_DELAY)
+        if delay <= 0:
+            self._reverse_until = None
+            return False
+
+        now = dt_util.utcnow()
+
+        # A pause already under way outranks the device state. Clearing the
+        # limits is the first thing the pause does, which leaves the device
+        # reporting no direction at all — reading that as "nothing to reverse
+        # from" would end the pause on the very next cycle.
+        if self._reverse_until is None:
+            current = self._device_direction(data)
+            if current in ("none", wanted):
+                return False
+
+            await self._write("inputLimit", 0, data)
+            await self._write("outputLimit", 0, data)
+            self._owns_limits = False
+            self._last_direction = "none"
+            self._reverse_until = now + timedelta(seconds=delay)
+            _LOGGER.debug(
+                "reversal %s -> %s: cleared both limits, pausing %ss",
+                current, wanted, delay,
+            )
+
+        remaining = (self._reverse_until - now).total_seconds()
+        if remaining > 0:
+            self._set_state(
+                "reversing",
+                f"pausing {remaining:.0f}s before {wanted}",
+                direction="none",
+            )
+            return True
+
+        self._reverse_until = None
+        _LOGGER.debug("reversal pause elapsed, %s may start", wanted)
+        return False
+
     def _device_direction(self, data: dict[str, Any]) -> str:
         """Which direction the device is actually set to, right now.
 
@@ -508,6 +577,11 @@ class ZendureController:
         await self._write_direction(
             data, AC_MODE_CHARGE if charging else AC_MODE_DISCHARGE, target, key=key
         )
+
+        if starting and await self._reverse_guard(
+            data, "charge" if charging else "discharge"
+        ):
+            return
 
         if starting:
             self._hold = self._hold_cycles()
@@ -640,9 +714,11 @@ class ZendureController:
         current = data.get(key)
         try:
             if current is not None and int(current) == int(value):
+                _LOGGER.debug("skip %s=%s, device already holds it", key, value)
                 return
         except (TypeError, ValueError):
             pass
+        _LOGGER.debug("write %s: %s -> %s", key, current, value)
         await self.coordinator.api.async_write_property(key, value)
         data[key] = value
 
@@ -674,3 +750,18 @@ class ZendureController:
             "last_direction": self._last_direction,
             "writes_enabled": self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY,
         }
+
+        # One line per decision. The status sensor shows the outcome; this shows
+        # the reasoning that led there, which is what you need when a mode does
+        # something unexpected three steps into a sequence.
+        _LOGGER.debug(
+            "%s | %s | dir=%s target=%sW grid=%sW battery=%sW idle=%s commanded=%sW",
+            status,
+            reason,
+            direction,
+            target,
+            self.state.meter_power,
+            self.state.battery_power,
+            self._idle_flag,
+            self._commanded,
+        )
