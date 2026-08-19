@@ -386,7 +386,13 @@ class ZendureController:
             )
             return
 
-        if idle and self._last_direction != "none":
+        # Idle means a direction change is safe, not that no direction is
+        # running: a limit of 30 W sits inside the deadband while the device is
+        # still charging. Clearing the record here fought the reconciliation at
+        # the top of this method, which restored it from the device on the very
+        # next cycle — 98 times in 100 minutes on live hardware. The device
+        # decides when a direction has ended, by reporting both limits at zero.
+        if self._device_direction(data) == "none":
             self._last_direction = "none"
 
         if grid > start_discharge and allow_discharge:
@@ -401,7 +407,7 @@ class ZendureController:
             self._set_state(
                 "tracking",
                 f"grid {grid:.0f} W within thresholds",
-                direction="none",
+                direction=self._last_direction,
             )
 
     def _wrong_way(self, grid: float) -> bool:
