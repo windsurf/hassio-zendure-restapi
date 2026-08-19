@@ -128,6 +128,10 @@ Four details do the real work.
 
 **Start thresholds gate starting, not continuing.** A direction already running keeps being balanced whatever the grid does, so it winds down to zero when the load disappears. A direction the mode forbids is cleared and released.
 
+**Idle means a direction change is safe, not that no direction is running.** A limit of 30 W
+sits inside the deadband while the device is still charging, so the running direction is only
+considered over when the device reports both limits at zero.
+
 **Idle is decided by what is commanded**, not by measured power. An inverter draws its own standby power continuously — a 3000 Mix AC+ idles at roughly 41 W — so the pack never reads zero. Both limits at zero means a direction change is safe regardless.
 
 ### Buffers and thresholds
@@ -311,6 +315,14 @@ either direction, gives wrong answers at the other end of the range.
 ---
 
 ## Changelog
+
+### v1.0.2 — Idle no longer clears the direction
+
+- **Fixed two pieces of logic undoing each other.** Reaching the deadband cleared the
+  remembered direction, while the reconciliation at the top of the cycle restored it from the
+  device — 98 times in 100 minutes on live hardware, at a charge limit of 33 W. The direction
+  is now cleared only when the device itself reports both limits at zero.
+- The `tracking` status reports the running direction instead of always `none`.
 
 ### v1.0.1 — Stale direction
 
