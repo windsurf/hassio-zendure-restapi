@@ -190,6 +190,12 @@ sections:
     features:
     - type: numeric-input
       style: slider
+  - type: tile
+    entity: number.zendure_solarflow_3000_mix_ac_trim_strength
+    features_position: bottom
+    features:
+    - type: numeric-input
+      style: slider
 - type: grid
   column_span: 2
   cards:
