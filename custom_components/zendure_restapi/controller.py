@@ -67,6 +67,11 @@ from .const import (
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
     CONTROL_MIN_STEP_FAST,
+    TRIM_FACTOR_DOWN,
+    TRIM_MIN_GRID_CHANGE,
+    TRIM_RESPONSE_FRACTION,
+    TRIM_RESPONSE_MAX_WAIT,
+    TRIM_SETTLE_SECONDS,
     METER_MAX_AGE,
     MODE_MANUAL,
     MODE_QUICK_CHARGE,
@@ -159,6 +164,12 @@ class ZendureController:
         self._trim_direction: str | None = None
         self._trim_busy = False
         self._fast_write_at: datetime | None = None
+        # Any write, by either loop. The trim loop refuses to act on a meter
+        # reading that was fetched before this moment, because such a reading
+        # cannot contain the effect of that write.
+        self._last_write_at: datetime | None = None
+        self._trim_last_grid: float | None = None
+        self._trim_last_delta: int = 0
         self._trim_writes = 0
         self._unsub_meter: Any = None
 
@@ -295,6 +306,45 @@ class ZendureController:
             self._trim_direction = None
             return
 
+        # ── Act only on evidence ─────────────────────────────────────
+        # A reading fetched before the last write cannot contain its effect,
+        # and a reading whose value has not moved since the last correction is
+        # the same evidence a second time. Acting on either is correcting twice
+        # for one deviation, which is how this loop would oscillate.
+        updated = self.meter.updated_at if self.meter else None
+        waited = (
+            (updated - self._last_write_at).total_seconds()
+            if updated is not None and self._last_write_at is not None
+            else None
+        )
+        if waited is not None and waited < TRIM_SETTLE_SECONDS:
+            return
+        if (
+            self._trim_last_grid is not None
+            and abs(grid - self._trim_last_grid) < TRIM_MIN_GRID_CHANGE
+        ):
+            return
+
+        # And wait for a response in proportion to what was asked for. Elapsed
+        # time alone is not enough: how long an effect needs to appear depends
+        # on the size of the correction, and a 1759 W command that has moved
+        # the grid by 3 W has plainly not landed yet, however many seconds have
+        # passed. Without this the loop doubles its own correction and winds
+        # the limit up to the device ceiling.
+        if (
+            self._trim_last_delta
+            and self._trim_last_grid is not None
+            and waited is not None
+            and waited < TRIM_RESPONSE_MAX_WAIT
+        ):
+            moved = abs(grid - self._trim_last_grid)
+            if moved < TRIM_RESPONSE_FRACTION * abs(self._trim_last_delta):
+                _LOGGER.debug(
+                    "trim | waiting: grid moved %.0fW of the %dW asked for",
+                    moved, abs(self._trim_last_delta),
+                )
+                return
+
         charging = direction == "charge"
         key = "inputLimit" if charging else "outputLimit"
         try:
@@ -314,9 +364,17 @@ class ZendureController:
         # how many watts of grid import to aim for. The sign flips because a
         # charge limit is a magnitude in the opposite direction, not because
         # the two are chasing different targets.
-        error = (grid - buffer) * self._trim_factor()
+        deviation = grid - buffer
+        raw = -deviation if charging else deviation
+
+        # Down runs at full strength, up at the configured one. Not a
+        # preference: a downward correction is clamped at zero and this loop
+        # cannot reverse, so it has no way to overshoot, while every watt added
+        # upward becomes export if the load then disappears. Damping the two
+        # together only made the safe direction slow. See TRIM_FACTOR_DOWN.
+        factor = TRIM_FACTOR_DOWN if raw < 0 else self._trim_factor()
         target = int(_clamp(
-            current - error if charging else current + error,
+            current + raw * factor,
             0,
             self._cap(data, charging),
         ))
@@ -325,10 +383,16 @@ class ZendureController:
         # loop: trimming below it would only be undone on the next poll, and
         # the two loops fighting over the same watt is worse than either
         # setting being slightly off.
+        #
+        # It also blocks the hand-back at zero, deliberately. A configured
+        # floor says this direction keeps running at at least this much, so
+        # letting the trim loop release the limit would override the setting
+        # for one cycle and have the mode loop restore it on the next. Zero is
+        # only reachable when no floor is set — which is the default.
         floor = self.settings.get_int(
             OPT_MIN_CHARGE_POWER if charging else OPT_MIN_DISCHARGE_POWER
         )
-        if floor > 0 and 0 < target < floor:
+        if floor > 0 and target < floor:
             target = int(min(floor, self._cap(data, charging)))
 
         if abs(target - current) < CONTROL_MIN_STEP_FAST:
@@ -336,6 +400,8 @@ class ZendureController:
 
         await self._write(key, target, data)
         self._fast_write_at = dt_util.utcnow()
+        self._trim_last_grid = grid
+        self._trim_last_delta = target - current
         self._trim_writes += 1
 
         if target <= 0:
@@ -349,8 +415,8 @@ class ZendureController:
 
         self.state.meter_power = grid
         _LOGGER.debug(
-            "trim | %s %sW -> %sW | grid=%.0fW buffer=%sW",
-            direction, current, target, grid, buffer,
+            "trim | %s %sW -> %sW | grid=%.0fW buffer=%sW factor=%.2f",
+            direction, current, target, grid, buffer, factor,
         )
 
     def _trim_factor(self) -> float:
@@ -526,6 +592,23 @@ class ZendureController:
             self._hold = 0
 
         if self._hold > 0:
+            # The hold protects *this* loop, not the trim loop. What it guards
+            # against is the absolute formula re-deriving a target from a
+            # measured battery power that has not caught up with the last
+            # write, and so counting the same deviation twice. The trim loop
+            # never reads that value: it adjusts the limit it wrote itself, and
+            # refuses any meter sample that cannot contain its last write.
+            #
+            # Blocking it here cost real energy. Observed at 17:31:33: the grid
+            # sat at 2542 W of unserved import for a full ten-second cycle
+            # while the hold ran, with the battery discharging 974 W and
+            # nothing raising it. The trim loop closes that gap in seconds and
+            # cannot, by construction, reverse the direction while doing so.
+            running = self._device_direction(data)
+            allowed = allow_charge if running == "charge" else allow_discharge
+            if running != "none" and allowed and self._commanded > 0:
+                self._trim_direction = running
+
             # Report first, then count down. The other order announces "0 left"
             # on a cycle it still skips, which reads as a contradiction.
             remaining = self._hold
@@ -829,17 +912,27 @@ class ZendureController:
         ):
             return
 
+        # The mode loop's steps are as large as the trim loop's, and the
+        # response gate is about the size of a correction rather than about
+        # which loop made it. Recording it here keeps the trim loop from
+        # doubling a step it did not write itself.
+        self._trim_last_grid = grid
+        self._trim_last_delta = target - current_val
+
         if starting:
             self._hold = self._hold_cycles()
         self._last_direction = direction if target > 0 else "none"
         self._idle_since = None
 
-        # Trimming resumes only once the direction is established. While
-        # starting, the hold is running and the device has not yet settled at
-        # the new limit, so a trim would be correcting against a transient.
-        self._trim_direction = None if starting else (
-            direction if target > 0 else None
-        )
+        # Trimming is handed the direction immediately, including on the
+        # starting cycle. The first step is deliberately undershot by a
+        # quarter, and waiting two mode cycles to close that gap is what left
+        # short load events entirely unserved: a coffee machine at 17:27 ran
+        # its whole cycle inside one starting step and one balancing step,
+        # with the trim loop never enabled. What made this unsafe before was
+        # acting on a reading that predates the write; that is now refused in
+        # _trim rather than avoided by standing still.
+        self._trim_direction = direction if target > 0 else None
 
         self._set_state(
             "starting" if starting else "balancing",
@@ -986,6 +1079,7 @@ class ZendureController:
         _LOGGER.debug("write %s: %s -> %s", key, current, value)
         await self.coordinator.api.async_write_property(key, value)
         data[key] = value
+        self._last_write_at = dt_util.utcnow()
 
     # ── State ────────────────────────────────────────────────────────────
 
@@ -1016,7 +1110,8 @@ class ZendureController:
             "writes_enabled": self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY,
             "trim_direction": self._trim_direction or "none",
             "trim_writes": self._trim_writes,
-            "trim_factor": self._trim_factor(),
+            "trim_factor_up": self._trim_factor(),
+            "trim_factor_down": TRIM_FACTOR_DOWN,
         }
 
         # One line per decision. The status sensor shows the outcome; this shows
