@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
@@ -58,6 +59,12 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.api = api
+        # When the last successful payload arrived, and when the request that
+        # produced it went out. The pair is what lets a second loop reason
+        # about age: "how old is this reading" needs the first, and "could this
+        # reading predate a write made a moment ago" needs the second.
+        self.updated_at: datetime | None = None
+        self.fetch_started_at: datetime | None = None
         self.raw: dict[str, Any] = {}
         self.pack_count = 0
         self.device_id: str | None = None
@@ -77,11 +84,13 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.update_interval = timedelta(seconds=seconds)
 
     async def _async_update_data(self) -> dict[str, Any]:
+        self.fetch_started_at = dt_util.utcnow()
         try:
             payload = await self.api.async_get_report()
         except ZendureApiError as err:
             raise UpdateFailed(str(err)) from err
 
+        self.updated_at = dt_util.utcnow()
         self.raw = payload
         flat = self._flatten(payload)
         self._learn_identity(payload, flat)
