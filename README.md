@@ -229,9 +229,74 @@ The strategy is a single `select` entity, `Operation mode`:
 
 The default is `standby`, so nothing moves until a mode is chosen deliberately.
 
-### Once per poll, not on a timer
+### Two loops, because the two decisions have different tempos
 
-The controller runs at the end of each coordinator refresh. That matters: a separate timer would sooner or later apply a correction based on readings from the previous cycle, correcting twice for one deviation. That is how oscillation gets built.
+Which mode applies and which direction runs changes on the scale of minutes. Following the
+house between those decisions is a per-second job. Before v1.1.0 both ran on the battery poll,
+so a meter reporting every second was read once every ten and nine samples went in the bin.
+
+**The mode loop** runs at the end of each battery refresh, so it always acts on readings from
+that same cycle. It owns everything that needs the device to be believed: mode, direction,
+when a direction may start, stop or reverse, SOC protection, and the ceilings.
+
+**The trim loop** runs once per meter sample and may do exactly one thing — adjust the limit
+*within* the direction already running. It never starts a direction, never reverses one, and
+never overrules a mode. Reaching zero is its floor, not a reversal: the limit is released and
+the mode loop decides what happens next.
+
+That restriction is the fix rather than a compromise. A 1700 W coffee machine was measured
+producing a swing of +1750, −1700, +1550, −1500 W across 80 seconds. Those reversals were not
+wrong decisions — by the time the mode loop looked, the grid genuinely had been at −1700 W for
+several seconds, and charging was the right answer to that reading. The fault was lateness, not
+logic, and a loop that trims every second never reaches the state where the reversal looks
+reasonable.
+
+The two loops use the same equation in different forms:
+
+```
+mode loop (absolute):     target = (grid + battery − buffer) × factor
+trim loop (incremental):  target = limit + (grid − buffer) × trim strength
+```
+
+They agree whenever the device is holding the limit it was given, and they fail differently
+when it is not. The absolute form needs a fresh battery reading, which only the mode loop has.
+The incremental form needs only the limit last written, which the controller knows exactly
+because it wrote it — but it would drift if the device silently failed to follow. Hence the
+pairing: the trim loop follows, and every battery poll resynchronises against measured truth.
+
+A single timer running both would be the worst of the two: it would correct twice for one
+deviation at the fast rate, and poll the battery ten times more often than anything needs.
+
+### Trim strength
+
+The trim loop is damped, and by default only applies half of each correction. This is not a
+speed control — it is what keeps the loop from ringing.
+
+The meter reports 0.4 to 1.1 seconds behind reality. At one correction per second that is a
+whole loop period of dead time: the loop commits a correction for a deviation whose answer it
+has not seen yet. Simulated at 1 s intervals with 1 s of delay:
+
+| Trim strength | Residual swing, 1 s delay | Residual swing, 2 s delay | Recovery after a load vanishes |
+|---|---|---|---|
+| 100% | 500 W, never settles | 985 W, never settles | 59 s |
+| 70% | settles | 621 W, never settles | 5 s |
+| 60% | settles | 197 W | 5 s |
+| **50%** *(default)* | **settles** | **settles** | **6 s** |
+| 30% | settles | settles | 6 s |
+
+The cost of the default is one extra second of recovery against a loop that would otherwise
+ring indefinitely. Raise it only if the meter is measured to be faster than assumed.
+
+The mode loop keeps its full correction, because one second of dead time is a tenth of a period
+there rather than a whole one.
+
+### Writes
+
+The trim loop ignores adjustments below 25 W, wider than the mode loop's 10 W: at ten times the
+rate a 10 W threshold turns ordinary household flicker into a continuous stream of writes. A
+steady house therefore produces no trim writes at all, since the loop only acts on a deviation
+it has not already corrected. The suppression band does leave a residual on the grid of up to
+25 W ÷ trim strength; the mode loop closes that at its own 10 W threshold on the next poll.
 
 ### Why standby writes nothing
 
@@ -248,7 +313,7 @@ discharging: target = clamp( ( grid + battery - discharge_buffer) * factor , flo
 
 Four details do the real work.
 
-**The first step is undershot** (factor 0.75 rather than 1.00). The device's actual response is not yet known, so committing the full correction invites overshoot. Once the direction holds, the controller balances at 1.00.
+**The first step is undershot** (factor 0.75 rather than 1.00). The device's actual response is not yet known, so committing the full correction invites overshoot. Once the direction holds, the mode loop balances at 1.00 and hands the direction to the trim loop.
 
 **Direction is read from the device, not from memory.** The controller's own record is empty after a restart, a reload or a mode switch, while the device carries on with the limit it was last given. Deriving direction from which limit is non-zero avoids waiting for an idle state that cannot arrive.
 
@@ -317,7 +382,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 13 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, SOC protection |
+| **Controller** | 14 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
@@ -441,6 +506,42 @@ either direction, gives wrong answers at the other end of the range.
 ---
 
 ## Changelog
+
+### v1.1.0 — The trim loop
+
+- **The controller no longer discards nine meter samples out of ten.** It is now two loops: the
+  mode loop on the battery poll, which owns mode, direction and safety, and a trim loop
+  subscribed to the meter coordinator, which adjusts the limit within the running direction once
+  per sample. The trim loop cannot start, reverse or end a direction, so every expensive
+  decision stays with the loop that has fresh battery data.
+- **Added `Trim strength`** (30–100%, default 50). Damping for the trim loop, needed because the
+  meter runs up to a second behind and the loop corrects once a second. At full strength a
+  simulated 1 s loop with 1 s of meter delay sustains a 500 W oscillation and never settles.
+- **`Meter max age` is now enforced.** The constant had been declared since v1.0.0 and never
+  read: the controller ran on the battery poll and had no timestamp to compare against. The
+  coordinator now records when each payload arrived, and a stale meter suspends trimming rather
+  than steering on an old number.
+- **Fixed a race in the idle test.** The trim loop can write while a battery poll is in flight,
+  and the returned payload then describes the device from before that write. Measured battery
+  power near zero reads as idle, idle permits a direction change, and the reversal would be
+  written into a running inverter. A payload that may predate the most recent trim write is no
+  longer treated as idle.
+- Unloading a battery entry now drops its meter subscription. Without it the listener outlived
+  the entry and kept trimming a device Home Assistant considered unloaded.
+- **Fixed a misleading reason on the controller status sensor.** Three situations shared one
+  message. The grid can be inside both start thresholds, which is what "within thresholds"
+  describes. Or it is well past a threshold and the direction that would answer it is ruled out
+  by the mode — reported as `grid -137 W within thresholds` with a 5 W start threshold, in
+  `smart_discharge_only`. That states something the numbers on the same card visibly contradict,
+  on the one entity whose job is to explain why the battery is doing what it does. The blocked
+  case now names the mode that blocked it.
+- **Fixed `Battery power` being permanently unavailable.** It has been since it was added in
+  v1.0.3. The base entity class checks that the entity's key is present in the device payload,
+  which is right for a sensor that reads one field and impossible for one that computes a value:
+  no key named `battery_power` exists, because the figure is derived from `packInputPower` and
+  `outputPackPower`. The entity was created and then reported unavailable for its whole life,
+  which hides it from the entity pickers instead of showing an error. Every other derived
+  entity already overrode that check; this one did not.
 
 ### v1.0.4 — P1 meter characterisation, PowerShell in the readme
 
