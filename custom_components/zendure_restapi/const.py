@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.0.4"
+INTEGRATION_VERSION = "1.1.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -101,6 +101,7 @@ OPT_MIN_DISCHARGE_POWER = "min_discharge_power"
 OPT_CHARGE_BUFFER = "charge_buffer"
 OPT_DISCHARGE_BUFFER = "discharge_buffer"
 OPT_SOC_PROTECTION = "soc_protection"
+OPT_TRIM_FACTOR = "trim_factor"
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -115,14 +116,28 @@ DEFAULTS = {
     OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
     OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
     OPT_SOC_PROTECTION: True,
+    OPT_TRIM_FACTOR: 50,                # % of each trim correction, see const below
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────
 # The first step is deliberately undershot: the device's actual response is
 # not yet known, so committing the full correction invites overshoot. Once a
-# direction is established the controller balances at the full amount.
+# direction is established the mode loop applies the whole correction. It runs
+# at the battery interval, where the meter's own 0.4-1.1 s delay is a tenth of
+# a period and the absolute formula re-measures the result every cycle. Damping
+# there would only make it converge over two cycles instead of one.
 CONTROL_FACTOR_START = 0.75
 CONTROL_FACTOR_BALANCE = 1.00
+
+# The trim loop is the opposite case, which is why it has its own setting
+# (OPT_TRIM_FACTOR) rather than sharing the constant above. At one correction
+# per second against a meter that reports up to one second late, the dead time
+# is a whole period: the loop commits a full correction for a deviation whose
+# answer it has not seen. Simulated at 1 s with 1 s of delay, 100% sustains a
+# 500 W oscillation indefinitely and never settles; 80% and below settle. At
+# two samples of delay only 50% and below settle. The default is therefore 50,
+# not 100 — the measured cost of that choice is one extra second of recovery
+# after a load disappears, against a loop that otherwise rings forever.
 
 # Only start a new direction while the battery is genuinely idle. The measured
 # power is the weaker of the two tests: an inverter draws its own standby power
@@ -134,6 +149,13 @@ CONTROL_DEADBAND = 60           # W
 # Ignore adjustments smaller than this, to avoid pointless writes.
 CONTROL_MIN_STEP = 10           # W
 
+# The same threshold for the trim loop, which runs once per meter sample
+# instead of once per battery poll. It is wider on purpose: at ten times the
+# rate, a 10 W threshold turns ordinary household flicker into a continuous
+# stream of writes. A quiet house produces no writes at all, because the trim
+# only acts on a deviation it has not already corrected.
+CONTROL_MIN_STEP_FAST = 25      # W
+
 # Settling time after a direction change, before the controller acts again.
 # Expressed in seconds rather than cycles: the reading that matters is how long
 # the device has had to respond, which does not change when the polling
@@ -141,6 +163,9 @@ CONTROL_MIN_STEP = 10           # W
 # and 20 s at a 10 s interval, for no reason related to the hardware.
 CONTROL_DIRECTION_HOLD_SECONDS = 10
 
-# Meter data older than this is not trusted for closed-loop control.
+# Meter data older than this is not trusted for closed-loop control. Until
+# v1.1.0 this constant was declared and never read: the controller ran on the
+# battery poll and had no timestamp to compare against. The trim loop runs on
+# the meter itself, so the age is now both knowable and load-bearing.
 METER_MAX_AGE = 60              # seconds
 
