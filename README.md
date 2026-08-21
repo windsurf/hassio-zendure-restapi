@@ -183,7 +183,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 
 | Group | Count | Entities |
 |---|---|---|
-| **Sensor** | 49 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
+| **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
 | **Per battery** | 11 | Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
@@ -315,6 +315,16 @@ either direction, gives wrong answers at the other end of the range.
 ---
 
 ## Changelog
+
+### v1.0.3 — Battery power
+
+- Added `Battery power`, one signed figure: discharge minus charge, positive while discharging.
+  It matches the `battery_power` attribute on the controller status sensor, so the two cannot
+  disagree.
+- The Energy dashboard accepts the two separate readings for its counters, but its power flow
+  wants a single signed sensor. Choosing "two sensors" there makes Home Assistant derive the
+  same figure into a helper with a 118-character entity id; this is that calculation under a
+  readable name.
 
 ### v1.0.2 — Idle no longer clears the direction
 
