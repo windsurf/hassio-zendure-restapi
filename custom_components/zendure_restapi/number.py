@@ -16,6 +16,14 @@ settings and bound only what this integration writes. The controller uses the
 lower of the two, which is why both are kept: the device ceiling remains a hard
 limit at moments when this integration is not running.
 
+**Trim strength is damping, not a speed control.** The trim loop corrects
+the grid once per meter sample, but the meter itself reports 0.4 to 1.1 s
+behind reality. At full strength the loop therefore commits a whole correction
+for a deviation whose answer it has not seen yet, which is the standard recipe
+for an oscillating integrator. Below 100% each correction is partial and the
+remainder is carried by the next sample. It is stored as whole percent so it
+travels the same integer path as every other setting.
+
 **Ceilings are read from the device, not hard-coded.** ``chargeMaxLimit`` bounds
 the charge side and ``inverseMaxPower`` the discharge side. Both are writable,
 so the app is not needed to change them. Their values differ per device and per
@@ -53,6 +61,7 @@ from .const import (
     OPT_MAX_DISCHARGE_POWER,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    OPT_TRIM_FACTOR,
 )
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
@@ -351,6 +360,17 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         entity_category=EntityCategory.CONFIG,
         icon="mdi:target",
     ), OPT_DISCHARGE_BUFFER),
+    (ZendureNumberDescription(
+        key="trim_factor",
+        name="Trim strength",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=30,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.SLIDER,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:tune-variant",
+    ), OPT_TRIM_FACTOR),
 )
 
 
