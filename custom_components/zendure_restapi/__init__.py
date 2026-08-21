@@ -10,10 +10,12 @@ Two device classes are supported and each gets its own config entry:
 * The P1 meter, which reports a flat payload with per-phase power and no serial
   number.
 
-A battery entry also runs the operation-mode controller. It executes once per
-coordinator poll, so it always acts on readings from that same cycle — a
-controller on its own timer would eventually correct twice for one deviation,
-which is how charge/discharge oscillation gets built.
+A battery entry also runs the operation-mode controller, which is two loops.
+The mode loop executes once per battery poll, so it always acts on readings
+from that same cycle — a loop on its own timer would eventually correct twice
+for one deviation, which is how charge/discharge oscillation gets built. The
+trim loop is subscribed to the meter coordinator instead, and follows the grid
+between battery polls without ever changing direction. See controller.py.
 """
 
 from __future__ import annotations
@@ -143,6 +145,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         store = hass.data.get(DOMAIN, {})
         store.pop(entry.entry_id, None)
-        store.pop(f"{entry.entry_id}{RUNTIME_SUFFIX}", None)
+        # Drop the meter subscription before the controller leaves the store.
+        # After the pop, _link_meters can no longer reach it, so a listener
+        # left behind here would outlive the entry and keep trimming a device
+        # Home Assistant considers unloaded.
+        runtime = store.pop(f"{entry.entry_id}{RUNTIME_SUFFIX}", None)
+        if runtime is not None:
+            runtime["controller"].detach_meter()
         _link_meters(hass)
     return unloaded
