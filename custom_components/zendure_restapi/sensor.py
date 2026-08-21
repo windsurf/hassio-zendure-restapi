@@ -386,6 +386,13 @@ async def async_setup_entry(
             )
         )
 
+    if "packInputPower" in data and "outputPackPower" in data:
+        entities.append(
+            ZendureBatteryPowerSensor(
+                coordinator, BATTERY_POWER_DESCRIPTION, device_id, model
+            )
+        )
+
     entities += _energy_sensors(coordinator, device_id, model)
     entities += _efficiency_sensors(coordinator, device_id, model)
 
@@ -498,6 +505,55 @@ class ZendureControllerSensor(ZendureSensor):
     @property
     def extra_state_attributes(self):
         return self._controller.state.attributes
+
+
+# ── Derived power ────────────────────────────────────────────────────────
+
+
+BATTERY_POWER_DESCRIPTION = SensorEntityDescription(
+    key="battery_power",
+    name="Battery power",
+    native_unit_of_measurement=UnitOfPower.WATT,
+    device_class=SensorDeviceClass.POWER,
+    state_class=SensorStateClass.MEASUREMENT,
+    icon="mdi:battery-charging-50",
+)
+
+
+class ZendureBatteryPowerSensor(ZendureEntity, SensorEntity):
+    """Battery power as one signed figure: discharge minus charge.
+
+    The device reports the two directions as separate positive readings, which
+    the Energy dashboard accepts, but a single signed sensor is what its power
+    flow needs. Selecting "two sensors" there makes Home Assistant derive the
+    same figure into a helper with a 118-character entity id; this is that
+    calculation, done once, under a readable name.
+
+    Positive is discharging, matching the battery_power attribute on the
+    controller status sensor. Two sensors of the same name with opposite signs
+    is a trap worth not setting.
+    """
+
+    def __init__(
+        self,
+        coordinator: ZendureCoordinator,
+        description: SensorEntityDescription,
+        device_id: str,
+        model: str,
+    ) -> None:
+        super().__init__(coordinator, description, device_id, model)
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data or {}
+        discharge = data.get("packInputPower")
+        charge = data.get("outputPackPower")
+        if discharge is None or charge is None:
+            return None
+        try:
+            return float(discharge) - float(charge)
+        except (TypeError, ValueError):
+            return None
 
 
 # ── Energy counters ──────────────────────────────────────────────────────
