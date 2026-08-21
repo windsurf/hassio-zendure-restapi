@@ -25,13 +25,18 @@ Under EN 18031 the local HTTP API is **disabled by default**. Enable it first:
 
 > Zendure app → add **HEMS** → exit the app to apply.
 
-Verify from a terminal before configuring anything:
+Verify from a terminal before configuring anything.
 
 ```bash
-curl -X GET "http://<device-ip>/properties/report"
+curl "http://<device-ip>/properties/report"
 ```
 
-If that returns JSON, the integration will work. If it returns nothing, the local API is still off and no amount of configuration will help.
+```powershell
+Invoke-RestMethod "http://<device-ip>/properties/report" | ConvertTo-Json
+```
+
+If that returns JSON, the integration will work. If it times out or returns nothing, the local
+API is still off and no amount of configuration will help.
 
 ---
 
@@ -65,7 +70,128 @@ Model naming prefers the `product` field in the report payload, which is authori
 
 ### The P1 meter
 
-The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity therefore falls back to `deviceId`, and no writable entities are created because writes require a serial. It is read-only by nature.
+The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity
+therefore falls back to `deviceId`, and no writable entities are created because writes require
+a serial. It is read-only by nature.
+
+---
+
+## What the P1 meter does and does not give you
+
+The meter is the only feedback the control loop has, so it is worth being precise about what it
+can tell you. What follows was measured on a three-phase meter (`meterType` 3, `protocolType`
+51) against a second, independent P1 reader on the same connection point through a splitter —
+so both saw the same electricity at the same instant. Roughly 1,300 paired samples at 0.36 s
+and 1.1 s intervals, in two runs, one with the controller in `standby` so nothing was steering
+the grid.
+
+### What it gets right
+
+**The reading is accurate.** Over 60 samples at rest, the two meters averaged −22.6 W and
+−18.6 W with a spread of 16.5 W on both. The 4 W gap is smaller than the sample-to-sample
+noise, so there is no measurable systematic error.
+
+**The phase readings are consistent with the total.** `a_aprt_power + b_aprt_power +
+c_aprt_power` matches `total_power` to within 0.2 W on average. Single snapshots disagree by
+tens of watts because the fields are not sampled at the same instant, but there is no offset.
+
+**The sign convention holds.** Positive is import, negative is export, confirmed against the
+reference meter across the full range from −1,700 W to +2,250 W.
+
+**Fast to query.** Round trips average 23 ms with a worst case of 31 ms and no failures over 30
+consecutive requests. The network is never the bottleneck.
+
+### The refresh rate
+
+**`total_power` updates roughly once per second**, in step with the meter's own P1 telegram.
+Sampled four times a second, each value repeats about three times before changing.
+
+Polling faster than 1 s therefore returns the same number again. Below that there is nothing to
+gain, and the same holds for the reference meter — this is a property of the telegram, not of
+the device.
+
+### The delay
+
+**The meter lags a second reader by 0.4 to 1.1 seconds.** This is the finding that matters most
+for control, and it is consistent rather than occasional.
+
+| Load step | Delay behind the reference |
+|---|---|
+| 2,234 W, rise | 1,111 ms |
+| 1,414 W, rise | 740 ms |
+| 1,900 W, rise | 389 ms |
+| 2,250 W, rise | 0 ms |
+
+That last one is not a contradiction: the step happened to coincide with a refresh. A single
+observation would have concluded the meters were equally fast, which is exactly what the first
+run did conclude before the other three were measured.
+
+Cross-correlating every sample rather than only the steps confirms it independently. The best
+agreement between the meter and the reference is at a shift of one to two samples — 0.4 to
+0.7 s — and it holds in both runs, so it is not an artefact of the controller acting on the
+grid.
+
+Visible in the raw samples, where the meter holds a stale value for three cycles after a load
+appears:
+
+```
+09:41:49.779   reference 2234 W    meter  -69 W
+09:41:50.155   reference 2234 W    meter  -69 W
+09:41:50.521   reference 2234 W    meter  -69 W
+09:41:50.890   reference 2179 W    meter 2179 W
+```
+
+**What this means in practice.** A control loop reading this meter is acting on a picture of the
+grid that is up to a second old. At a 10 s control interval that is a fraction of the cycle and
+hardly matters; at a 1 s interval it is the dominant source of error. It also sets a floor on
+how tightly any loop can hold the grid at zero, no matter how fast it writes.
+
+### What it does not have
+
+**No cumulative counters.** The meter reports instantaneous power only. Every sample taken
+between two polls is gone — poll at 10 s while the meter refreshes at 1 s and nine readings are
+discarded. A meter that counts loses nothing at any polling rate, because the difference between
+two readings still covers the whole interval.
+
+**No import and export registers.** The smart meter's own `1.8.1`, `1.8.2`, `2.8.1` and `2.8.2`
+are in every P1 telegram, and the reference reader exposes all four. This meter exposes none of
+them, not even their net sum.
+
+That matters more than it used to. Where import and export are settled separately — as they
+will be in the Netherlands from 2027 — the net figure hides what you are billed on. In one
+two-minute window the reference registers showed 5 Wh imported and 14 Wh exported: a net of
+−9 Wh concealing 19 Wh of actual exchange.
+
+**No second endpoint.** `/properties/report` is all there is. `/properties/list`,
+`/device/info`, `/meter/report` and `/properties/get` all return 404, and a port scan finds only
+80 open — no MQTT, no Modbus. There is no richer channel hiding behind another protocol.
+
+### Suggestions for the device firmware
+
+Each of these is something the hardware already has and the API does not expose. They are listed
+in the order they would help a control loop.
+
+**Expose a timestamp for the reading itself.** The payload carries `timestamp` and `messageId`,
+but nothing that says when the underlying measurement was taken. A consumer cannot tell a fresh
+value from one repeated for the third time, and so cannot correct for the delay or detect a
+stalled telegram feed.
+
+**Reduce the delay, or document it.** Up to a second of lag on a meter sold for closed-loop
+control is significant. If it is inherent to the design, saying so in the documentation would
+let integrators compensate rather than discover it by measurement.
+
+**Expose the four energy registers.** `1.8.1`, `1.8.2`, `2.8.1`, `2.8.2` arrive in every
+telegram. Publishing them costs nothing and gives consumers an exact energy balance over any
+interval, independent of polling rate, plus the import/export split that billing increasingly
+requires.
+
+**Report a serial number.** The device identifies itself only by `deviceId`. Home Assistant and
+comparable systems key device identity on a serial; without one, an integration must invent a
+fallback, and no writable entities can be offered safely.
+
+**Document the units and conventions.** `a_aprt_power` is labelled apparent power but tracks
+real power in practice. `protocolType` 51 and `meterType` 3 are undocumented. A short table of
+fields, units and sign conventions would remove a class of integration errors entirely.
 
 ---
 
@@ -316,6 +442,18 @@ either direction, gives wrong answers at the other end of the range.
 
 ## Changelog
 
+### v1.0.4 — P1 meter characterisation, PowerShell in the readme
+
+- Added a section on what the P1 meter measures, how often it refreshes, and how far it lags,
+  measured against an independent reader on the same connection point through a splitter.
+  Roughly 1,300 paired samples across two runs. The headline: readings are accurate and the
+  phase sum is consistent, but the meter runs 0.4 to 1.1 seconds behind and has no cumulative
+  counters or energy registers.
+- The pre-flight check now shows a PowerShell command alongside the `curl` one. Windows has no
+  `curl` that takes those arguments — `curl.exe` exists but `curl` is an alias for
+  `Invoke-WebRequest`, which rejects `-X` and reads as a syntax error rather than a missing
+  tool.
+
 ### v1.0.3 — Battery power
 
 - Added `Battery power`, one signed figure: discharge minus charge, positive while discharging.
@@ -386,7 +524,7 @@ taken from the specification:
 
 ### v0.9.7 — Remove meter sign inversion
 
-- Removed `Invert meter sign`. The convention was verified against a second meter on the same connection — 2088 W on the Zendure against 2059 W on the YouLess, both positive while importing — so the setting had nothing left to correct.
+- Removed `Invert meter sign`. The convention was verified against a second meter on the same connection — 2088 W on the Zendure against 2059 W on the reference reader, both positive while importing — so the setting had nothing left to correct.
 
 ### v0.9.6 — README and hacs.json
 
