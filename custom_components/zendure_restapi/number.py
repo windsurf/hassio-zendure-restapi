@@ -16,13 +16,21 @@ settings and bound only what this integration writes. The controller uses the
 lower of the two, which is why both are kept: the device ceiling remains a hard
 limit at moments when this integration is not running.
 
-**Trim strength is damping, not a speed control.** The trim loop corrects
-the grid once per meter sample, but the meter itself reports 0.4 to 1.1 s
-behind reality. At full strength the loop therefore commits a whole correction
-for a deviation whose answer it has not seen yet, which is the standard recipe
-for an oscillating integrator. Below 100% each correction is partial and the
-remainder is carried by the next sample. It is stored as whole percent so it
-travels the same integer path as every other setting.
+**Trim strength damps the upward direction only.** The trim loop corrects the
+grid once per meter sample, but the meter itself reports 0.4 to 1.1 s behind
+reality, so at full strength it commits a whole correction for a deviation
+whose answer it has not seen yet. 80% is the highest value that settles at two
+samples of delay as well as one, which is why it is the default.
+
+Lowering the limit runs at full strength regardless of this setting. That is
+not an oversight: a downward correction is clamped at zero and the trim loop
+cannot reverse, so it has no way to overshoot, while every cycle spent easing
+towards zero is a cycle of pushing power onto the grid. Measured on hardware:
+at 30% both ways a load event took ten seconds to wind down against four at
+50%, and the extra six seconds sat between -2500 and -800 W.
+
+It is stored as whole percent so it travels the same integer path as every
+other setting.
 
 **Ceilings are read from the device, not hard-coded.** ``chargeMaxLimit`` bounds
 the charge side and ``inverseMaxPower`` the discharge side. Both are writable,
@@ -365,7 +373,7 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         name="Trim strength",
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=30,
-        native_max_value=100,
+        native_max_value=100,   # 100 is offered but rings at two samples of delay
         native_step=5,
         mode=NumberMode.SLIDER,
         entity_category=EntityCategory.CONFIG,
