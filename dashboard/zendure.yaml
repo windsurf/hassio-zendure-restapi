@@ -62,7 +62,7 @@ sections:
     entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
     icon: mdi:battery-charging
   - type: tile
-    entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_power
+    entity: sensor.zendure_solarflow_3000_mix_ac_battery_power
     icon: mdi:flash
   - type: tile
     entity: sensor.zendure_solarflow_3000_mix_ac_battery_state
