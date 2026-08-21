@@ -544,6 +544,16 @@ class ZendureBatteryPowerSensor(ZendureEntity, SensorEntity):
         super().__init__(coordinator, description, device_id, model)
 
     @property
+    def available(self) -> bool:
+        # Not backed by a single coordinator key, so the base check does not
+        # apply. Without this override the base class looks for a key named
+        # "battery_power" in the device payload, which cannot exist: the value
+        # is computed from packInputPower and outputPackPower. The entity was
+        # therefore created and then reported unavailable for its whole life,
+        # which hides it from the entity pickers rather than showing an error.
+        return self.coordinator.last_update_success
+
+    @property
     def native_value(self) -> float | None:
         data = self.coordinator.data or {}
         discharge = data.get("packInputPower")
