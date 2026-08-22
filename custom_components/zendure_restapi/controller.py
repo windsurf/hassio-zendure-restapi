@@ -67,12 +67,8 @@ from .const import (
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
     CONTROL_MIN_STEP_FAST,
-    TRIM_FACTOR_DOWN,
-    TRIM_MIN_GRID_CHANGE,
-    TRIM_RESPONSE_FRACTION,
-    TRIM_RESPONSE_MAX_WAIT,
-    TRIM_SETTLE_SECONDS,
     METER_MAX_AGE,
+    METER_SANE_LIMIT,
     MODE_MANUAL,
     MODE_QUICK_CHARGE,
     MODE_QUICK_DISCHARGE,
@@ -164,12 +160,11 @@ class ZendureController:
         self._trim_direction: str | None = None
         self._trim_busy = False
         self._fast_write_at: datetime | None = None
-        # Any write, by either loop. The trim loop refuses to act on a meter
-        # reading that was fetched before this moment, because such a reading
-        # cannot contain the effect of that write.
-        self._last_write_at: datetime | None = None
-        self._trim_last_grid: float | None = None
-        self._trim_last_delta: int = 0
+        # Ordered but not yet seen, in grid watts. Signed: negative means the
+        # grid is still expected to fall. This is the whole of what makes the
+        # loop device-independent — see const.py.
+        self._pending: float = 0.0
+        self._prev_grid: float | None = None
         self._trim_writes = 0
         self._unsub_meter: Any = None
 
@@ -236,6 +231,10 @@ class ZendureController:
         # the trim loop without having to remember to say so.
         self._trim_direction = None
 
+        # The outstanding amount is not cleared here: this loop re-derives it
+        # from measured battery power further down, and a reset in between
+        # would let the trim loop order those watts a second time.
+
         data = self.coordinator.data or {}
         if not data:
             self._set_state("waiting", "no device data")
@@ -299,51 +298,12 @@ class ZendureController:
 
         grid = self._meter_power()
         if grid is None:
-            # No trustworthy feedback. Winding down here would be a direction
-            # decision, which is not this loop's to make; the mode loop already
-            # clears both limits on a dead meter. Standing still until it runs
-            # is the smaller of the two wrongs.
-            self._trim_direction = None
+            # No trustworthy feedback. A closed loop with no feedback is worse
+            # than no loop, so the battery is stopped rather than steered on a
+            # guess. Releasing to zero is always safe: it is the direction the
+            # clamp already allows, and it cannot reverse anything.
+            await self._fail_safe(data, "no valid meter reading")
             return
-
-        # ── Act only on evidence ─────────────────────────────────────
-        # A reading fetched before the last write cannot contain its effect,
-        # and a reading whose value has not moved since the last correction is
-        # the same evidence a second time. Acting on either is correcting twice
-        # for one deviation, which is how this loop would oscillate.
-        updated = self.meter.updated_at if self.meter else None
-        waited = (
-            (updated - self._last_write_at).total_seconds()
-            if updated is not None and self._last_write_at is not None
-            else None
-        )
-        if waited is not None and waited < TRIM_SETTLE_SECONDS:
-            return
-        if (
-            self._trim_last_grid is not None
-            and abs(grid - self._trim_last_grid) < TRIM_MIN_GRID_CHANGE
-        ):
-            return
-
-        # And wait for a response in proportion to what was asked for. Elapsed
-        # time alone is not enough: how long an effect needs to appear depends
-        # on the size of the correction, and a 1759 W command that has moved
-        # the grid by 3 W has plainly not landed yet, however many seconds have
-        # passed. Without this the loop doubles its own correction and winds
-        # the limit up to the device ceiling.
-        if (
-            self._trim_last_delta
-            and self._trim_last_grid is not None
-            and waited is not None
-            and waited < TRIM_RESPONSE_MAX_WAIT
-        ):
-            moved = abs(grid - self._trim_last_grid)
-            if moved < TRIM_RESPONSE_FRACTION * abs(self._trim_last_delta):
-                _LOGGER.debug(
-                    "trim | waiting: grid moved %.0fW of the %dW asked for",
-                    moved, abs(self._trim_last_delta),
-                )
-                return
 
         charging = direction == "charge"
         key = "inputLimit" if charging else "outputLimit"
@@ -356,68 +316,82 @@ class ZendureController:
             self._trim_direction = None
             return
 
+        # ── What has arrived since the last look ─────────────────────
+        # Movement in the direction the outstanding order predicted counts as
+        # that order landing. Movement the other way is the house, and must
+        # not be credited: over-crediting would let the loop order the same
+        # watts twice, which is the whole thing this avoids.
+        if self._prev_grid is not None and self._pending != 0.0:
+            moved = grid - self._prev_grid
+            if (self._pending < 0 < -moved) or (self._pending > 0 < moved):
+                if abs(moved) >= abs(self._pending):
+                    self._pending = 0.0
+                else:
+                    self._pending -= moved
+        self._prev_grid = grid
+
         buffer = self.settings.get_int(
             OPT_CHARGE_BUFFER if charging else OPT_DISCHARGE_BUFFER
         )
 
-        # One error term for both directions. Both buffers mean the same thing:
-        # how many watts of grid import to aim for. The sign flips because a
-        # charge limit is a magnitude in the opposite direction, not because
-        # the two are chasing different targets.
-        deviation = grid - buffer
-        raw = -deviation if charging else deviation
+        # Every sample is a fresh measurement, but not a fresh error: the part
+        # already ordered and still on its way is subtracted before correcting.
+        effective = (grid - buffer) + self._pending
+        step = effective * self._trim_factor()
 
-        # Down runs at full strength, up at the configured one. Not a
-        # preference: a downward correction is clamped at zero and this loop
-        # cannot reverse, so it has no way to overshoot, while every watt added
-        # upward becomes export if the load then disappears. Damping the two
-        # together only made the safe direction slow. See TRIM_FACTOR_DOWN.
-        factor = TRIM_FACTOR_DOWN if raw < 0 else self._trim_factor()
+        # A discharge limit removes watts from the grid, a charge limit adds
+        # them, so the same intent moves the two the opposite way.
         target = int(_clamp(
-            current + raw * factor,
+            current - step if charging else current + step,
             0,
             self._cap(data, charging),
         ))
 
-        # The floor applies here for the same reason it applies in the mode
-        # loop: trimming below it would only be undone on the next poll, and
-        # the two loops fighting over the same watt is worse than either
-        # setting being slightly off.
-        #
-        # It also blocks the hand-back at zero, deliberately. A configured
-        # floor says this direction keeps running at at least this much, so
-        # letting the trim loop release the limit would override the setting
-        # for one cycle and have the mode loop restore it on the next. Zero is
-        # only reachable when no floor is set — which is the default.
+        # The floor keeps the direction alive at at least this much, and blocks
+        # the hand-back at zero: letting the trim loop release a limit the
+        # setting demands would only have the mode loop restore it next poll.
         floor = self.settings.get_int(
             OPT_MIN_CHARGE_POWER if charging else OPT_MIN_DISCHARGE_POWER
         )
         if floor > 0 and target < floor:
             target = int(min(floor, self._cap(data, charging)))
 
-        if abs(target - current) < CONTROL_MIN_STEP_FAST:
+        delta = target - current
+        if abs(delta) < CONTROL_MIN_STEP_FAST:
             return
 
         await self._write(key, target, data)
+        # Record it as ordered, in grid watts: a larger discharge limit means
+        # the grid still has that much further to fall.
+        self._pending += delta if charging else -delta
         self._fast_write_at = dt_util.utcnow()
-        self._trim_last_grid = grid
-        self._trim_last_delta = target - current
         self._trim_writes += 1
 
         if target <= 0:
-            # Zero is the floor of this loop, not a reversal: the limit is
-            # released, the direction is not changed and acMode is left alone.
-            # Restarting is a direction decision, so the mode loop takes it
-            # from here. This is the branch that ends the coffee-machine
-            # scenario without ever commanding the opposite direction.
             self._owns_limits = False
             self._trim_direction = None
 
         self.state.meter_power = grid
         _LOGGER.debug(
-            "trim | %s %sW -> %sW | grid=%.0fW buffer=%sW factor=%.2f",
-            direction, current, target, grid, buffer, factor,
+            "trim | %s %sW -> %sW | grid=%.0fW buffer=%sW pending=%.0fW",
+            direction, current, target, grid, buffer, self._pending,
         )
+
+    async def _fail_safe(self, data: dict[str, Any], reason: str) -> None:
+        """Stop the battery. Used when the meter cannot be believed."""
+        self._trim_direction = None
+        self._pending = 0.0
+        self._prev_grid = None
+        for key in ("inputLimit", "outputLimit"):
+            try:
+                if int(data.get(key) or 0) != 0:
+                    await self._write(key, 0, data)
+            except (TypeError, ValueError):
+                await self._write(key, 0, data)
+        self._owns_limits = False
+        self._last_direction = "none"
+        self._set_state("blocked", reason, blocked=True)
+        _LOGGER.warning("Battery stopped: %s", reason)
 
     def _trim_factor(self) -> float:
         """How much of each trim correction to apply, as a fraction.
@@ -541,10 +515,7 @@ class ZendureController:
         """Track the grid meter towards zero exchange."""
         grid = self._meter_power()
         if grid is None:
-            # No trustworthy feedback: stop rather than guess.
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
-            self._set_state("blocked", "no meter reading", blocked=True)
+            await self._fail_safe(data, "no valid meter reading")
             return
 
         own = self._battery_power(data)
@@ -912,12 +883,16 @@ class ZendureController:
         ):
             return
 
-        # The mode loop's steps are as large as the trim loop's, and the
-        # response gate is about the size of a correction rather than about
-        # which loop made it. Recording it here keeps the trim loop from
-        # doubling a step it did not write itself.
-        self._trim_last_grid = grid
-        self._trim_last_delta = target - current_val
+        # This loop knows the outstanding amount exactly, because it has the
+        # measured battery power: whatever the new limit asks for beyond what
+        # the device is actually delivering is still on its way. Setting it
+        # here rather than adding to it is what keeps the two loops from
+        # ordering the same watts — the trim loop would otherwise re-order
+        # them from a reading that is a sample or two behind.
+        actual = own if not charging else -own
+        outstanding = max(0.0, target - actual)
+        self._pending = outstanding if charging else -outstanding
+        self._prev_grid = grid
 
         if starting:
             self._hold = self._hold_cycles()
@@ -991,6 +966,13 @@ class ZendureController:
         try:
             power = float(value)
         except (TypeError, ValueError):
+            return None
+
+        # Beyond this it is not a measurement but a fault, and a fault must
+        # stop the battery rather than steer it. A 3x25 A connection cannot
+        # carry anything near this.
+        if abs(power) > METER_SANE_LIMIT:
+            _LOGGER.warning("Implausible meter reading %.0fW, ignored", power)
             return None
 
         return power
@@ -1079,7 +1061,6 @@ class ZendureController:
         _LOGGER.debug("write %s: %s -> %s", key, current, value)
         await self.coordinator.api.async_write_property(key, value)
         data[key] = value
-        self._last_write_at = dt_util.utcnow()
 
     # ── State ────────────────────────────────────────────────────────────
 
@@ -1110,8 +1091,8 @@ class ZendureController:
             "writes_enabled": self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY,
             "trim_direction": self._trim_direction or "none",
             "trim_writes": self._trim_writes,
-            "trim_factor_up": self._trim_factor(),
-            "trim_factor_down": TRIM_FACTOR_DOWN,
+            "trim_gain": self._trim_factor(),
+            "trim_pending": round(self._pending),
         }
 
         # One line per decision. The status sensor shows the outcome; this shows
