@@ -300,10 +300,17 @@ measurable as a slow limit cycle of several hundred watts.
 
 Two things remain, and neither describes the device:
 
-**A threshold.** Do not write a correction smaller than the house wanders by on its own, or the
-loop chases the household into a limit cycle — observed at a load of about 200 W as 19 writes a
-minute with the grid swinging between −106 and +122 W. The wander is roughly −30 to +20 W, so the
-threshold sits at 40 W.
+**A threshold**, `Trim threshold`, default 40 W, with `Mode threshold` at 10 W for the other
+loop. Do not write a correction smaller than the house wanders by on its own, or the loop chases
+the household into a limit cycle — observed at a load of about 200 W as 19 writes a minute with
+the grid swinging between −106 and +122 W. The wander in a quiet house is roughly −30 to +20 W,
+which is where 40 comes from.
+
+Both are settings rather than constants because the right value is a property of the house: the
+wander measured on this one varied between 4 and 146 W median over a single afternoon, a factor
+of thirty-five. Raising them is worth trying and easy to undo — see the notes under v1.3.0 for
+what was measured at 125 and 350 W, and why it is not the recommendation it first appeared to
+be.
 
 **A gain**, `Trim strength`, default 80%. Below 100 for the reason any feedback loop is: the
 bookkeeping removes double-counting, not the meter's own delay.
@@ -346,15 +353,19 @@ documentation for this device alone.
 Releasing to zero is always safe: it is the direction the clamp already allows, and it cannot
 reverse anything.
 
-### Why standby touches no limit
+### Standby stops the battery, once
 
-A zero is still a command. Earlier versions had `standby` write zeros to both limits, and on a device running its own energy manager that produces a fight: the manager sets a discharge limit to cover the house, the integration overwrites it with zero on the next poll, the manager sets it back. Measured on hardware as a square wave in grid power at the polling interval.
+Selecting `standby` sends one command and then goes quiet:
 
-Two writes happen on entry, in this order, and nothing after.
+```json
+{"inputLimit": 0, "outputLimit": 0, "smartMode": 0}
+```
 
-A limit this controller set itself is cleared, once. A limit set by the device's own manager is never touched. Then `smartMode` is handed back to 0, because the smart modes force it to 1 to keep their frequent limit writes out of flash and the device will not drop to its low-power state while that flag is set — see [Standby draw](#known-limitations).
+The limits go to zero whether or not this controller set them — selecting standby should stop the battery, not hand it over. `smartMode` goes back to 0 in the same breath, because the smart modes force it to 1 to keep their frequent limit writes out of flash and the device will not drop to its low-power state while that flag is set. See [Standby draw](#known-limitations).
 
-Neither write is a setpoint, so a device managing itself is left alone, and the `writer` column in the trace keeps meaning what it means.
+**Once, and only once.** A zero is still a command, and repeating it every poll is what v0.5.0 removed: on a device running its own energy manager the manager sets its limit back a second later, the integration overwrites it on the next poll, and the two produce a square wave in grid power at the polling interval. After the command the controller is passive again, and a limit that appears afterwards is left alone.
+
+That is also what keeps the `writer` column in the trace meaningful: outside that one command, every limit change in `standby` came from somewhere else.
 
 ### The smart control loop
 
@@ -389,7 +400,7 @@ Keep each start threshold further from zero than its buffer, or the direction ne
 
 `Min charge power` and `Min discharge power` raise the target above what the meter asks for, in every smart mode. Both default to 0, which disables the floor.
 
-With a 400 W charge floor and 100 W of surplus, the device charges 400 W: 100 from the surplus, 300 bought from the grid. That is the point — the energy is cheap now and worth more later. Note that zero-on-the-meter only holds while both floors are at 0.
+With a 150 W charge floor and 100 W of surplus, the device charges 150 W: 100 from the surplus, 50 bought from the grid. That is the point — the energy is cheap now and worth more later. Note that zero-on-the-meter only holds while both floors are at 0.
 
 The two directions are not symmetric in value. Overcharging is compared against the future import tariff, the full retail price; overdischarging exports at the feed-in rate. Setting the charge floor is usually worthwhile, setting the discharge floor rarely is.
 
@@ -434,7 +445,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 15 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording |
+| **Controller** | 17 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
@@ -618,6 +629,39 @@ cell readings.
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.3.0 — Two write thresholds you can set
+
+- **Added `Mode threshold` and `Trim threshold`**, the smallest adjustment each loop bothers to
+  write. They replace two constants of 10 and 40 W and default to those values, so nothing
+  changes until they are raised on purpose. Range 0 to 500 W.
+- Both apply to **adjustments only**. Opening a direction is never gated: the mode loop skips the
+  threshold while starting, and the trim loop is only entered while a direction is already
+  running. A threshold above the day's surplus therefore cannot leave the battery idle.
+- **What the numbers do, and what they do not.** Scoring 1818 writes over four hours by the grid
+  error four seconds after each one against the three seconds before it, the optimum came out at
+  mode 125 and trim 350: from 1818 writes to 318, and from +13.8 to +81.6 Wh. Measured again on
+  the hardware against churn — import and export integrated separately, which is the quantity
+  that costs money — the same settings came out **worse**:
+
+  | | Mode 125 / trim 350 | 10 and 40 |
+  |---|---|---|
+  | Churn | 126 Wh/h | **110 Wh/h** |
+  | Band, p5 to p95 | 481 W | **303 W** |
+  | Writes per minute | 3.5 | 8.4 |
+
+  The first measure rewards few large corrections: a write at 300 W of error scores well while
+  the error is allowed to grow in between. What matters is that the error stays small, and only
+  churn sees that. The two windows were not equally restless, so this is a direction rather than
+  a verdict — but the shipped defaults stay at 10 and 40 until a run alternating the two settings
+  in blocks says otherwise.
+- The two buffers, the two start thresholds and the two minimum powers now run to 200 W rather
+  than 1000, and every setting in watts steps by 5.
+- Fixed a `TypeError` introduced with the thresholds: they read their setting with a default
+  argument where `ZendureSettings.get_int()` takes none, so the mode loop raised on every cycle
+  and wrote nothing at all. Observed as 74 seconds of `smart_matching` doing nothing while 900 W
+  of surplus went to the grid. The test harness now mirrors the real signatures — it had been the
+  lenient one, which is why the call passed there and raised on the device.
+
 ### v1.2.0 — Standby lets the device sleep
 
 - **Standby now hands the flash flag back.** The smart modes force `smartMode` to 1 so their
@@ -675,8 +719,9 @@ findings and the fixes that changed behaviour and dropping the housekeeping.
   reported `within thresholds` for a direction the mode had ruled out.
 - The trim loop now runs during the settling hold and on the starting cycle; it used to be
   disabled in both, which left short load events handled entirely at ten-second granularity.
-- Every setting in watts shares one range and one step: the two buffers run to 1000 W like the
-  two start thresholds, and all of them step by 5.
+- Every setting in watts shares one step of 5 W, and the six that express a distance from zero on
+  the grid — the two buffers, the two start thresholds and the two minimum powers — share one
+  range of 0 to 200 W.
 
 ### v1.0.0–v1.0.4 — First stable release
 
