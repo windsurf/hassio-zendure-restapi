@@ -51,6 +51,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -93,6 +94,7 @@ from .const import (
 )
 from .coordinator import ZendureCoordinator
 from .settings import ZendureSettings
+from .trace import ZendureTrace
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,9 +118,24 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+def _as_int(value: Any) -> int | None:
+    """Best-effort integer, for recording rather than steering."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 
 # Keys through which the device publishes its own power ceiling.
 DEVICE_CAP_KEY = {True: "chargeMaxLimit", False: "inverseMaxPower"}
+
+# How many of this controller's own writes to remember per key, for telling its
+# own setpoints apart from the device's. Six covers the worst lag seen between
+# a write and the report that reflects it; the cost of remembering too many is
+# only that a value written long ago and later set by something else is
+# credited here, which is the mild direction to be wrong in.
+WRITE_HISTORY = 6
 
 
 class ZendureController:
@@ -168,6 +185,24 @@ class ZendureController:
         self._trim_writes = 0
         self._unsub_meter: Any = None
 
+        # ── Trace recording ──────────────────────────────────────────
+        # Who last moved each limit, and to what. An on-device energy manager
+        # never announces itself; the only trace it leaves is a setpoint this
+        # controller did not write. Comparing the two is what makes it
+        # measurable on the same yardstick as the loops here.
+        self.trace = ZendureTrace(coordinator.hass)
+        self._write_source = "none"
+        # The last few values written per key, newest first, not just the
+        # newest one. The device's report lags a write by a sample or two, so
+        # at a one-second poll an older value of our own comes back after a
+        # newer one; remembering only the newest reads that as somebody else's
+        # setpoint. Measured at a 1 s battery poll: seventeen of seventeen
+        # supposed foreign writes were values this controller had written one
+        # to six samples earlier.
+        self._last_written: dict[str, deque[tuple[int, str]]] = {}
+        self._seen_limits: dict[str, int | None] = {}
+        self._foreign_writes = 0
+
     # ── Wiring ───────────────────────────────────────────────────────────
 
     def attach_meter(self, meter: ZendureCoordinator | None) -> None:
@@ -190,7 +225,7 @@ class ZendureController:
 
         @callback
         def _on_meter() -> None:
-            meter.hass.async_create_task(self.async_trim())
+            meter.hass.async_create_task(self.async_sample())
 
         self._unsub_meter = meter.async_add_listener(_on_meter)
         _LOGGER.debug(
@@ -204,6 +239,8 @@ class ZendureController:
             self._unsub_meter()
             self._unsub_meter = None
         self._trim_direction = None
+        if self.trace.active:
+            self.coordinator.hass.async_create_task(self.trace.async_close())
 
     # ── Main entry point ─────────────────────────────────────────────────
 
@@ -225,6 +262,8 @@ class ZendureController:
             self._busy = False
 
     async def _run(self) -> None:
+        self._write_source = "mode"
+
         # Trimming is re-enabled only by the branch that establishes a healthy
         # running direction. Clearing it here means every early return below —
         # no data, protection, standby, manual, quick, holding, blocked — stops
@@ -270,6 +309,18 @@ class ZendureController:
 
     # ── Trim loop ────────────────────────────────────────────────────────
 
+    async def async_sample(self) -> None:
+        """Handle one meter sample: record it, then trim on it.
+
+        Recording comes first and runs in every mode, including standby, where
+        this controller writes nothing and whatever else steers the device is
+        the only thing moving. The row therefore describes the situation the
+        trim step is about to act on, and the write it makes appears on the
+        next row — cause before effect, which is what a trace is read for.
+        """
+        await self._record()
+        await self.async_trim()
+
     async def async_trim(self) -> None:
         """Execute one trim step, once per meter sample. Never raises."""
         if self._trim_busy or self._busy:
@@ -288,6 +339,7 @@ class ZendureController:
 
     async def _trim(self) -> None:
         """Adjust the running limit against the meter, within one direction."""
+        self._write_source = "trim"
         direction = self._trim_direction
         if direction is None:
             return
@@ -889,8 +941,18 @@ class ZendureController:
         # here rather than adding to it is what keeps the two loops from
         # ordering the same watts — the trim loop would otherwise re-order
         # them from a reading that is a sample or two behind.
+        #
+        # The difference is taken signed. Clamping it at zero booked increases
+        # and silently dropped reductions, which made the loop asymmetric in
+        # exactly the direction that costs money: on a falling load or a mode
+        # change the trim loop saw the whole deviation as fresh, ordered a
+        # second reduction on top of the one already in flight, and drove the
+        # limit to zero. The battery then stopped, and the mode loop needed a
+        # start plus a settling hold — some thirty seconds of doing nothing,
+        # observed three times on 22 August with an identical signature:
+        # 3000 W running, target 167 W, outstanding booked as nought.
         actual = own if not charging else -own
-        outstanding = max(0.0, target - actual)
+        outstanding = target - actual
         self._pending = outstanding if charging else -outstanding
         self._prev_grid = grid
 
@@ -1020,6 +1082,100 @@ class ZendureController:
         return -magnitude if charging else magnitude
 
 
+    # ── Trace recording ──────────────────────────────────────────────────
+
+    async def _record(self) -> None:
+        """Write one trace row. Records, never steers.
+
+        Nothing here may influence the loops: the row is assembled from values
+        they have already settled on, and a failure to write it is logged and
+        dropped. A recorder that can change an outcome is no longer measuring
+        the thing it was pointed at.
+        """
+        if not self.trace.wanted:
+            if self.trace.active:
+                await self.trace.async_close()
+            return
+
+        data = self.coordinator.data or {}
+        meter_data = (self.meter.data or {}) if self.meter is not None else {}
+
+        limits = {
+            "inputLimit": _as_int(data.get("inputLimit")),
+            "outputLimit": _as_int(data.get("outputLimit")),
+        }
+        writer = self._classify_writer(limits)
+
+        age = ""
+        if self.coordinator.updated_at is not None:
+            age = round(
+                (dt_util.utcnow() - self.coordinator.updated_at).total_seconds(), 1
+            )
+
+        # The accepted reading and the raw one are both recorded: when the
+        # fail-safe fires, the difference between them is the evidence for why.
+        grid = self._meter_power()
+        pack_in = _as_int(data.get("packInputPower"))
+        pack_out = _as_int(data.get("outputPackPower"))
+        pack = "" if pack_in is None and pack_out is None else (pack_in or 0) - (pack_out or 0)
+
+        await self.trace.async_sample({
+            "ts": dt_util.now().isoformat(timespec="milliseconds"),
+            "mode": self.settings.get(OPT_OPERATION_MODE),
+            "status": self.state.status,
+            "reason": self.state.reason,
+            "grid_w": "" if grid is None else round(grid),
+            "grid_raw_w": _as_int(meter_data.get("total_power")),
+            "battery_ac_w": round(self._battery_power(data)) if data else "",
+            "pack_dc_w": pack,
+            "soc": _as_int(data.get("electricLevel")),
+            "input_limit": limits["inputLimit"],
+            "output_limit": limits["outputLimit"],
+            "ac_mode": _as_int(data.get("acMode")),
+            "smart_mode": _as_int(data.get("smartMode")),
+            "battery_age_s": age,
+            "writer": writer,
+            "trim_direction": self._trim_direction or "none",
+            "pending_w": round(self._pending),
+            "trim_writes": self._trim_writes,
+            "foreign_writes": self._foreign_writes,
+        })
+
+    def _classify_writer(self, limits: dict[str, int | None]) -> str:
+        """Name whoever moved a limit since the previous sample.
+
+        A limit that moved to a value this controller wrote is its own; one
+        that moved to anything else was written on the device side — the
+        on-board energy manager, or the app. That is the whole trick to
+        measuring a manager that never announces itself: it leaves a setpoint
+        behind, and a setpoint nobody here ordered has exactly one other
+        possible author.
+
+        Foreign wins over own when both limits moved in the same sample: a
+        reversal that this controller only half caused is the interesting case,
+        not the boring one.
+        """
+        sources: set[str] = set()
+        for key, value in limits.items():
+            previous = self._seen_limits.get(key, "unset")
+            self._seen_limits[key] = value
+            if previous == "unset" or value is None or value == previous:
+                continue
+            own = next(
+                (w for w in self._last_written.get(key, ()) if w[0] == value), None
+            )
+            if own is not None:
+                sources.add(own[1])
+            else:
+                sources.add("foreign")
+                self._foreign_writes += 1
+
+        if "foreign" in sources:
+            return "foreign"
+        if sources:
+            return sorted(sources)[0]
+        return "none"
+
     # ── Writes ───────────────────────────────────────────────────────────
 
     async def _write_direction(
@@ -1061,6 +1217,13 @@ class ZendureController:
         _LOGGER.debug("write %s: %s -> %s", key, current, value)
         await self.coordinator.api.async_write_property(key, value)
         data[key] = value
+        try:
+            written = int(value)
+        except (TypeError, ValueError):
+            self._last_written.pop(key, None)
+        else:
+            history = self._last_written.setdefault(key, deque(maxlen=WRITE_HISTORY))
+            history.appendleft((written, self._write_source))
 
     # ── State ────────────────────────────────────────────────────────────
 
@@ -1093,6 +1256,11 @@ class ZendureController:
             "trim_writes": self._trim_writes,
             "trim_gain": self._trim_factor(),
             "trim_pending": round(self._pending),
+            # Limits moved by something other than this controller. Zero in
+            # normal operation; the count is what makes an on-device manager
+            # visible while the operation mode sits in standby.
+            "foreign_writes": self._foreign_writes,
+            "trace_file": self.trace.path,
         }
 
         # One line per decision. The status sensor shows the outcome; this shows
