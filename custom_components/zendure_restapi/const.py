@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.2.0"
+INTEGRATION_VERSION = "1.3.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -101,6 +101,8 @@ OPT_MAX_DISCHARGE_POWER = "max_discharge_power"
 OPT_START_DISCHARGE_AT = "start_discharge_at"
 OPT_START_CHARGE_AT = "start_charge_at"
 OPT_DIRECTION_DELAY = "direction_change_delay"
+OPT_MODE_THRESHOLD = "mode_threshold"
+OPT_TRIM_THRESHOLD = "trim_threshold"
 OPT_MIN_CHARGE_POWER = "min_charge_power"
 OPT_MIN_DISCHARGE_POWER = "min_discharge_power"
 OPT_CHARGE_BUFFER = "charge_buffer"
@@ -116,6 +118,25 @@ DEFAULTS = {
     OPT_START_DISCHARGE_AT: 30,         # W of import before discharging starts
     OPT_START_CHARGE_AT: 5,             # W of export before charging starts
     OPT_DIRECTION_DELAY: 10,            # s to pause between directions, 0 = off
+    # Smallest adjustment worth writing, per loop. Both keep the values the
+    # constants used to hold, so the behaviour is unchanged until they are
+    # raised on purpose.
+    #
+    # Measured over four hours of trace across three operation modes, 1818
+    # writes, scoring each one by the grid error four seconds later against the
+    # three seconds before it:
+    #
+    #     as shipped, 10 and 40 W      1818 writes   +13.8 Wh
+    #     mode 125, trim 350            318 writes   +81.6 Wh
+    #
+    # The optimum is flat — anywhere from 250 to 450 W costs the trim loop
+    # under 5% — and it moves with how restless the house is, which is why
+    # these are settings rather than constants. Both loops came out well above
+    # what they shipped with, the trim loop by an order of magnitude, because
+    # it samples every second and therefore sees every excursion that would
+    # have passed on its own.
+    OPT_MODE_THRESHOLD: 10,             # W, adjustments only
+    OPT_TRIM_THRESHOLD: 40,             # W, adjustments only
     OPT_MIN_CHARGE_POWER: 0,            # floor in every smart mode, 0 = off
     OPT_MIN_DISCHARGE_POWER: 0,         # floor in every smart mode, 0 = off
     OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
@@ -143,7 +164,9 @@ CONTROL_FACTOR_BALANCE = 1.00
 # The primary test is therefore whether the controller is commanding anything.
 CONTROL_DEADBAND = 60           # W
 
-# Ignore adjustments smaller than this, to avoid pointless writes.
+# Ignore adjustments smaller than this, to avoid pointless writes. The value
+# lives in DEFAULTS[OPT_MODE_THRESHOLD]; this is the floor used before the
+# settings are available.
 CONTROL_MIN_STEP = 10           # W
 
 
