@@ -346,11 +346,15 @@ documentation for this device alone.
 Releasing to zero is always safe: it is the direction the clamp already allows, and it cannot
 reverse anything.
 
-### Why standby writes nothing
+### Why standby touches no limit
 
 A zero is still a command. Earlier versions had `standby` write zeros to both limits, and on a device running its own energy manager that produces a fight: the manager sets a discharge limit to cover the house, the integration overwrites it with zero on the next poll, the manager sets it back. Measured on hardware as a square wave in grid power at the polling interval.
 
-The single exception is on entering `standby`: a limit is cleared once, and only if this controller set it. A limit set by the device's own manager is never touched.
+Two writes happen on entry, in this order, and nothing after.
+
+A limit this controller set itself is cleared, once. A limit set by the device's own manager is never touched. Then `smartMode` is handed back to 0, because the smart modes force it to 1 to keep their frequent limit writes out of flash and the device will not drop to its low-power state while that flag is set — see [Standby draw](#known-limitations).
+
+Neither write is a setpoint, so a device managing itself is left alone, and the `writer` column in the trace keeps meaning what it means.
 
 ### The smart control loop
 
@@ -414,7 +418,7 @@ shorter than configured, only longer.
 
 If the meter stops reporting, both limits go to zero — a closed loop without feedback is worse than no loop. Below the lower SOC bound the battery is charged back regardless of strategy, except in `manual` and `quick_discharge` where the operator's intent is explicit; switchable off.
 
-`smartMode` is set to RAM before writing limits, so frequent adjustments never reach flash. At a ten second interval that is tens of thousands of limit writes a year.
+`smartMode` is set to RAM before writing limits, so frequent adjustments never reach flash. At a ten second interval that is tens of thousands of limit writes a year. `standby` hands it back on entry, because the device stays awake while it is set.
 
 ---
 
@@ -456,7 +460,9 @@ All sources are AC-side fields, matching the side the meter is on. Conversion lo
 
 Two diagnostic sensors surface that loss. `Charge efficiency` is DC over AC, `Discharge efficiency` is AC over DC. Only packs in the matching state contribute.
 
-Expect 94–95% at meaningful power. The figure drops sharply at low power because the converter's own consumption is nearly constant: at 122 W of output it costs around 41 W, so efficiency falls to about 75%. That is not a measurement error — it is why trickle-discharging is expensive.
+The figure drops sharply at low power, because the converter's own consumption is nearly constant. Measured on a 3000 Mix AC+ with the trace: 36 W drawn from the cells while idle, and 43 W of loss at 662 W of charging — so almost all of it is the fixed part, and delivering power on top of it is comparatively cheap. Round-trip over the lifetime counters was 80.8%.
+
+That is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle.
 
 ---
 
@@ -538,9 +544,9 @@ that level cannot be lowered again without a restart, so every recording would r
 one and no file would ever be closed properly.
 
 The row is the measurement and the command side by side — grid power as accepted for control
-and as the meter reported it, battery power on both the AC and the DC side, state of charge,
-both limits, `acMode`, `smartMode`, the age of the battery payload, and the loop's own
-bookkeeping. Nothing is averaged, scored or derived, because a definition of "how well did that
+and as the meter reported it, battery power on both the AC side and at the cells with the pack
+state that signs it, state of charge, both limits, `acMode`, `smartMode`, the age of the battery
+payload, and the loop's own bookkeeping. Nothing is averaged, scored or derived, because a definition of "how well did that
 go" is worth changing after you have looked at the data, and one written into the file cannot be.
 
 The `writer` column names whoever last moved a limit: `mode`, `trim`, `none`, or `foreign` for a
@@ -556,8 +562,8 @@ and compare the two files.
 Two things to watch when doing that. The battery poll interval sets the resolution at which a
 foreign write becomes visible, so a manager that evaluates on the same period as the poll will
 be undercounted — for a measurement run, poll the battery every second or two. And entering
-`standby` clears any limit this controller still owned, which is one write of its own; give it a
-minute before the run starts.
+`standby` costs two writes of its own — clearing a limit it still owned, then handing back
+`smartMode`; give it a minute before the run starts.
 
 At one sample a second a day of recording is roughly 86,000 rows and some 15 MB. Rows are
 buffered for half a minute at a time, so an abrupt restart loses that half minute.
@@ -576,225 +582,156 @@ Diagnostics files end up attached to public issues, so identifying values are st
 the device has no watchdog that returns it to zero. Keep `Max charge power` and
 `Max discharge power` at values you would accept running unattended.
 
-**Standby draw cannot be switched off.** The inverter spends roughly 40 W monitoring the grid,
-continuously, because a grid-tied inverter must stay able to detect grid state under
-VDE-AR-N 4105 and UL 1741. Limits at zero do not stop it. Over a day that is around 0.9 kWh,
-which matters when weighing whether to hold charge for a later price peak.
+**Standby draw needs two settings, not one.** With limits at zero the inverter still drew 36 W
+from the cells — measured as a median with quartiles at 35 and 36, and confirmed against the raw
+cell values, 26.48 V at 1.3 A. Over a day that is 0.86 kWh, about a quarter of a 3.8 kWh
+household.
+
+Two settings together bring it down, and neither works alone:
+
+| Backup mode | `smartMode` | Cell draw |
+|---|---|---|
+| economic | 1 | 36 W |
+| economic | 0 | 35 W |
+| closed | 1 | 29 W |
+| closed | 0 | **5 W** |
+
+`standby` writes the flag; **Backup mode must be set to `closed` by hand**, and that gives up the
+sub-10 ms changeover on the backup outlet. Earlier releases of this README attributed the whole
+36 W to mandatory grid monitoring under VDE-AR-N 4105 and UL 1741. That cannot be the full story:
+grid monitoring does not stop when the backup outlet is closed, and the draw does.
 
 **`acCouplingState` bit 15 is undocumented.** It is set on every sample from a 3000 Mix AC+ and
 its meaning is unknown. Reported as-is.
 
-**Efficiency is not constant.** The converter's overhead has a fixed part and a proportional
-one: around 41 W at 122 W of throughput, but 157 W at 3 kW. Treating it as a constant, in
-either direction, gives wrong answers at the other end of the range.
+**Efficiency is not constant.** The converter's overhead has a fixed part and a proportional one,
+and the fixed part dominates: 36 W idle and 43 W of loss at 662 W of charging, measured with the
+trace. Treating it as a constant, in either direction, gives wrong answers at the other end of
+the range. The shape of the curve above a kilowatt is not established — that needs a run holding
+several fixed power levels for long enough to average out the sampling offset between the AC and
+cell readings.
 
 ---
 
 ## Changelog
 
-### v1.1.1 — The sample trace
+The current release is listed in full. Earlier ones are grouped by minor version, keeping the
+findings and the fixes that changed behaviour and dropping the housekeeping.
 
-- **Added a per-sample CSV trace** in `config/zendure_restapi/`, started and stopped by the new
-  **Trace recording** switch. One row per meter sample. It records what was measured and what was
-  commanded, and scores nothing: band, error in watt-hours and recovery time are all defined
-  afterwards, on the file. The switch is off after a restart, and switching it on always starts a
-  new file rather than continuing an old one.
-- **The `writer` column names whoever moved a limit**, including `foreign` for a setpoint this
-  integration did not write. In `standby` this controller writes nothing, so a device managing
-  itself can now be recorded under the same conditions and measured against the same yardstick
-  as the control loops here.
+### v1.2.0 — Standby lets the device sleep
+
+- **Standby now hands the flash flag back.** The smart modes force `smartMode` to 1 so their
+  frequent limit writes stay out of flash, and nothing put it back, so the device stayed awake at
+  its full idle draw. Standby writes `smartMode` 0 once on entry and nothing after. Measured on a
+  SolarFlow 3000 Mix AC+, cell draw with nothing running:
+
+  | Backup mode | `smartMode` | Cell draw |
+  |---|---|---|
+  | economic | 1 | 36 W |
+  | economic | 0 | 35 W |
+  | closed | 1 | 29 W |
+  | closed | 0 | **5 W** |
+
+  Necessary but not sufficient: **Backup mode must be set to `closed` by hand**. That is a
+  standing choice about the backup outlet — closing it gives up the sub-10 ms changeover — and
+  not something to toggle on every standby, so the controller leaves it alone. With both applied,
+  idle drops by roughly 0.75 kWh a day.
+- An owned limit is still cleared first, on the cycle before, so the cleanup command does not
+  land in flash. Standby continues to touch no limit at all, which is what keeps the `writer`
+  column in the trace meaningful.
+
+### v1.1.0–v1.1.3 — The trim loop and the sample trace
+
+- **The controller became two loops.** The mode loop runs on the battery poll and owns mode,
+  direction and safety; a trim loop subscribed to the meter adjusts the limit within the running
+  direction once per sample. It cannot start, reverse or end a direction, so every expensive
+  decision stays with the loop that has fresh battery data. Added `Trim strength` (30–100%,
+  default 80): how much of the *remaining* error to correct per sample — remaining, because the
+  loop subtracts what it has already ordered and not yet seen.
+- **A fault now stops the battery.** `Meter max age` is enforced at last, and a missing, stale,
+  non-numeric or implausible reading writes both limits to zero rather than steering on a guess.
+- **Added a per-sample CSV trace** in `config/zendure_restapi/`, started and stopped by the
+  **Trace recording** switch. One row per meter sample, recording what was measured and what was
+  commanded, and scoring nothing: band, error in watt-hours and recovery time are all defined
+  afterwards, on the file. The `writer` column names whoever moved a limit, including `foreign`
+  for a setpoint this integration did not write — so a device managing itself can be recorded
+  under the same conditions and measured against the same yardstick as the loops here. Telling
+  the two apart needs a short history of this controller's own writes rather than only the
+  latest, because the device's report lags a write by a sample or two.
 - **Fixed the mode loop dropping reductions from its bookkeeping.** It booked what a new limit
-  asks for beyond what the device is delivering, clamped at zero, so an increase was recorded and
-  a decrease was not. On a falling load or a mode change the trim loop then saw the whole
-  deviation as fresh, ordered a second reduction on top of the one already in flight, and drove
-  the limit to zero — after which the battery stopped and the mode loop needed a start plus a
-  settling hold, some thirty seconds of doing nothing. Measured three times with an identical
-  signature: 3000 W running, a new target of 167 W, and nought booked as outstanding. The
-  difference is now taken signed.
-- Added `foreign_writes` and `trace_file` to the controller status attributes. No change to any
-  control decision: the recorder reads state the loops have already settled on, and a failure to
-  write a row switches the recorder off rather than raising into a control loop.
+  asks for beyond what the device delivers, clamped at zero, so increases were recorded and
+  decreases were not. On a falling load or a mode change the trim loop then saw the whole
+  deviation as fresh, ordered a second reduction on top of the one in flight, and drove the limit
+  to zero — after which the battery stopped and the mode loop needed a start plus a settling
+  hold, some thirty seconds of doing nothing. Measured three times with an identical signature.
+  The difference is now taken signed.
+- **Fixed `pack_dc_w` reading an AC-side field instead of the cells.** Derived from
+  `packInputPower` and `outputPackPower`, which sit on the AC side like the rest, it duplicated
+  `battery_ac_w` in every row and the converter loss it exists to expose stayed invisible. It now
+  sums `packN.power` across the packs, signed by each pack's state.
+- **Fixed a race in the idle test.** A payload that may predate the most recent trim write is no
+  longer treated as idle, so a reversal cannot be written into a running inverter.
+- Fixed `Battery power` being permanently unavailable since v1.0.3, and a status message that
+  reported `within thresholds` for a direction the mode had ruled out.
+- The trim loop now runs during the settling hold and on the starting cycle; it used to be
+  disabled in both, which left short load events handled entirely at ten-second granularity.
+- Every setting in watts shares one range and one step: the two buffers run to 1000 W like the
+  two start thresholds, and all of them step by 5.
 
-### v1.1.0 — The trim loop
+### v1.0.0–v1.0.4 — First stable release
 
-- **The controller no longer discards nine meter samples out of ten.** It is now two loops: the
-  mode loop on the battery poll, which owns mode, direction and safety, and a trim loop
-  subscribed to the meter coordinator, which adjusts the limit within the running direction once
-  per sample. The trim loop cannot start, reverse or end a direction, so every expensive
-  decision stays with the loop that has fresh battery data.
-- **Added `Trim strength`** (30–100%, default 80). How much of the *remaining* error to correct
-  per sample — remaining, because the loop subtracts what it has already ordered and not yet
-  seen. It applies in both directions; there is no separate downward factor, because a
-  correction that cannot be ordered twice cannot overshoot by being ordered twice either.
+The point at which every defect found against live hardware had been fixed and the remaining
+unknowns were documented rather than suspected.
 
-- **A fault now stops the battery.** `Meter max age` is enforced at last — the constant had been
-  declared since v1.0.0 and never read — and a missing, stale, non-numeric or implausible reading
-  writes both limits to zero rather than steering on a guess.
+- **v1.0.0** adds `Direction change delay`, a pause between opposite directions. The smart modes
+  already wound a direction down before starting the other, but the quick and manual modes wrote
+  their target immediately, so a mode switch could reverse several kilowatts within one cycle.
+  Also adds a `LICENSE` file and `DEBUG` logging of every controller decision.
+- **v1.0.1** fixed a deadlock between two sources of truth: the wind-down branches trusted the
+  controller's memory while the step function derived direction from the device. Observed as
+  *waiting for idle before discharge* while the battery charged at 3 kW. Direction is now
+  reconciled against the device every cycle.
+- **v1.0.2** fixed two pieces of logic undoing each other — reaching the deadband cleared the
+  remembered direction while reconciliation restored it, 98 times in 100 minutes on hardware.
+- **v1.0.3** added `Battery power`, one signed figure, positive while discharging.
+- **v1.0.4** characterised the P1 meter against an independent reader through a splitter, about
+  1,300 paired samples: accurate and phase-consistent, but 0.4 to 1.1 seconds behind, with no
+  cumulative counters.
 
-- **Fixed a race in the idle test.** The trim loop can write while a battery poll is in flight,
-  and the returned payload then describes the device from before that write. Measured battery
-  power near zero reads as idle, idle permits a direction change, and the reversal would be
-  written into a running inverter. A payload that may predate the most recent trim write is no
-  longer treated as idle.
-- Unloading a battery entry now drops its meter subscription. Without it the listener outlived
-  the entry and kept trimming a device Home Assistant considered unloaded.
-- **The trim loop runs during the settling hold and on the starting cycle.** It used to be switched
-  off in both, which left it enabled only from the third mode cycle of a load event onwards — so
-  short events were handled entirely at ten-second granularity, which is what it exists to avoid.
+### v0.8.0–v0.9.9 — Meter, energy and thresholds
 
-- **Fixed a misleading reason on the controller status sensor.** Three situations shared one
-  message. The grid can be inside both start thresholds, which is what "within thresholds"
-  describes. Or it is well past a threshold and the direction that would answer it is ruled out
-  by the mode — reported as `grid -137 W within thresholds` with a 5 W start threshold, in
-  `smart_discharge_only`. That states something the numbers on the same card visibly contradict,
-  on the one entity whose job is to explain why the battery is doing what it does. The blocked
-  case now names the mode that blocked it.
-- **Fixed `Battery power` being permanently unavailable.** It has been since it was added in
-  v1.0.3. The base entity class checks that the entity's key is present in the device payload,
-  which is right for a sensor that reads one field and impossible for one that computes a value:
-  no key named `battery_power` exists, because the figure is derived from `packInputPower` and
-  `outputPackPower`. The entity was created and then reported unavailable for its whole life,
-  which hides it from the entity pickers instead of showing an error. Every other derived
-  entity already overrode that check; this one did not.
-
-### v1.0.4 — P1 meter characterisation, PowerShell in the readme
-
-- Added a section on what the P1 meter measures, how often it refreshes, and how far it lags,
-  measured against an independent reader on the same connection point through a splitter.
-  Roughly 1,300 paired samples across two runs. The headline: readings are accurate and the
-  phase sum is consistent, but the meter runs 0.4 to 1.1 seconds behind and has no cumulative
-  counters or energy registers.
-- The pre-flight check now shows a PowerShell command alongside the `curl` one. Windows has no
-  `curl` that takes those arguments — `curl.exe` exists but `curl` is an alias for
-  `Invoke-WebRequest`, which rejects `-X` and reads as a syntax error rather than a missing
-  tool.
-
-### v1.0.3 — Battery power
-
-- Added `Battery power`, one signed figure: discharge minus charge, positive while discharging.
-  It matches the `battery_power` attribute on the controller status sensor, so the two cannot
-  disagree.
-- The Energy dashboard accepts the two separate readings for its counters, but its power flow
-  wants a single signed sensor. Choosing "two sensors" there makes Home Assistant derive the
-  same figure into a helper with a 118-character entity id; this is that calculation under a
-  readable name.
-
-### v1.0.2 — Idle no longer clears the direction
-
-- **Fixed two pieces of logic undoing each other.** Reaching the deadband cleared the
-  remembered direction, while the reconciliation at the top of the cycle restored it from the
-  device — 98 times in 100 minutes on live hardware, at a charge limit of 33 W. The direction
-  is now cleared only when the device itself reports both limits at zero.
-- The `tracking` status reports the running direction instead of always `none`.
-
-### v1.0.1 — Stale direction
-
-- **Fixed a deadlock between two sources of truth.** The wind-down branches trusted the
-  controller's remembered direction while `_smart_step` derived "is this a direction change"
-  from the device. When the two disagreed, the first called for a discharge step and the second
-  read it as a reversal and waited for an idle state that nothing was winding down. Observed as
-  *waiting for idle before discharge* while the battery charged at 3 kW, for nine minutes and
-  counting.
-- The remembered direction is now reconciled against the device on every cycle, not only when
-  it is empty. The device is the single source of truth.
-- If you are stuck on an earlier version: switching to `standby` and back clears it.
-
-### v1.0.0 — First stable release
-
-Adds a `LICENSE` file. The README claimed MIT but no licence file existed, which leaves the
-legal status of a public repository unclear regardless of what the README says.
-
-Adds `Direction change delay`, a pause between opposite directions, defaulting to 10 seconds to
-match the default polling interval. Also adds `DEBUG` logging of every controller decision:
-writes with their previous value, skipped no-ops, reversal pauses and the state that followed. The smart modes already wound a direction down before
-starting the other one, but the quick and manual modes wrote their target immediately, so a
-mode switch could reverse several kilowatts within a single cycle. Otherwise no functional
-change over v0.9.9. The version marks the point at which every defect found
-against live hardware has been fixed and the remaining unknowns are documented rather than
-suspected.
-
-What the 0.x series established, all of it observed on a SolarFlow 3000 Mix AC+ rather than
-taken from the specification:
-
-- Six errors in the zenSDK document, each cross-checked against a second measurement
-- A control loop that holds the grid at its setpoint without oscillating, verified over
-  multi-hour runs at 5 and 10 second polling
-- Eight defects that only surfaced on hardware: a standby that fought the device's own energy
-  manager, a deadlock after every restart, an options flow that silently wiped every setting,
-  a buffer whose sign was inverted, battery power read on the wrong side of the converter,
-  a mode that kept running a direction it forbids, a timing constant expressed in the wrong
-  unit, and a serial number leaking into diagnostics
-
-### v0.9.9 — Positive start thresholds
-
-- Fixed a diagnostics leak: the battery serial travelled in `flat_data` as `pack1.sn`, which the exact-match redaction did not cover. Flattened per-pack forms of every sensitive key are now redacted too.
-- The MQTT status is summarised rather than copied into diagnostics; the RPC response is undocumented and may carry a broker address or device key.
-
-- Renamed both start thresholds and made them positive. `Start charging below` ran from -1000 to 0, so a typical setting of -5 sat hard against the right-hand end of the slider and showed a full bar for the smallest possible threshold. Now `Start charging at export` and `Start discharging at import`, both 0 to 1000.
-- Which side of zero a threshold sits on is carried in the name rather than in the sign.
-
-### v0.9.8 — Brand images
-
-- Added `brand/icon.png` and `brand/logo.png` at 256px with `@2x` variants at 512px, picked up directly by Home Assistant 2026.3 and later.
-
-### v0.9.7 — Remove meter sign inversion
-
-- Removed `Invert meter sign`. The convention was verified against a second meter on the same connection — 2088 W on the Zendure against 2059 W on the reference reader, both positive while importing — so the setting had nothing left to correct.
-
-### v0.9.6 — README and hacs.json
-
-- Changelog rebuilt; it had silently stopped at a version that was never released, because each edit searched for the previous heading and failed quietly once it moved.
-- Entity table generated from the source rather than maintained by hand.
-- Minimum Home Assistant version raised to 2024.10.0.
-
-### v0.9.5 — Forbidden direction, floor scope
-
-- Fixed: a mode could keep running a direction it forbids. Observed as `smart_charge_only` discharging at 200 W because the device happened to be discharging when the mode was selected. A forbidden direction is now cleared and released.
-- The minimum power floors apply in every smart mode, including `smart_matching`.
-
-### v0.9.4 — Minimum power becomes a floor
-
-- `Min charge power` and `Min discharge power` raise the target above what the meter asks for, rather than declining to act below it. The half-floor hysteresis went with the gate.
-
-### v0.9.3 — Minimum power floors
-
-- Added `Min charge power` and `Min discharge power` as gates, reworked in v0.9.4.
-
-### v0.9.2 — AC energy counters and efficiency
-
-- Energy counters integrate AC-side fields rather than the DC pack reading, matching the side the meter is on.
-- Added `PV energy`, `Charge efficiency` and `Discharge efficiency`.
-
-### v0.9.1 — Read battery power on the AC side
-
-- Fixed a permanent offset: battery power was read on the DC side, which is larger than the AC side by the converter's own consumption. The loop settled with the grid exporting by roughly that loss instead of importing by the buffer.
-
-### v0.9.0 — Charge buffer sign
-
-- Fixed the sign of `Charge buffer`. The two buffers carried opposite meanings under the same name: discharge aimed at import, charge aimed at export. Both now mean watts of grid import, range 0 to 200 W.
-
-### v0.8.0 — Writable device charge ceiling
-
-- `chargeMaxLimit` is writable as `Charge power limit`, matching `Inverter power limit`.
+- **Fixed a permanent offset**: battery power was read on the DC side, larger than the AC side by
+  the converter's own consumption, so the loop settled exporting by roughly that loss instead of
+  importing by the buffer.
+- **Fixed the sign of `Charge buffer`.** The two buffers carried opposite meanings under one
+  name; both now mean watts of grid import.
+- **Fixed a mode running a direction it forbids** — `smart_charge_only` discharging at 200 W
+  because the device happened to be discharging when the mode was selected.
+- **Removed `Invert meter sign`**, verified against a second meter on the same connection: 2088 W
+  on the Zendure against 2059 W on the reference reader, both positive while importing.
+- **Fixed a diagnostics leak**: the battery serial travelled in `flat_data` as `pack1.sn`, which
+  exact-match redaction did not cover.
+- Both start thresholds renamed and made positive, so which side of zero they sit on is carried
+  in the name rather than in the sign.
+- `Min charge power` and `Min discharge power` became floors that raise the target, rather than
+  gates that decline to act. They apply in every smart mode.
+- Energy counters integrate AC-side fields rather than the DC pack reading, matching the side the
+  meter is on. Added `PV energy`, `Charge efficiency` and `Discharge efficiency`.
+- `chargeMaxLimit` became writable as `Charge power limit`; brand images added; minimum Home
+  Assistant version raised to 2024.10.0.
 
 ### v0.7.0–v0.7.1 — Energy dashboard
 
 - v0.7.1: fixed the options flow resetting every controller setting, because it replaces the entire options dict rather than merging into it.
 - v0.7.0: energy counters integrated trapezoidally from power, restoring across a restart. Gaps beyond five minutes are skipped and implausible readings ignored.
 
-### v0.6.0 — Consolidation
+### v0.4.0–v0.6.0 — Operation-mode controller
 
-- Version aligned across the integration, release script, dashboard and session reports.
-
-### v0.5.0–v0.5.3 — Standby, direction and timing
-
-- v0.5.3: settling period measured in seconds rather than polling cycles, and a contradictory status message fixed.
+- v0.6.0: version aligned across the integration, release script, dashboard and session reports.
+- v0.5.3: settling period measured in seconds rather than polling cycles.
 - v0.5.2: removed the `passive` mode; with `standby` no longer writing, the difference favoured `standby`.
 - v0.5.1: smart modes deadlocked after any restart. Direction is now read from the device rather than from the controller's memory.
 - v0.5.0: `standby` writes nothing at all. It previously forced both limits to zero on every poll, which on a device running its own energy manager produced a square wave at the polling period.
-
-### v0.4.0–v0.4.2 — Operation-mode controller
-
 - v0.4.2: fixed stale readings outside the smart modes, and made the power ceiling the lower of setting and device.
 - v0.4.1: discharging never started, because the idle test compared measured pack power against a 30 W band while the inverter's own draw is around 41 W.
 - v0.4.0: seven operation modes executed once per poll. Corrected `gridReverse`.
