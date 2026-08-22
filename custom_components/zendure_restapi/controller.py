@@ -60,6 +60,8 @@ from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
 from .const import (
+    PACK_PREFIX,
+    PACK_STATE_CHARGING,
     AC_MODE_CHARGE,
     AC_MODE_DISCHARGE,
     CONTROL_DEADBAND,
@@ -510,12 +512,39 @@ class ZendureController:
         a limit this controller set itself. Leaving that behind would not be
         restraint, it would be abandoning a command mid-flight.
         """
+        # Clear an owned limit first, while writes still go to RAM. Releasing
+        # the flash flag before that would put the cleanup command into flash
+        # for no reason.
         if self._owns_limits:
             await self._write("inputLimit", 0, data)
             await self._write("outputLimit", 0, data)
             self._owns_limits = False
             self._last_direction = "none"
             self._set_state("standby", "released own limits, now passive")
+            return
+
+        # Then hand the flash flag back. The smart modes force smartMode to 1
+        # so their frequent limit writes stay out of flash, and the device will
+        # not drop to its low-power state while that flag is set.
+        #
+        # Measured on a SolarFlow 3000 Mix AC+, cell draw with nothing running:
+        #
+        #     backup economic + smartMode 1 -> 36 W
+        #     backup economic + smartMode 0 -> 35 W
+        #     backup closed   + smartMode 1 -> 29 W
+        #     backup closed   + smartMode 0 ->  5 W
+        #
+        # So this write is necessary but not sufficient: Backup mode must be
+        # closed as well. That is a standing choice about the backup outlet,
+        # not something to toggle on every standby, so this controller sets
+        # only the flag and leaves Backup mode alone.
+        #
+        # One write on entry and nothing after. Standby stays passive in the
+        # sense that matters: it never touches a limit, so the writer column in
+        # the trace keeps meaning what it means.
+        if data.get("smartMode") != 0:
+            await self._write("smartMode", 0, data)
+            self._set_state("standby", "flash writes re-enabled, now passive")
             return
 
         self._reverse_until = None
@@ -1115,9 +1144,7 @@ class ZendureController:
         # The accepted reading and the raw one are both recorded: when the
         # fail-safe fires, the difference between them is the evidence for why.
         grid = self._meter_power()
-        pack_in = _as_int(data.get("packInputPower"))
-        pack_out = _as_int(data.get("outputPackPower"))
-        pack = "" if pack_in is None and pack_out is None else (pack_in or 0) - (pack_out or 0)
+        pack, pack_state = self._pack_power(data)
 
         await self.trace.async_sample({
             "ts": dt_util.now().isoformat(timespec="milliseconds"),
@@ -1128,6 +1155,7 @@ class ZendureController:
             "grid_raw_w": _as_int(meter_data.get("total_power")),
             "battery_ac_w": round(self._battery_power(data)) if data else "",
             "pack_dc_w": pack,
+            "pack_state": pack_state,
             "soc": _as_int(data.get("electricLevel")),
             "input_limit": limits["inputLimit"],
             "output_limit": limits["outputLimit"],
@@ -1140,6 +1168,42 @@ class ZendureController:
             "trim_writes": self._trim_writes,
             "foreign_writes": self._foreign_writes,
         })
+
+    def _pack_power(self, data: dict[str, Any]) -> tuple[int | str, int | str]:
+        """DC power at the cells, summed over the packs, and their state.
+
+        The cell readings live under packN.power; packInputPower and
+        outputPackPower, despite their names, are AC-side fields like the rest
+        and differ from the battery power by nothing at all. Recording those as
+        the DC side made the column a duplicate of battery_ac_w in every row of
+        every trace, which is exactly as useful as leaving it out.
+
+        Positive is discharging, matching battery_ac_w, so the difference
+        between the two columns is the converter's own consumption at that
+        moment's power. That is the whole reason for having both.
+        """
+        total = 0.0
+        seen = False
+        states: set[int] = set()
+        for index in range(1, self.coordinator.pack_count + 1):
+            state = _as_int(data.get(f"{PACK_PREFIX}{index}.state"))
+            power = data.get(f"{PACK_PREFIX}{index}.power")
+            if power is None:
+                continue
+            try:
+                value = float(power)
+            except (TypeError, ValueError):
+                continue
+            seen = True
+            if state is not None:
+                states.add(state)
+            # State decides the sign: a pack reports magnitude, not direction.
+            total += -abs(value) if state == PACK_STATE_CHARGING else abs(value)
+
+        if not seen:
+            return "", ""
+        state_out = states.pop() if len(states) == 1 else (max(states) if states else "")
+        return round(total), state_out
 
     def _classify_writer(self, limits: dict[str, int | None]) -> str:
         """Name whoever moved a limit since the previous sample.
