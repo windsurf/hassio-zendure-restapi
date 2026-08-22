@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.1.0"
+INTEGRATION_VERSION = "1.1.1"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -197,4 +197,27 @@ METER_SANE_LIMIT = 17250        # W, three phases of 25 A at 230 V
 # battery poll and had no timestamp to compare against. The trim loop runs on
 # the meter itself, so the age is now both knowable and load-bearing.
 METER_MAX_AGE = 60              # seconds
+
+# ── Trace recording ──────────────────────────────────────────────────────
+# One CSV row per meter sample, started and stopped by the Trace recording
+# switch. It exists to make two control regimes comparable on one yardstick:
+# this controller in a smart mode, and the device's own energy manager while
+# the operation mode sits in standby, which writes nothing at all.
+#
+# The switch is the only control. Hanging it on the debug log level needed no
+# new entity but had no off: the level cannot be lowered again without a
+# restart, so a recording ran until the next one and its file was never closed.
+#
+# The recorder scores nothing. Band, error in watt-hours and recovery time are
+# all computed afterwards from the file, because those definitions are still
+# moving and a definition in code costs a release to change.
+TRACE_DIR = DOMAIN              # under the Home Assistant config directory
+
+# Rows buffered before a write leaves the event loop. At one sample a second
+# that is one file operation every half minute; the cost of a crash is the
+# unflushed remainder, which is a measurement and not a decision.
+TRACE_FLUSH_ROWS = 30
+
+# Roll over to a new file here. A day at one sample a second is 86400 rows.
+TRACE_MAX_ROWS = 100000
 
