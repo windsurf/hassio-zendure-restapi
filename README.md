@@ -430,7 +430,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 14 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection |
+| **Controller** | 15 | Operation mode, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
@@ -525,6 +525,43 @@ quick | discharging at maximum | dir=discharge target=3000W grid=0.0W battery=-3
 The status sensor shows the outcome; this shows the reasoning that led there, which is what you
 need when a mode does something unexpected three steps into a sequence.
 
+### The sample trace
+
+The **Trace recording** switch writes one CSV row per meter sample to
+`config/zendure_restapi/trace_<date>_<time>.csv`. Switching it on always starts a new file;
+switching it off flushes the buffer and releases the file, so a measurement run is one file. It
+reports off after a restart whatever it was doing before — a recording that silently resumes is
+worse than one you have to start yourself.
+
+The switch is the only control. Hanging it on the debug log level would need no new entity, but
+that level cannot be lowered again without a restart, so every recording would run until the next
+one and no file would ever be closed properly.
+
+The row is the measurement and the command side by side — grid power as accepted for control
+and as the meter reported it, battery power on both the AC and the DC side, state of charge,
+both limits, `acMode`, `smartMode`, the age of the battery payload, and the loop's own
+bookkeeping. Nothing is averaged, scored or derived, because a definition of "how well did that
+go" is worth changing after you have looked at the data, and one written into the file cannot be.
+
+The `writer` column names whoever last moved a limit: `mode`, `trim`, `none`, or `foreign` for a
+setpoint this integration did not write. Telling those apart needs a short history of this
+controller's own writes rather than just the latest one: the device's report lags a write by a
+sample or two, so at a one-second battery poll an older value of our own comes back after a newer
+one, and matching on the latest write alone reads that as somebody else's setpoint. That last case is the useful one. With the operation
+mode in `standby` this controller writes nothing at all, so a device running its own energy
+manager can be recorded under exactly the same conditions and scored on exactly the same
+yardstick as the loops here. Set the operation mode to `standby`, let the device manage itself,
+and compare the two files.
+
+Two things to watch when doing that. The battery poll interval sets the resolution at which a
+foreign write becomes visible, so a manager that evaluates on the same period as the poll will
+be undercounted — for a measurement run, poll the battery every second or two. And entering
+`standby` clears any limit this controller still owned, which is one write of its own; give it a
+minute before the run starts.
+
+At one sample a second a day of recording is roughly 86,000 rows and some 15 MB. Rows are
+buffered for half a minute at a time, so an abrupt restart loses that half minute.
+
 ## Reporting an unsupported property
 
 The integration logs every reported key it has no entity for, once each, at `INFO` level. For a complete picture, download diagnostics from the device page: the file contains the device report plus the full list of unrecognised keys.
@@ -554,6 +591,29 @@ either direction, gives wrong answers at the other end of the range.
 ---
 
 ## Changelog
+
+### v1.1.1 — The sample trace
+
+- **Added a per-sample CSV trace** in `config/zendure_restapi/`, started and stopped by the new
+  **Trace recording** switch. One row per meter sample. It records what was measured and what was
+  commanded, and scores nothing: band, error in watt-hours and recovery time are all defined
+  afterwards, on the file. The switch is off after a restart, and switching it on always starts a
+  new file rather than continuing an old one.
+- **The `writer` column names whoever moved a limit**, including `foreign` for a setpoint this
+  integration did not write. In `standby` this controller writes nothing, so a device managing
+  itself can now be recorded under the same conditions and measured against the same yardstick
+  as the control loops here.
+- **Fixed the mode loop dropping reductions from its bookkeeping.** It booked what a new limit
+  asks for beyond what the device is delivering, clamped at zero, so an increase was recorded and
+  a decrease was not. On a falling load or a mode change the trim loop then saw the whole
+  deviation as fresh, ordered a second reduction on top of the one already in flight, and drove
+  the limit to zero — after which the battery stopped and the mode loop needed a start plus a
+  settling hold, some thirty seconds of doing nothing. Measured three times with an identical
+  signature: 3000 W running, a new target of 167 W, and nought booked as outstanding. The
+  difference is now taken signed.
+- Added `foreign_writes` and `trace_file` to the controller status attributes. No change to any
+  control decision: the recorder reads state the loops have already settled on, and a failure to
+  write a row switches the recorder off rather than raising into a control loop.
 
 ### v1.1.0 — The trim loop
 
