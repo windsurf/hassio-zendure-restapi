@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
 from .const import CONF_MODEL, DOMAIN, OPT_SOC_PROTECTION
+from .controller import ZendureController
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
 from .settings import ZendureSettings
@@ -60,6 +61,9 @@ async def async_setup_entry(
             ZendureSettingSwitch(coordinator, d, device_id, model, runtime["settings"], key)
             for d, key in SETTING_SWITCHES
         ]
+        entities.append(
+            ZendureTraceSwitch(coordinator, TRACE_SWITCH, device_id, model, runtime["controller"])
+        )
 
     async_add_entities(entities)
 
@@ -105,6 +109,68 @@ SETTING_SWITCHES: tuple[tuple[SwitchEntityDescription, str], ...] = (
         entity_category=EntityCategory.CONFIG,
     ), OPT_SOC_PROTECTION),
 )
+
+
+# ── Trace recording ──────────────────────────────────────────────────────
+
+TRACE_SWITCH = SwitchEntityDescription(
+    key="trace_recording",
+    name="Trace recording",
+    icon="mdi:record-rec",
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+
+class ZendureTraceSwitch(ZendureEntity, SwitchEntity):
+    """Starts and stops the per-sample CSV trace.
+
+    Deliberately not restored across a restart: the recorder reports off when
+    Home Assistant comes back, whatever it was doing before. A measurement that
+    silently resumes is worse than one that has to be started by hand, and a
+    file left open for weeks is worse than both.
+    """
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: ZendureCoordinator,
+        description: SwitchEntityDescription,
+        device_id: str,
+        model: str,
+        controller: ZendureController,
+    ) -> None:
+        super().__init__(coordinator, description, device_id, model)
+        self._controller = controller
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # The recorder can stop itself, on a write failure or a rollover, so
+        # the entity follows it rather than assuming its own last command holds.
+        self.async_on_remove(
+            self._controller.trace.add_listener(self.async_write_ha_state)
+        )
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        return self._controller.trace.wanted
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | int | None]:
+        trace = self._controller.trace
+        return {"file": trace.path, "rows": trace.rows}
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._controller.trace.async_start()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._controller.trace.async_stop()
+        self.async_write_ha_state()
 
 
 class ZendureSettingSwitch(ZendureEntity, SwitchEntity):
