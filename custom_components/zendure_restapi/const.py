@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.1.1"
+INTEGRATION_VERSION = "1.2.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -48,6 +48,11 @@ ZEROCONF_TYPE = "_zendure._tcp.local."
 # ── Data model ───────────────────────────────────────────────────────────
 # Prefix used for flattened per-pack keys: pack1.socLevel, pack2.power, ...
 PACK_PREFIX = "pack"
+
+# Pack state as the device reports it, used to sign the cell power: a pack
+# publishes a magnitude, not a direction.
+PACK_STATE_CHARGING = 1
+PACK_STATE_DISCHARGING = 2
 
 # Kelvin offset used by Zendure for 0.1K temperature storage.
 KELVIN_OFFSET_DECIKELVIN = 2731
