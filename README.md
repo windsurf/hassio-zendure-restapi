@@ -267,99 +267,84 @@ pairing: the trim loop follows, and every battery poll resynchronises against me
 A single timer running both would be the worst of the two: it would correct twice for one
 deviation at the fast rate, and poll the battery ten times more often than anything needs.
 
-### Trim strength, and why it only applies upward
+### Does the trim loop earn its place
 
-Raising a limit and lowering one are not mirror images, so they do not share a factor.
+Yes, and speeding the mode loop up is not an alternative. Simulated across the devices the
+measurements admit:
 
-**Lowering runs at full strength**, whatever the setting says. A downward correction is clamped
-at zero and the trim loop may not reverse, so the worst an over-large one can do is reach 0 W —
-exactly where a vanished load wants it. Every cycle spent easing towards that is a cycle of
-pushing power onto the grid. Measured on hardware: at 30% both ways a load event took ten seconds
-to wind down against four at 50%, and the extra six seconds sat between −2500 and −800 W.
-
-**Raising is the side that can ring**, because the meter reports 0.4 to 1.1 seconds behind and the
-loop commits a correction for a deviation whose answer it has not seen. With the evidence gate in
-place, simulated at a constant load:
-
-| Trim strength | 1 sample of meter delay | 2 samples |
+| | Wrong-way energy | Residual at constant load |
 |---|---|---|
-| 100% | settles | 500 W, never settles |
-| **80%** *(default)* | **settles** | **settles** |
-| 50% | settles | settles |
+| Mode loop only, ten seconds | 37.1 Wh | 44 W, settled |
+| Mode loop at one second, no trim loop | 35.1 Wh | **2103 W, ringing** |
+| **Mode loop ten seconds plus trim loop** | **14.5 Wh** | **44 W, settled** |
 
-80% is the highest value that is demonstrably stable at both, and it is close to the cheapest.
-Replayed against three logged load events, total wrong-way energy came to 12.2 Wh at 30%, 11.1 at
-50%, 8.6 at 80% and 8.0 at 100%. Damping this side mostly costs unserved import rather than saving
-export — and avoided import is worth more per watt-hour, since avoided export only saves the
-spread between the import and feed-in tariffs.
+The trim loop more than halves the error. Running the mode loop faster instead does not work: its
+absolute formula reads measured battery power, which lags the limit it was given, so at one second
+it re-derives a target from a device that has not caught up.
 
-The mode loop keeps its full correction in both directions, because one second of dead time is a
-tenth of a period there rather than a whole one.
+### One rule: never order the same watts twice
 
-### Acting only on evidence
+Every sample is a fresh **measurement**, but not a fresh **error**. Part of what it shows has
+already been ordered and is still on its way, so the loop keeps that amount and corrects only the
+remainder. See 1000 W too much with 800 W already on order, and it corrects 200.
 
-The trim loop refuses a meter sample that cannot yet contain the effect of its own last write.
-Two tests do that, and both are needed.
+That single piece of bookkeeping is what makes the loop device-independent. There is no dead time,
+response fraction, timeout or noise estimate anywhere in the controller, because it does not matter
+whether the device answers in one sample or in ten — the loop simply does not ask again for what it
+has already asked for.
 
-A sample fetched before the write obviously cannot contain it — but "fetched after" is not the
-same as "contains", because the meter reports 0.4 to 1.1 seconds behind. So the loop waits until
-a sample is at least 1.5 seconds newer than the last write. And separately, a reading whose value
-has not moved since the last correction is the same evidence twice, so it is skipped as well.
+The mode loop takes part in the same bookkeeping. It knows the outstanding amount exactly, because
+it has the measured battery power: whatever the new limit asks for beyond what the device is
+actually delivering is still on its way. Without that, the two loops order the same watts, which is
+measurable as a slow limit cycle of several hundred watts.
 
-Without this the loop corrects twice for one deviation. Observed on hardware: two consecutive
-samples both reported 318 W, and 156 W was added for each of them.
+Two things remain, and neither describes the device:
 
-Elapsed time alone is not enough either, because how long an effect needs to appear depends on how
-big the correction was. Also observed:
+**A threshold.** Do not write a correction smaller than the house wanders by on its own, or the
+loop chases the household into a limit cycle — observed at a load of about 200 W as 19 writes a
+minute with the grid swinging between −106 and +122 W. The wander is roughly −30 to +20 W, so the
+threshold sits at 40 W.
 
-```
-18:41:30.695  16W -> 1775W   | grid=2204W    (asked for +1759 W)
-18:41:32.332  1775W -> 3000W | grid=2207W    (asked for another +1225 W)
-```
+**A gain**, `Trim strength`, default 80%. Below 100 for the reason any feedback loop is: the
+bookkeeping removes double-counting, not the meter's own delay.
 
-1.6 seconds apart, so the settle window had passed, and the grid had moved 3 W, so the
-unchanged-value test passed as well. But 3 W is not a response to a 1759 W command — the write had
-not landed, and the loop wound the limit up to the device ceiling for a 2200 W load.
+That setting kept its name and its entity id through the rewrite, but its meaning changed: it used
+to be 80% of the *deviation*, applied upward only, with downward corrections always at full
+strength. It is now 80% of the *remaining* error — remaining after subtracting what is already on
+order — in both directions. The asymmetry is gone because the bookkeeping makes it unnecessary: a
+downward correction can no more be ordered twice than an upward one. The id was left alone
+deliberately; renaming it would break every dashboard and template that references it, and this
+integration has been bitten by that before.
 
-So the loop also waits for a response in proportion to what it asked: the grid must have moved by
-at least a quarter of the last correction. Small corrections resume almost at once, large ones
-wait as long as they need to. A five-second ceiling stops that becoming a deadlock when the device
-genuinely cannot answer, at a power limit or with the load moving to cancel the correction.
+### Why the device is not modelled
 
-### Where the trim loop is allowed to run
+Measured in manual mode, where no controller is in the loop, the device gave no consistent rate:
+750, 820, 1083 and 1500 W per second across six steps, with a dead time of nought to one sample.
+Four separate attempts to pin that down to a number were wrong, each derived from a single
+interval. A real load step — a 2330 W boiling-water tap, with nothing written at all — arrives in a
+single sample, so the meter passes a sharp edge cleanly and the spread belongs to the device.
 
-It is enabled the moment a direction is established, including on the starting cycle where the
-first step is deliberately undershot, and it keeps running through the settling hold that follows
-a direction change.
+Simulated against the real integration code across the range those measurements admit — dead time
+nought to one sample, 700 W/s to instant, meter one to two samples behind — the loop settles within
+44 W on every one. Widened well past what was measured, to three samples of dead time and 400 W/s,
+one corner degrades to a slow 727 W cycle; that is outside anything the hardware has shown.
 
-That hold protects the mode loop, not this one. What it guards against is the absolute formula
-re-deriving a target from a battery reading that has not caught up with the last write. The trim
-loop never reads that value, and refuses stale meter samples on its own, so the reason for the
-hold does not apply to it.
+### Faults stop the battery
 
-Blocking it there cost real energy. Observed at 17:31:33: the grid sat at 2542 W of unserved
-import for a full ten-second cycle while the hold ran and nothing raised the discharge limit. And
-a coffee machine at 17:27 ran its entire cycle inside one starting step and one balancing step,
-so the trim loop was never enabled at all — ten seconds of the battery pushing 807 W into the
-grid after the load had gone.
+A closed loop with no feedback is worse than no loop. When the meter cannot be believed, both
+limits are written to zero and the controller reports itself blocked. That covers a missing meter,
+a coordinator that has stopped updating, a reading older than `METER_MAX_AGE`, a missing or
+non-numeric value, and a reading beyond the grid connection's capacity.
 
-Simulated against both events, at one correction per second with one second of meter delay:
+That last bound is the connection, not the battery. This meter reads the whole house: an inverter
+ceiling of 3.6 kW would be quite wrong here, since the installation's own measurements record an
+evening peak of 4384 W from an oven and a dryer together and a boiling-water tap alone draws
+2330 W. 3×25 A at 230 V is 17.25 kW, and nothing past that can be real. The check earns its place
+because scale and sign errors are a live risk on this API — six of them were found in the zenSDK
+documentation for this device alone.
 
-| | Quooker, wrong-way energy | Coffee machine, wrong-way energy |
-|---|---|---|
-| Mode loop only | 7.6 Wh | 2.9 Wh |
-| With the trim loop | 4.5 Wh | 2.3 Wh |
-
-The trim loop cannot reverse a direction, so covering a large load and then having it vanish
-still leaves one deep export excursion. That part is inherent, not a tuning failure.
-
-### Writes
-
-The trim loop ignores adjustments below 25 W, wider than the mode loop's 10 W: at ten times the
-rate a 10 W threshold turns ordinary household flicker into a continuous stream of writes. A
-steady house therefore produces no trim writes at all, since the loop only acts on a deviation
-it has not already corrected. The suppression band does leave a residual on the grid of up to
-25 W ÷ trim strength; the mode loop closes that at its own 10 W threshold on the next poll.
+Releasing to zero is always safe: it is the direction the clamp already allows, and it cannot
+reverse anything.
 
 ### Why standby writes nothing
 
@@ -577,14 +562,15 @@ either direction, gives wrong answers at the other end of the range.
   subscribed to the meter coordinator, which adjusts the limit within the running direction once
   per sample. The trim loop cannot start, reverse or end a direction, so every expensive
   decision stays with the loop that has fresh battery data.
-- **Added `Trim strength`** (30–100%, default 80). Damping for *raising* a limit, needed because
-  the meter runs up to a second behind and the loop corrects once a second. Lowering a limit runs
-  at full strength regardless: it is clamped at zero and cannot reverse, so it has no way to
-  overshoot, while every cycle spent easing down is a cycle of pushing power onto the grid.
-- **`Meter max age` is now enforced.** The constant had been declared since v1.0.0 and never
-  read: the controller ran on the battery poll and had no timestamp to compare against. The
-  coordinator now records when each payload arrived, and a stale meter suspends trimming rather
-  than steering on an old number.
+- **Added `Trim strength`** (30–100%, default 80). How much of the *remaining* error to correct
+  per sample — remaining, because the loop subtracts what it has already ordered and not yet
+  seen. It applies in both directions; there is no separate downward factor, because a
+  correction that cannot be ordered twice cannot overshoot by being ordered twice either.
+
+- **A fault now stops the battery.** `Meter max age` is enforced at last — the constant had been
+  declared since v1.0.0 and never read — and a missing, stale, non-numeric or implausible reading
+  writes both limits to zero rather than steering on a guess.
+
 - **Fixed a race in the idle test.** The trim loop can write while a battery poll is in flight,
   and the returned payload then describes the device from before that write. Measured battery
   power near zero reads as idle, idle permits a direction change, and the reversal would be
@@ -592,12 +578,10 @@ either direction, gives wrong answers at the other end of the range.
   longer treated as idle.
 - Unloading a battery entry now drops its meter subscription. Without it the listener outlived
   the entry and kept trimming a device Home Assistant considered unloaded.
-- **The trim loop now runs during the settling hold and on the starting cycle.** It was switched
+- **The trim loop runs during the settling hold and on the starting cycle.** It used to be switched
   off in both, which left it enabled only from the third mode cycle of a load event onwards — so
   short events were handled entirely at ten-second granularity, which is what it exists to avoid.
-  It also refuses meter samples that cannot yet contain its own last write, which is what made
-  running it in those places unsafe before — both by elapsed time and by requiring a grid response
-  in proportion to the correction it asked for.
+
 - **Fixed a misleading reason on the controller status sensor.** Three situations shared one
   message. The grid can be inside both start thresholds, which is what "within thresholds"
   describes. Or it is well past a threshold and the direction that would answer it is ruled out
