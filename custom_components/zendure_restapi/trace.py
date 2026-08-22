@@ -50,7 +50,8 @@ COLUMNS = (
     "grid_w",            # meter reading accepted for control, empty if rejected
     "grid_raw_w",        # the same reading before the sanity and age checks
     "battery_ac_w",      # outputHomePower - gridInputPower, positive discharging
-    "pack_dc_w",         # packInputPower - outputPackPower, positive discharging
+    "pack_dc_w",         # sum of packN.power at the cells, positive discharging
+    "pack_state",        # 1 charging, 2 discharging, as the packs report it
     "soc",               # electricLevel
     "input_limit",       # charge limit as the device reports it
     "output_limit",      # discharge limit as the device reports it
