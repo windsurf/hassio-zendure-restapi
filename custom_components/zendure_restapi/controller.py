@@ -69,7 +69,6 @@ from .const import (
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
-    CONTROL_MIN_STEP_FAST,
     METER_MAX_AGE,
     METER_SANE_LIMIT,
     MODE_MANUAL,
@@ -85,6 +84,8 @@ from .const import (
     OPT_MANUAL_POWER,
     OPT_MIN_CHARGE_POWER,
     OPT_MIN_DISCHARGE_POWER,
+    OPT_MODE_THRESHOLD,
+    OPT_TRIM_THRESHOLD,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
     OPT_OPERATION_MODE,
@@ -166,6 +167,9 @@ class ZendureController:
         self._reverse_until: datetime | None = None
         self._last_direction = "none"
         self._idle_since: Any = None
+        # Whether the one-time standby command has been sent for this stay in
+        # standby. Cleared on the way out, so re-entering sends it again.
+        self._standby_sent = False
 
         # ── Trim loop ────────────────────────────────────────────────
         # The single contract point between the two loops. The mode loop sets
@@ -296,6 +300,10 @@ class ZendureController:
         if await self._handle_soc_protection(data, mode):
             return
 
+        if mode != MODE_STANDBY:
+            # Arm the one-time standby command for the next stay in standby.
+            self._standby_sent = False
+
         if mode == MODE_STANDBY:
             await self._apply_standby(data)
         elif mode == MODE_MANUAL:
@@ -411,7 +419,12 @@ class ZendureController:
             target = int(min(floor, self._cap(data, charging)))
 
         delta = target - current
-        if abs(delta) < CONTROL_MIN_STEP_FAST:
+        # Adjustments only. This loop never opens a direction — it is entered
+        # solely while _trim_direction is set, which the mode loop clears the
+        # moment the running limit reaches zero. A threshold above the day's
+        # surplus therefore cannot leave the battery idle: starting is the mode
+        # loop's business, and there the threshold is skipped while starting.
+        if abs(delta) < self._trim_threshold():
             return
 
         await self._write(key, target, data)
@@ -501,50 +514,55 @@ class ZendureController:
     # ── Modes ────────────────────────────────────────────────────────────
 
     async def _apply_standby(self, data: dict[str, Any]) -> None:
-        """Hands off. The controller reads and reports, and writes nothing.
+        """Stop the battery once, then hands off.
 
-        This matters when the device runs its own energy manager. A standby
-        that keeps forcing both limits to zero does not stand by at all: it
-        overrules the on-device manager on every poll, the manager restores its
-        setpoint a second later, and the pair oscillate at the polling period.
+        Selecting standby stops the battery: both limits to zero and the flash
+        flag handed back, in one command on entry. After that the controller
+        reads and reports and writes nothing at all.
 
-        The one exception is a single cleanup on entering standby, and only for
-        a limit this controller set itself. Leaving that behind would not be
-        restraint, it would be abandoning a command mid-flight.
+        The second half matters when the device runs its own energy manager. A
+        standby that keeps forcing both limits to zero does not stand by: it
+        overrules the manager on every poll, the manager restores its setpoint
+        a second later, and the pair oscillate at the polling period. Sending
+        the command once and then leaving the device alone gets both — a
+        battery that actually stops, and a manager that is free to take over.
         """
-        # Clear an owned limit first, while writes still go to RAM. Releasing
-        # the flash flag before that would put the cleanup command into flash
-        # for no reason.
-        if self._owns_limits:
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
-            self._owns_limits = False
-            self._last_direction = "none"
-            self._set_state("standby", "released own limits, now passive")
-            return
-
-        # Then hand the flash flag back. The smart modes force smartMode to 1
-        # so their frequent limit writes stay out of flash, and the device will
-        # not drop to its low-power state while that flag is set.
+        # One command on entry, then silence.
         #
-        # Measured on a SolarFlow 3000 Mix AC+, cell draw with nothing running:
+        #     {"inputLimit": 0, "outputLimit": 0, "smartMode": 0}
+        #
+        # The limits go to zero whether or not this controller set them, so a
+        # setpoint left behind by the device's own manager is stopped too:
+        # selecting standby should stop the battery, not hand it over.
+        #
+        # smartMode comes last and in the same breath. The smart modes force it
+        # to 1 to keep their frequent limit writes out of flash, and the device
+        # will not drop to its low-power state while that flag is set. Measured
+        # on a SolarFlow 3000 Mix AC+, cell draw with nothing running:
         #
         #     backup economic + smartMode 1 -> 36 W
         #     backup economic + smartMode 0 -> 35 W
         #     backup closed   + smartMode 1 -> 29 W
         #     backup closed   + smartMode 0 ->  5 W
         #
-        # So this write is necessary but not sufficient: Backup mode must be
-        # closed as well. That is a standing choice about the backup outlet,
-        # not something to toggle on every standby, so this controller sets
-        # only the flag and leaves Backup mode alone.
+        # Necessary but not sufficient: Backup mode must be closed as well,
+        # which is a standing choice about the backup outlet rather than
+        # something to toggle on every standby, so this controller leaves it
+        # alone.
         #
-        # One write on entry and nothing after. Standby stays passive in the
-        # sense that matters: it never touches a limit, so the writer column in
-        # the trace keeps meaning what it means.
-        if data.get("smartMode") != 0:
+        # Sent once, and only once. Repeating it on every cycle is what v0.5.0
+        # removed: a device running its own energy manager sets its limit back
+        # a second later, and the two produce a square wave in grid power at
+        # the polling period. After this command the controller is passive
+        # again and whatever the manager does next is its own business.
+        if not self._standby_sent:
+            await self._write("inputLimit", 0, data)
+            await self._write("outputLimit", 0, data)
             await self._write("smartMode", 0, data)
-            self._set_state("standby", "flash writes re-enabled, now passive")
+            self._standby_sent = True
+            self._owns_limits = False
+            self._last_direction = "none"
+            self._set_state("standby", "stopped and released, now passive")
             return
 
         self._reverse_until = None
@@ -942,14 +960,14 @@ class ZendureController:
         except (TypeError, ValueError):
             current_val = -1
 
-        if abs(target - current_val) < CONTROL_MIN_STEP and not starting:
+        if abs(target - current_val) < self._mode_threshold() and not starting:
             # Settled, which is precisely the state in which the trim loop is
             # useful: the direction is established and healthy, and all that is
             # left is following the house between polls.
             self._trim_direction = direction if current_val > 0 else None
             self._set_state(
                 "tracking",
-                f"{direction} at {current_val} W, within {CONTROL_MIN_STEP} W",
+                f"{direction} at {current_val} W, within {self._mode_threshold()} W",
                 target=current_val,
                 direction=direction,
             )
@@ -1006,6 +1024,21 @@ class ZendureController:
             target=target,
             direction=direction,
         )
+
+    def _mode_threshold(self) -> int:
+        """Smallest adjustment the mode loop bothers to write."""
+        return max(CONTROL_MIN_STEP, self.settings.get_int(OPT_MODE_THRESHOLD))
+
+    def _trim_threshold(self) -> int:
+        """Smallest adjustment the trim loop bothers to write.
+
+        Higher than the mode loop's by design, and measurably so: the trim loop
+        runs once a second and therefore sees every excursion the house makes,
+        including the ones that would have passed on their own. Correcting
+        those does not settle the grid, it moves the battery to where the house
+        no longer is.
+        """
+        return max(CONTROL_MIN_STEP, self.settings.get_int(OPT_TRIM_THRESHOLD))
 
     def _cap(self, data: dict[str, Any], charging: bool) -> int:
         """Effective power ceiling: the lower of the setting and the device.
