@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.3.0"
+INTEGRATION_VERSION = "1.4.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -175,7 +175,6 @@ CONTROL_MIN_STEP = 10           # W
 # the device has had to respond, which does not change when the polling
 # interval does. Counting cycles instead made the wait 10 s at a 5 s interval
 # and 20 s at a 10 s interval, for no reason related to the hardware.
-CONTROL_DIRECTION_HOLD_SECONDS = 10
 
 # ── The trim loop ────────────────────────────────────────────────────────
 # Every sample is a fresh *measurement*, but not a fresh *error*: part of what
@@ -247,5 +246,37 @@ TRACE_DIR = DOMAIN              # under the Home Assistant config directory
 TRACE_FLUSH_ROWS = 30
 
 # Roll over to a new file here. A day at one sample a second is 86400 rows.
-TRACE_MAX_ROWS = 100000
+# Roughly an hour at a one-second meter, some 150 kB, which keeps a file small
+# enough to copy off a running system and to recover after a crash. The old
+# limit was more than a day and some fifteen megabytes, which is exactly the
+# file you cannot get off the machine when you need it.
+#
+# Not exact: the rollover point is drawn per file within a spread of the
+# nominal size. Files that all break on the same minute and second look like a
+# pattern in the data when read back, and a load that happens to be periodic
+# with the file length would otherwise fall in the same place in every file.
+# ── Rest state ───────────────────────────────────────────────────────────
+# With both of its own limits at zero, this controller hands the flash-write
+# flag back so the inverter can drop to its low-power state. Measured 23 August
+# on a 3000 Mix AC+ with Backup mode closed: the cells give 30 W with the flag
+# set and 5 W with it clear. While actually converting the flag changes nothing
+# — 453 W from the cells at 500 W of charging either way — so the saving exists
+# only at a zero limit. Waking costs nothing measurable: the same 500 W order
+# responded in 6 s from rest and 6 s from awake.
+#
+# There is no delay setting, because the poll rate already is one. Entering
+# requires two consecutive polls that both see zero, so a limit passing through
+# zero during a direction change never triggers it: that lasts a sample, not a
+# poll. An earlier version offered a delay in seconds and was measured to be
+# meaningless — at a ten second poll nothing under about eleven seconds could
+# ever fire, so every value from 0 to 10 behaved identically.
+#
+# The floor below exists because the poll interval is configurable and the
+# comparison runs in this project set the battery to one second. Two polls
+# would then be two seconds and the natural hysteresis would vanish exactly
+# when someone is measuring.
+CONTROL_REST_MIN_SECONDS = 10   # floor under the poll-derived hysteresis
+
+TRACE_MAX_ROWS = 5000
+TRACE_ROWS_JITTER = 400     # plus or minus, drawn per file
 
