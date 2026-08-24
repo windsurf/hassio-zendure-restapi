@@ -29,13 +29,19 @@ from __future__ import annotations
 
 import csv
 import logging
+import random
 from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
-from .const import TRACE_DIR, TRACE_FLUSH_ROWS, TRACE_MAX_ROWS
+from .const import (
+    TRACE_DIR,
+    TRACE_FLUSH_ROWS,
+    TRACE_MAX_ROWS,
+    TRACE_ROWS_JITTER,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +80,16 @@ class ZendureTrace:
         self._path: Path | None = None
         self._buffer: list[list[Any]] = []
         self._rows = 0
+        # One recording is one series of files. The stamp is taken once, when
+        # the switch goes on, and every file of that recording carries it with
+        # a sequence number appended. A fresh stamp per file would make a
+        # rollover indistinguishable from a new recording, which is exactly the
+        # thing you need to tell apart when reading a night back.
+        self._stamp: str | None = None
+        self._sequence = 0
+        # Drawn again for every file, so a recording is a series of files of
+        # similar but not identical length.
+        self._limit = TRACE_MAX_ROWS
         self._enabled = False
         # A write failure stops the recorder rather than logging once a second.
         # Switching off and on again is the retry.
@@ -96,6 +112,8 @@ class ZendureTrace:
         """Begin a new recording. Always a new file, never an append."""
         self._failed = False
         self._enabled = True
+        self._stamp = None
+        self._sequence = 0
         if self.active:
             # Switching on while a file is open would silently continue it.
             await self.async_close()
@@ -149,15 +167,21 @@ class ZendureTrace:
                 return
 
         self._buffer.append([values.get(column, "") for column in COLUMNS])
-        if len(self._buffer) >= TRACE_FLUSH_ROWS:
-            await self._async_flush()
 
-        if self._rows >= TRACE_MAX_ROWS:
-            # Roll over rather than grow without bound. The next sample opens a
-            # fresh file, so a recording left on for a week is a series of
-            # files instead of one that no spreadsheet will open.
+        # Counted with the buffer included, so a file lands on its limit rather
+        # than up to a flush past it. Counting flushed rows only made the size
+        # depend on whether the limit happened to be a multiple of the flush
+        # size, which is not a property anyone would think to check.
+        if self._rows + len(self._buffer) >= self._limit:
+            # Roll over rather than grow without bound. The next sample opens
+            # the next file in the series, so a recording left on all night is
+            # a set of files that each survive a copy off a running system.
             await self.async_close()
             self._notify()
+            return
+
+        if len(self._buffer) >= TRACE_FLUSH_ROWS:
+            await self._async_flush()
 
     async def async_close(self) -> None:
         """Flush and close the current file, if there is one."""
@@ -166,13 +190,21 @@ class ZendureTrace:
         await self._async_flush()
         _LOGGER.info("Trace recording closed: %s rows in %s", self._rows, self._path)
         self._path = None
+        # The stamp deliberately survives: if this was a rollover rather than a
+        # stop, the next file continues the same series.
 
     # ── File handling ────────────────────────────────────────────────────
 
     async def _async_open(self) -> bool:
-        started = dt_util.now()
+        if self._stamp is None:
+            self._stamp = f"{dt_util.now():%Y%m%d_%H%M%S}"
+        self._sequence += 1
+        self._limit = max(
+            TRACE_FLUSH_ROWS,
+            TRACE_MAX_ROWS + random.randint(-TRACE_ROWS_JITTER, TRACE_ROWS_JITTER),
+        )
         directory = Path(self.hass.config.path(TRACE_DIR))
-        path = directory / f"trace_{started:%Y%m%d_%H%M%S}.csv"
+        path = directory / f"trace_{self._stamp}_{self._sequence:03d}.csv"
         try:
             await self.hass.async_add_executor_job(self._create, directory, path)
         except OSError as err:
@@ -182,7 +214,7 @@ class ZendureTrace:
             return False
         self._path = path
         self._rows = 0
-        _LOGGER.info("Trace recording to %s", path)
+        _LOGGER.info("Trace recording to %s, rolling over at %s rows", path, self._limit)
         return True
 
     async def _async_flush(self) -> None:
