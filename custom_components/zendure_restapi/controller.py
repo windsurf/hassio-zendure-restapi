@@ -65,10 +65,10 @@ from .const import (
     AC_MODE_CHARGE,
     AC_MODE_DISCHARGE,
     CONTROL_DEADBAND,
-    CONTROL_DIRECTION_HOLD_SECONDS,
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
+    CONTROL_REST_MIN_SECONDS,
     METER_MAX_AGE,
     METER_SANE_LIMIT,
     MODE_MANUAL,
@@ -190,6 +190,16 @@ class ZendureController:
         self._prev_grid: float | None = None
         self._trim_writes = 0
         self._unsub_meter: Any = None
+
+        # ── Rest state ───────────────────────────────────────────────
+        # When this controller has both of its own limits at zero across two
+        # consecutive polls, the flash-write flag is handed back so the
+        # inverter can drop to its low-power state. `_rest_since` marks when
+        # the pair was first seen at zero; `_resting` records that the flag has
+        # already been released, so it is written once and not held down.
+        # Repeating it is what made v0.5.0 fight the device into a square wave.
+        self._rest_since: datetime | None = None
+        self._resting = False
 
         # ── Trace recording ──────────────────────────────────────────
         # Who last moved each limit, and to what. An on-device energy manager
@@ -316,6 +326,13 @@ class ZendureController:
             await self._apply_smart(data, mode)
         else:
             self._set_state("idle", f"unknown mode {mode}")
+
+        # After the strategy has had its say, so it sees the limits this cycle
+        # actually left behind. Standby is excluded: it hands the flag back
+        # itself on entry and writes nothing afterwards, which is the whole
+        # point of that mode.
+        if mode != MODE_STANDBY:
+            await self._rest_step(data)
 
     # ── Trim loop ────────────────────────────────────────────────────────
 
@@ -638,7 +655,12 @@ class ZendureController:
 
         # Frequent limit writes are coming; keep them out of flash. The device
         # reverts smartMode to 0 across a reboot, so this cannot be assumed.
-        if data.get("smartMode") != 1:
+        #
+        # Not while resting: the flag was handed back on purpose, and the write
+        # path sets it again before it touches a limit, so forcing it here
+        # would only undo the rest state on the next poll without a limit write
+        # ever happening.
+        if data.get("smartMode") != 1 and not self._resting:
             await self._write("smartMode", 1, data)
 
         allow_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
@@ -776,12 +798,31 @@ class ZendureController:
         return False
 
     def _hold_cycles(self) -> int:
-        """How many polls make up the settling time, at the current interval."""
+        """How many polls make up the settling time, at the current interval.
+
+        Governed by `Direction change delay`, the same setting the quick and
+        manual modes obey, so the two paths cannot disagree about whether this
+        inverter needs a pause. At zero there is no settling state at all.
+
+        Until v1.3.2 this came from a constant of its own and was armed on
+        every start, which is why `holding` followed `starting` in 28 of 28
+        observations on 22 August — 17 of them from standstill, where no
+        direction had changed and there was nothing to settle from. Measured on
+        23 August in `manual`, this inverter reverses without a pause: three
+        reversals against eight same-direction steps of equal amplitude, dead
+        time 1 to 5 s against 1 to 6 s, and not one sample resting near zero on
+        the way through. The largest, 2000 W charge to 2000 W discharge in one
+        command, was the fastest of the whole run.
+        """
+        delay = self.settings.get_int(OPT_DIRECTION_DELAY)
+        if delay <= 0:
+            return 0
+
         interval = self.coordinator.update_interval
         seconds = interval.total_seconds() if interval else 10.0
         if seconds <= 0:
             return 1
-        return max(1, round(CONTROL_DIRECTION_HOLD_SECONDS / seconds))
+        return max(1, round(delay / seconds))
 
     async def _reverse_guard(self, data: dict[str, Any], wanted: str) -> bool:
         """Hold a reversal for the configured time. True means: wait.
@@ -1004,6 +1045,8 @@ class ZendureController:
         self._prev_grid = grid
 
         if starting:
+            # Zero cycles means no settling state; the next poll evaluates
+            # normally instead of reporting a hold it is not observing.
             self._hold = self._hold_cycles()
         self._last_direction = direction if target > 0 else "none"
         self._idle_since = None
@@ -1057,6 +1100,54 @@ class ZendureController:
         if device > 0:
             return min(setting, device)
         return setting
+
+    # ── Rest state ───────────────────────────────────────────────────────
+
+    async def _rest_step(self, data: dict[str, Any]) -> None:
+        """Hand the flash-write flag back once both own limits have sat at zero.
+
+        Entering needs two consecutive polls that both see zero, which is where
+        the hysteresis comes from: a limit passing through zero during a
+        direction change lasts a sample, not a poll, so it never triggers this.
+        There is deliberately no delay setting — an earlier version had one and
+        it was measured to be meaningless, because nothing shorter than a poll
+        interval could ever fire and every value below it behaved identically.
+
+        Leaving needs no code at all: every limit write sets the flag first, in
+        every mode, so the first order out of rest carries the wake-up with it.
+        Written once, never held down.
+        """
+        idle = (
+            self._owns_limits
+            and int(data.get("inputLimit") or 0) == 0
+            and int(data.get("outputLimit") or 0) == 0
+        )
+
+        if not idle:
+            # Any limit off zero ends the rest state. The flag is not written
+            # back here: the write path does that, and two writers ordering the
+            # same thing is how the older faults in this loop started.
+            self._rest_since = None
+            self._resting = False
+            return
+
+        now = dt_util.utcnow()
+        if self._rest_since is None:
+            self._rest_since = now
+            return
+
+        if self._resting:
+            return
+
+        # The floor keeps the hysteresis intact when the poll interval is set
+        # short for a comparison run, where two polls could be two seconds.
+        if (now - self._rest_since).total_seconds() < CONTROL_REST_MIN_SECONDS:
+            return
+
+        if data.get("smartMode") != 0:
+            await self._write("smartMode", 0, data)
+        self._resting = True
+        _LOGGER.debug("resting: limits idle across two polls, flash-write flag released")
 
     # ── Readings ─────────────────────────────────────────────────────────
 
