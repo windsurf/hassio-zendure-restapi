@@ -663,92 +663,64 @@ to average out the sampling offset between the AC and cell readings.
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
 
-### v1.4.0 — Trace rotation, no settling hold, and a rest state
+### v1.4.0 — No settling hold, a rest state, and smaller trace files
 
-Released as one minor. It was developed in three steps, kept separate below because each answers a
-different question and each was measured on its own. Nothing in v1.3.1, v1.3.2 or v1.3.5 was
-published; those numbers exist only in the development history.
-
-**Not yet seen in production: the rest state.** It is built and tested — eight behavioural checks
-against the real module — but in eleven hours of trace since it went live, no idle stretch has
-lasted the two polls it needs. That is consistent with what was measured beforehand, since a smart
-mode with an active load never sits still for longer than one poll, but it is not confirmation
-that the code does what it should. Treat the yield as undetermined; see below.
-
-### v1.3.5 — Rest state: hand the flash flag back while idle
-
-**With both of its own limits at zero across two consecutive polls, the controller hands
-`smartMode` back to the device** so the inverter can drop to its low-power state. There is no
-setting: the poll rate is the hysteresis. A limit passing through zero during a direction change
-lasts a sample, not a poll, so it never triggers this.
-
-Leaving needed no code. Every limit write already sets the flag first, in every mode, so the
-first order out of rest carries the wake-up with it. Entering is written once and never held down
-— repeating it is what turned v0.5.0 into a square wave against the device's own manager.
-
-**Measured on a 3000 Mix AC+ with Backup mode closed.** With both limits at zero the cells give
-30 W with the flag set and 5 W with it clear — 25 W. While actually converting the flag changes
-nothing: 453 W from the cells at 500 W of charging either way, so the saving exists only at a
-zero limit. Waking costs nothing measurable — the same 500 W order responded in 6 s from rest and
-6 s from awake.
-
-**What it is worth is undetermined.** Over five hours of clean trace both limits sat at zero for
-17.2% of the time, but almost all of that was one stretch of 44 minutes with the battery held in a
-mode that could not act. Three hours of ordinary operation later the same day gave stretches with
-a median of 6 seconds and a maximum of 12 — one poll interval, because the next poll sets a
-direction again. Nine hours of night gave none at all.
-
-So: nothing while actively regulating, and 25 W times however long the battery structurally has
-nothing to do. That second figure needs a day without interventions to establish. It is saved cell
-energy rather than avoided import, so what it is worth is whatever that charge displaces later.
-
-*A first attempt shipped a `Rest delay` setting in seconds. Measurement showed it did nothing:
-the check runs on the battery poll, entering needs two polls inside one idle stretch, and at a ten
-second poll that means nothing under about eleven seconds could ever fire — so every value from 0
-to 10 behaved identically. The setting is gone; a constant floor of ten seconds keeps the
-hysteresis intact when the poll interval is set short for a comparison run.*
-
-### v1.3.2 — No settling hold unless you ask for one
-
-**`holding` is now governed by `Direction change delay`**, the same setting the quick and manual
-modes already obeyed. At zero — the default on hardware that does not need it — there is no
-settling state at all.
-
-It used to come from a constant of its own and was armed on every start, which is why `holding`
-followed `starting` in 28 of 28 observations, 17 of them from standstill where no direction had
-changed and there was nothing to settle from. On a busy evening that was 280 seconds of doing
-nothing in two and a half hours.
-
-The measurement that settled it, in `manual` with PV and the largest intermittent load switched
-off: three reversals against eight same-direction steps of equal amplitude. Dead time 1 to 5 s
-for the reversals against 1 to 6 s for the plain steps, and not one sample resting near zero on
-the way through. The largest reversal — 2000 W charge to 2000 W discharge in a single command,
-4000 W across zero — had the shortest dead time of the whole run at 1 second.
-
-So on this inverter a reversal costs nothing that an ordinary step does not, `Direction change
-delay` belongs at 0, and with it there is no reason to hold. On hardware that does need a pause,
-set the delay and both paths observe it.
-
-### v1.3.1 — Smaller trace files
-
-**Trace files roll over at roughly 5,000 rows** instead of 100,000 — about an hour at a
-one-second meter, some 150 kB. The old limit was more than a day and some fifteen megabytes per
-file, which is exactly the file you cannot copy off a running system or recover after a crash.
-
-The rollover point is drawn per file within ±400 rows of the nominal size rather than fixed.
-Files that all break on the same minute and second look like a pattern in the data when read
-back, and a load that happens to be periodic with the file length would otherwise fall in the
-same place in every file.
-
-Each recording is one series: the timestamp is taken once when the switch goes on and every file
-of that recording carries it with a sequence number, `trace_20260822_223100_001.csv` and up, so
-a rollover stays distinguishable from a new recording. The row count includes the unflushed
-buffer, so a file lands on its limit rather than up to one flush past it.
-
-The control loops are untouched. Documentation corrected in the same release: the
-conversion-efficiency figures now distinguish the two Backup mode settings, carry an eight-hour
-measurement at a stable discharge, and warn that efficiency cannot be read off a trace containing
-transients.
+- **`holding` is now governed by `Direction change delay`**, the same setting the quick and manual
+  modes already obeyed. At zero — the default on hardware that does not need it — there is no
+  settling state at all. It used to come from a constant of its own and was armed on every start,
+  which is why `holding` followed `starting` in 28 of 28 observations, 17 of them from standstill
+  where no direction had changed and there was nothing to settle from. On a busy evening that was
+  280 seconds of doing nothing in two and a half hours.
+- **Measured before it was changed**, in `manual` with PV and the largest intermittent load
+  switched off: three reversals against eight same-direction steps of equal amplitude. Dead time 1
+  to 5 s for the reversals against 1 to 6 s for the plain steps, and not one sample resting near
+  zero on the way through. The largest reversal — 2000 W charge to 2000 W discharge in a single
+  command, 4000 W across zero — had the shortest dead time of the whole run at 1 second. So on
+  this inverter a reversal costs nothing that an ordinary step does not, `Direction change delay`
+  belongs at 0, and with it there is no reason to hold. On hardware that does need a pause, set
+  the delay and both paths observe it.
+- **With both of its own limits at zero across two consecutive polls, the controller hands
+  `smartMode` back to the device** so the inverter can drop to its low-power state. There is no
+  setting: the poll rate is the hysteresis. A limit passing through zero during a direction change
+  lasts a sample, not a poll, so it never triggers this. Leaving needed no code — every limit
+  write already sets the flag first, in every mode, so the first order out of rest carries the
+  wake-up with it. Entering is written once and never held down; repeating it is what turned
+  v0.5.0 into a square wave against the device's own manager.
+- **What that is worth on a 3000 Mix AC+ with Backup mode closed.** With both limits at zero the
+  cells give 30 W with the flag set and 5 W with it clear — 25 W. While actually converting the
+  flag changes nothing: 453 W from the cells at 500 W of charging either way, so the saving exists
+  only at a zero limit. Waking costs nothing measurable — the same 500 W order responded in 6 s
+  from rest and 6 s from awake.
+- **The rest state has not yet been seen in production.** It is built and tested — eight
+  behavioural checks against the real module — but no idle stretch since it went live has lasted
+  the two polls it needs. Over five hours of clean trace both limits sat at zero for 17.2% of the
+  time, but almost all of that was a single stretch of 44 minutes with the battery held in a mode
+  that could not act; three hours of ordinary operation gave stretches with a median of 6 seconds
+  and a maximum of 12, and nine hours of night gave none at all. So: nothing while actively
+  regulating, and 25 W times however long the battery structurally has nothing to do. That second
+  figure needs a day without interventions to establish, and it is saved cell energy rather than
+  avoided import, so what it is worth is whatever that charge displaces later. Treat the yield as
+  undetermined.
+- **Trace files roll over at roughly 5,000 rows** instead of 100,000 — about an hour at a
+  one-second meter, some 150 kB. The old limit was more than a day and some fifteen megabytes per
+  file, which is exactly the file you cannot copy off a running system or recover after a crash.
+  The rollover point is drawn per file within ±400 rows of the nominal size rather than fixed:
+  files that all break on the same minute and second look like a pattern in the data when read
+  back, and a load that happens to be periodic with the file length would otherwise fall in the
+  same place in every file. Each recording stays one series — the timestamp is taken once when the
+  switch goes on and every file of that recording carries it with a sequence number,
+  `trace_<date>_<time>_001.csv` and up — so a rollover remains distinguishable from a new
+  recording. The row count includes the unflushed buffer, so a file lands on its limit rather than
+  up to one flush past it.
+- The control loops are otherwise untouched. Documentation corrected in the same release: the
+  conversion-efficiency figures now distinguish the two Backup mode settings, carry an eight-hour
+  measurement at a stable discharge, and warn that efficiency cannot be read off a trace
+  containing transients.
+- *A first attempt at the rest state shipped a `Rest delay` setting in seconds. Measurement showed
+  it did nothing: the check runs on the battery poll, entering needs two polls inside one idle
+  stretch, and at a ten second poll that means nothing under about eleven seconds could ever fire
+  — so every value from 0 to 10 behaved identically. The setting is gone; a constant floor of ten
+  seconds keeps the hysteresis intact when the poll interval is set short for a comparison run.*
 
 ### v1.3.0 — Two write thresholds you can set
 
