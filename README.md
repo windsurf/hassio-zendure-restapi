@@ -135,10 +135,10 @@ Visible in the raw samples, where the meter holds a stale value for three cycles
 appears:
 
 ```
-09:41:49.779   reference 2234 W    meter  -69 W
-09:41:50.155   reference 2234 W    meter  -69 W
-09:41:50.521   reference 2234 W    meter  -69 W
-09:41:50.890   reference 2179 W    meter 2179 W
+T+0.000   reference 2234 W    meter  -69 W
+T+0.376   reference 2234 W    meter  -69 W
+T+0.742   reference 2234 W    meter  -69 W
+T+1.111   reference 2179 W    meter 2179 W
 ```
 
 **What this means in practice.** A control loop reading this meter is acting on a picture of the
@@ -158,7 +158,7 @@ are in every P1 telegram, and the reference reader exposes all four. This meter 
 them, not even their net sum.
 
 That matters more than it used to. Where import and export are settled separately — as they
-will be in the Netherlands from 2027 — the net figure hides what you are billed on. In one
+will be under some tariff regimes — the net figure hides what you are billed on. In one
 two-minute window the reference registers showed 5 Wh imported and 14 Wh exported: a net of
 −9 Wh concealing 19 Wh of actual exchange.
 
@@ -386,7 +386,7 @@ Four details do the real work.
 sits inside the deadband while the device is still charging, so the running direction is only
 considered over when the device reports both limits at zero.
 
-**Idle is decided by what is commanded**, not by measured power. An inverter draws its own standby power continuously — a 3000 Mix AC+ idles at roughly 41 W — so the pack never reads zero. Both limits at zero means a direction change is safe regardless.
+**Idle is decided by what is commanded**, not by measured power. An inverter draws its own standby power continuously — a 3000 Mix AC+ idles at 29 to 36 W depending on Backup mode, and only reaches a few watts with both that setting and the flag clear — so the pack never reads zero. Both limits at zero means a direction change is safe regardless.
 
 ### Buffers and thresholds
 
@@ -409,6 +409,14 @@ The two directions are not symmetric in value. Overcharging is compared against 
 `Direction change delay` pauses between opposite directions: the current limit is cleared, the
 configured number of seconds elapses, then the new direction is written. It defaults to 10
 seconds, matching the default polling interval; set it to 0 to reverse immediately.
+
+**Measured on a 3000 Mix AC+: a reversal costs nothing an ordinary step does not.** Eleven
+commands in `manual` with PV and the largest intermittent load switched off, scored on the P1
+meter because the battery reading lags 5 to 10 s. Three reversals against eight same-direction
+steps of equal amplitude: dead time 1 to 5 s against 1 to 6 s, and not one sample resting near
+zero on the way through. The largest — 2000 W charge to 2000 W discharge in a single command,
+4000 W across zero — had the shortest dead time of the run at 1 second. On this hardware the
+setting belongs at 0. Other inverters may differ, which is why it is a setting.
 
 The smart modes already wind a direction down before starting the other one, but `quick_charge`,
 `quick_discharge` and `manual` write their target straight away — so a mode switch could take
@@ -471,9 +479,18 @@ All sources are AC-side fields, matching the side the meter is on. Conversion lo
 
 Two diagnostic sensors surface that loss. `Charge efficiency` is DC over AC, `Discharge efficiency` is AC over DC. Only packs in the matching state contribute.
 
-The figure drops sharply at low power, because the converter's own consumption is nearly constant. Measured on a 3000 Mix AC+ with the trace: 36 W drawn from the cells while idle, and 43 W of loss at 662 W of charging — so almost all of it is the fixed part, and delivering power on top of it is comparatively cheap. Round-trip over the lifetime counters was 80.8%.
+The figure drops sharply at low power, because the converter's own consumption is nearly constant. How large that fixed part is depends on Backup mode — see [Standby draw](#known-limitations). On a 3000 Mix AC+ with `Backup mode = closed` it is around 27 W; with `economic` it is around 41 W.
 
-That is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle.
+Measured over eight uninterrupted hours at a stable discharge, 29,239 samples with `closed`:
+
+| Band | AC delivered | DC from cells | Efficiency | Loss |
+|---|---|---|---|---|
+| 100–150 W | 596.3 Wh | 738.7 Wh | **80.7%** | 32 W |
+| 150–200 W | 569.4 Wh | 681.0 Wh | **83.6%** | 31 W |
+
+The loss is flat across that range, so the proportional term cannot be read from it. Charge efficiency is roughly 95% and nearly flat. Round-trip over the lifetime counters was 80.8%.
+
+That is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle — and on whether your tariff still nets import against export.
 
 ---
 
@@ -612,15 +629,32 @@ sub-10 ms changeover on the backup outlet. Earlier releases of this README attri
 36 W to mandatory grid monitoring under VDE-AR-N 4105 and UL 1741. That cannot be the full story:
 grid monitoring does not stop when the backup outlet is closed, and the draw does.
 
+**The flag is only worth those 25 W at a zero limit.** Once the converter is actually converting
+it is awake regardless: measured at 500 W of charging, the cells gave 453 W with the flag set and
+453 W with it clear. The 47 W of loss there matches `27 + 0.035 × 500` from the curve above. The
+flag governs where limit writes are stored, not the power state.
+
+**And the device does not clear the flag by itself.** In `manual` with both limits at zero it
+stayed clear for as long as nothing wrote to it. What sets it back is this controller: at the
+start of every smart cycle, and again before any limit write in any mode — so a limit and a set
+flag cannot be separated from Home Assistant. Reports elsewhere of the device reverting the flag
+on its own were not reproducible here; what looked like that turned out to be the device's own
+energy manager still running alongside.
+
 **`acCouplingState` bit 15 is undocumented.** It is set on every sample from a 3000 Mix AC+ and
 its meaning is unknown. Reported as-is.
 
 **Efficiency is not constant.** The converter's overhead has a fixed part and a proportional one,
-and the fixed part dominates: 36 W idle and 43 W of loss at 662 W of charging, measured with the
-trace. Treating it as a constant, in either direction, gives wrong answers at the other end of
-the range. The shape of the curve above a kilowatt is not established — that needs a run holding
-several fixed power levels for long enough to average out the sampling offset between the AC and
-cell readings.
+and the fixed part dominates. Treating it as a constant, in either direction, gives wrong answers
+at the other end of the range. The fixed part also depends on Backup mode: around 27 W with
+`closed`, around 41 W with `economic`, so a curve measured under one does not describe the other.
+
+**Efficiency cannot be read off a trace with transients in it.** `battery_ac_w` and `pack_dc_w`
+are 5 to 10 seconds out of step, so on any edge the same division returns nonsense — in one
+otherwise clean night, 43% and 104% on bands with 70 and 130 samples. Only long stretches at a
+stable power level give a usable number, and the shape of the curve above 200 W is not
+established under `closed`. That needs a run holding several fixed power levels for long enough
+to average out the sampling offset between the AC and cell readings.
 
 ---
 
@@ -628,6 +662,93 @@ cell readings.
 
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.4.0 — Trace rotation, no settling hold, and a rest state
+
+Released as one minor. It was developed in three steps, kept separate below because each answers a
+different question and each was measured on its own. Nothing in v1.3.1, v1.3.2 or v1.3.5 was
+published; those numbers exist only in the development history.
+
+**Not yet seen in production: the rest state.** It is built and tested — eight behavioural checks
+against the real module — but in eleven hours of trace since it went live, no idle stretch has
+lasted the two polls it needs. That is consistent with what was measured beforehand, since a smart
+mode with an active load never sits still for longer than one poll, but it is not confirmation
+that the code does what it should. Treat the yield as undetermined; see below.
+
+### v1.3.5 — Rest state: hand the flash flag back while idle
+
+**With both of its own limits at zero across two consecutive polls, the controller hands
+`smartMode` back to the device** so the inverter can drop to its low-power state. There is no
+setting: the poll rate is the hysteresis. A limit passing through zero during a direction change
+lasts a sample, not a poll, so it never triggers this.
+
+Leaving needed no code. Every limit write already sets the flag first, in every mode, so the
+first order out of rest carries the wake-up with it. Entering is written once and never held down
+— repeating it is what turned v0.5.0 into a square wave against the device's own manager.
+
+**Measured on a 3000 Mix AC+ with Backup mode closed.** With both limits at zero the cells give
+30 W with the flag set and 5 W with it clear — 25 W. While actually converting the flag changes
+nothing: 453 W from the cells at 500 W of charging either way, so the saving exists only at a
+zero limit. Waking costs nothing measurable — the same 500 W order responded in 6 s from rest and
+6 s from awake.
+
+**What it is worth is undetermined.** Over five hours of clean trace both limits sat at zero for
+17.2% of the time, but almost all of that was one stretch of 44 minutes with the battery held in a
+mode that could not act. Three hours of ordinary operation later the same day gave stretches with
+a median of 6 seconds and a maximum of 12 — one poll interval, because the next poll sets a
+direction again. Nine hours of night gave none at all.
+
+So: nothing while actively regulating, and 25 W times however long the battery structurally has
+nothing to do. That second figure needs a day without interventions to establish. It is saved cell
+energy rather than avoided import, so what it is worth is whatever that charge displaces later.
+
+*A first attempt shipped a `Rest delay` setting in seconds. Measurement showed it did nothing:
+the check runs on the battery poll, entering needs two polls inside one idle stretch, and at a ten
+second poll that means nothing under about eleven seconds could ever fire — so every value from 0
+to 10 behaved identically. The setting is gone; a constant floor of ten seconds keeps the
+hysteresis intact when the poll interval is set short for a comparison run.*
+
+### v1.3.2 — No settling hold unless you ask for one
+
+**`holding` is now governed by `Direction change delay`**, the same setting the quick and manual
+modes already obeyed. At zero — the default on hardware that does not need it — there is no
+settling state at all.
+
+It used to come from a constant of its own and was armed on every start, which is why `holding`
+followed `starting` in 28 of 28 observations, 17 of them from standstill where no direction had
+changed and there was nothing to settle from. On a busy evening that was 280 seconds of doing
+nothing in two and a half hours.
+
+The measurement that settled it, in `manual` with PV and the largest intermittent load switched
+off: three reversals against eight same-direction steps of equal amplitude. Dead time 1 to 5 s
+for the reversals against 1 to 6 s for the plain steps, and not one sample resting near zero on
+the way through. The largest reversal — 2000 W charge to 2000 W discharge in a single command,
+4000 W across zero — had the shortest dead time of the whole run at 1 second.
+
+So on this inverter a reversal costs nothing that an ordinary step does not, `Direction change
+delay` belongs at 0, and with it there is no reason to hold. On hardware that does need a pause,
+set the delay and both paths observe it.
+
+### v1.3.1 — Smaller trace files
+
+**Trace files roll over at roughly 5,000 rows** instead of 100,000 — about an hour at a
+one-second meter, some 150 kB. The old limit was more than a day and some fifteen megabytes per
+file, which is exactly the file you cannot copy off a running system or recover after a crash.
+
+The rollover point is drawn per file within ±400 rows of the nominal size rather than fixed.
+Files that all break on the same minute and second look like a pattern in the data when read
+back, and a load that happens to be periodic with the file length would otherwise fall in the
+same place in every file.
+
+Each recording is one series: the timestamp is taken once when the switch goes on and every file
+of that recording carries it with a sequence number, `trace_20260822_223100_001.csv` and up, so
+a rollover stays distinguishable from a new recording. The row count includes the unflushed
+buffer, so a file lands on its limit rather than up to one flush past it.
+
+The control loops are untouched. Documentation corrected in the same release: the
+conversion-efficiency figures now distinguish the two Backup mode settings, carry an eight-hour
+measurement at a stable discharge, and warn that efficiency cannot be read off a trace containing
+transients.
 
 ### v1.3.0 — Two write thresholds you can set
 
