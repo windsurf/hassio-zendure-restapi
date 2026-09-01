@@ -804,8 +804,8 @@ class ZendureController:
         manual modes obey, so the two paths cannot disagree about whether this
         inverter needs a pause. At zero there is no settling state at all.
 
-        Until v1.3.2 this came from a constant of its own and was armed on
-        every start, which is why `holding` followed `starting` in 28 of 28
+        This used to come from a constant of its own and was armed on every
+        start, which is why `holding` followed `starting` in 28 of 28
         observations on 22 August — 17 of them from standstill, where no
         direction had changed and there was nothing to settle from. Measured on
         23 August in `manual`, this inverter reverses without a pause: three
@@ -1116,9 +1116,25 @@ class ZendureController:
         Leaving needs no code at all: every limit write sets the flag first, in
         every mode, so the first order out of rest carries the wake-up with it.
         Written once, never held down.
+
+        The idle test is `_last_direction`, not `_owns_limits`. The latter
+        means "we currently hold a nonzero limit" — it goes False on every
+        path that winds a direction down, including the ones this controller
+        performs itself, so it can never be True at the same moment both
+        limits read zero. `_last_direction == "none"` is the flag that
+        already answers the right question: it is set on exactly the paths
+        where this controller itself considers no direction to be running
+        (start-up, fail-safe, standby entry, a reversal pause, a forbidden
+        direction wound down, or the mode loop's own write settling at a
+        target of zero) and nowhere else, and three other branches in this
+        same loop already rely on it to decide whether a direction is still
+        theirs to continue. Confirmed on 24 August: a mode switch away from
+        an active discharge wound it down through the forbidden-direction
+        path, `smartMode` stayed at 1 for the following 745 seconds with
+        both limits at zero, and no rest was ever entered.
         """
         idle = (
-            self._owns_limits
+            self._last_direction == "none"
             and int(data.get("inputLimit") or 0) == 0
             and int(data.get("outputLimit") or 0) == 0
         )
