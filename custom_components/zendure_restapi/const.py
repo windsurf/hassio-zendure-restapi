@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.4.0"
+INTEGRATION_VERSION = "1.4.2"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ DEFAULTS = {
     OPT_MANUAL_POWER: 0,
     OPT_MAX_CHARGE_POWER: 800,
     OPT_MAX_DISCHARGE_POWER: 800,
-    OPT_START_DISCHARGE_AT: 30,         # W of import before discharging starts
+    OPT_START_DISCHARGE_AT: 5,          # W of import before discharging starts
     OPT_START_CHARGE_AT: 5,             # W of export before charging starts
     OPT_DIRECTION_DELAY: 10,            # s to pause between directions, 0 = off
     # Smallest adjustment worth writing, per loop. Both keep the values the
