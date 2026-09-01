@@ -663,6 +663,42 @@ to average out the sampling offset between the AC and cell readings.
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.4.2 — Settings brought in line with what the measurements showed
+
+- **`Start discharging at import` now defaults to 5 W instead of 30.** Two days of traces
+  show the loop tracks a 5 W threshold without hunting: median error 3 W over a full
+  night, 89% of the time within 10 W. The old 30 W was a guess made before any of that
+  was measured, and it leaves the base load on the grid for no reason.
+- **`Mode threshold` and `Trim threshold` now stop at 200 W instead of 500.** No measured
+  configuration has ever needed more than 40 W, and a range that runs to 500 makes the
+  useful part of the slider unusably small.
+- **`Max charge power`, `Max discharge power` and `Manual power` now step in 100 W
+  instead of 5 W.** These are ceilings and setpoints, not trim values; nobody sets a
+  ceiling to 1,645 W, and a 5 W step over a 3,600 W range means dragging the slider
+  through 720 positions.
+- No behaviour changes. The control loop, the rest state and the trace writer are
+  untouched.
+
+### v1.4.1 — The rest state now actually enters
+
+- **Fixed: the rest state could never fire.** It gated on `_owns_limits`, a
+  flag meaning "this controller currently holds a nonzero limit" — which
+  goes False on every path that winds a direction down, including the ones
+  this controller performs itself, so it could never be True at the same
+  moment both limits read zero. The idle test now uses `_last_direction`,
+  which is already set to "none" on exactly the paths where no direction is
+  running and nowhere else, and which three other branches in the same loop
+  already rely on for the same question.
+- **Found on trace, not by inspection.** A recording taken straight after
+  the v1.4.0 restart showed a mode switch wind a discharge down through the
+  forbidden-direction path — a fully legitimate, self-caused zero — after
+  which `smartMode` sat at 1 for the next 745 seconds with both limits at
+  zero, and no rest was ever entered. A second stretch of 288 seconds in the
+  same recording did the same. Both are explained by the flag, not by
+  anything about the hardware or the load.
+- No other behaviour changes. `_owns_limits` is untouched and keeps its
+  original meaning for standby bookkeeping.
+
 ### v1.4.0 — No settling hold, a rest state, and smaller trace files
 
 - **`holding` is now governed by `Direction change delay`**, the same setting the quick and manual
