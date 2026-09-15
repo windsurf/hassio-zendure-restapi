@@ -1297,6 +1297,7 @@ class ZendureController:
             "pack_dc_w": pack,
             "pack_state": pack_state,
             "soc": _as_int(data.get("electricLevel")),
+            "soc_limit": _as_int(data.get("socLimit")),
             "input_limit": limits["inputLimit"],
             "output_limit": limits["outputLimit"],
             "ac_mode": _as_int(data.get("acMode")),
