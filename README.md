@@ -458,6 +458,26 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
+### SOC limit status
+
+`socLimit` maps to three values: `none`, `upper_limit` and `lower_limit`. All three occur in
+practice, and the sensor is early enough to act on.
+
+| Transition | Behaviour |
+|---|---|
+| To `upper_limit` | one second before the device stopped accepting charge |
+| To `lower_limit` | in the same sample as the meter, ten seconds before `Battery power` followed |
+
+That ten-second lag is the battery poll interval, not the sensor: the meter and the flag change
+together, the cell readings catch up on the next payload.
+
+Over three days the sensor produced eight transitions — four to each limit, each with a return to
+`none` in between, no chattering and no intermediate states.
+
+**Treat `unavailable` separately from `none`.** The sensor spent ten seconds unavailable once in
+those three days. Anything keying off this entity should distinguish "no limit active" from "no
+value", or a brief gap will read as the limit having cleared.
+
 ---
 
 ## The Energy dashboard
@@ -488,7 +508,62 @@ Measured over eight uninterrupted hours at a stable discharge, 29,239 samples wi
 | 100–150 W | 596.3 Wh | 738.7 Wh | **80.7%** | 32 W |
 | 150–200 W | 569.4 Wh | 681.0 Wh | **83.6%** | 31 W |
 
-The loss is flat across that range, so the proportional term cannot be read from it. Charge efficiency is roughly 95% and nearly flat. Round-trip over the lifetime counters was 80.8%.
+The loss is flat across that range, so the proportional term cannot be read from it. Round-trip over the lifetime counters was 80.8%.
+
+#### Separating the fixed and proportional parts
+
+A later run isolated the two. Rather than integrating over hours — which mixes in the sampling offset between the AC and cell readings — it takes **paired values that each held still for at least five seconds**, so both columns describe the same moment. Thirty-three such pairs, `closed`:
+
+| AC | DC | Loss | Efficiency |
+|---|---|---|---|
+| 31 W | 68 W | 37 W | 45.6% |
+| 94 W | 133 W | 39 W | 70.7% |
+| 131 W | 170 W | 39 W | 77.1% |
+| 152 W | 190 W | 38 W | 80.0% |
+| 170 W | 208 W | 38 W | 81.7% |
+| 190 W | 227 W | 37 W | 83.7% |
+
+Least squares over all thirty-three:
+
+```
+P_DC = 1.027 × P_AC + 32.9
+```
+
+**A fixed term of 33 W and a marginal conversion of 97.4%.** Stronger than the fit: the loss itself sits between 36 and 40 W across the whole range, median 38. There is no poor efficiency at low power — there is one fixed cost that dominates when little is flowing.
+
+#### The charge side has its own characteristic
+
+Three `quick_charge` windows at a fixed 3000 W limit, on two different days and across a state of charge from 26% to 99%:
+
+| Duration | AC in | DC in | Loss | Efficiency |
+|---|---|---|---|---|
+| 24.6 min | 2999 W | 2856 W | 144 W | 95.2% |
+| 14.3 min | 2999 W | 2853 W | 146 W | 95.1% |
+| 18.6 min | 2980 W | 2837 W | 143 W | 95.2% |
+
+The discharge fit above predicts about 100 W at this power; measured is 143 to 146 W, three times, with a spread of 3 W. **The discharge curve does not describe the charge side** — either the proportional term is larger there, or the fixed term is. Three points at one power level cannot separate the two.
+
+### Usable capacity
+
+The device publishes no capacity figure, so it is derived from charge windows: energy in against the change in state of charge.
+
+| Window | Duration | SOC | AC in | Wh AC per point | Wh DC per point |
+|---|---|---|---|---|---|
+| 1 | 15.0 min | 22 → 30 | 750 Wh | 93.7 | 89.3 |
+| 2 | 25.3 min | 30 → 39 | 764 Wh | 84.9 | 80.3 |
+| 3 | 116.5 min | 39 → 99 | 5702 Wh | 95.0 | 90.4 |
+| 4 | 352.8 min | 9 → 100 | 8436 Wh | 92.7 | 87.3 |
+
+**Median 93.2 Wh AC per percentage point**, or 88.3 Wh on the cell side.
+
+| | 3000 Mix AC+ with one 3840 Wh pack ×2 |
+|---|---|
+| Usable capacity, cell side | **8.8 kWh** |
+| Energy needed at the AC port for 0 → 100% | **9.3 kWh** |
+
+Which of the two you want depends on the question. Planning purchases in metered kilowatt-hours needs the AC figure; sizing what the battery can deliver needs the cell figure. Eleven further discharge windows gave 86 to 88 Wh per point on the cell side, consistent with the table.
+
+Short windows are unreliable here: window 2 spans nine points, where rounding of the whole-percent scale weighs heavily. The two long windows, 60 and 91 points, are the ones to trust.
 
 That is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle — and on whether your tariff still nets import against export.
 
@@ -573,8 +648,13 @@ one and no file would ever be closed properly.
 
 The row is the measurement and the command side by side — grid power as accepted for control
 and as the meter reported it, battery power on both the AC side and at the cells with the pack
-state that signs it, state of charge, both limits, `acMode`, `smartMode`, the age of the battery
-payload, and the loop's own bookkeeping. Nothing is averaged, scored or derived, because a definition of "how well did that
+state that signs it, state of charge and the SOC limit flag, both limits, `acMode`, `smartMode`,
+the age of the battery payload, and the loop's own bookkeeping.
+
+Having the AC and cell readings in the same row is what makes conversion loss measurable without
+a second instrument — but the two are 5 to 10 seconds out of step, so only pairs that hold still
+for several seconds give a usable ratio. `soc_limit` carries the raw 0, 1 or 2 rather than the
+sensor's text, in keeping with the rest of the row. Nothing is averaged, scored or derived, because a definition of "how well did that
 go" is worth changing after you have looked at the data, and one written into the file cannot be.
 
 The `writer` column names whoever last moved a limit: `mode`, `trim`, `none`, or `foreign` for a
@@ -634,12 +714,39 @@ it is awake regardless: measured at 500 W of charging, the cells gave 453 W with
 453 W with it clear. The 47 W of loss there matches `27 + 0.035 × 500` from the curve above. The
 flag governs where limit writes are stored, not the power state.
 
+**At a state-of-charge limit the device drops to 5 W on its own, flag or no flag.** Over 58.9 hours
+of trace, 116,534 samples with the battery delivering nothing:
+
+| State | Samples | Cell draw |
+|---|---|---|
+| Limits zero, flag clear (resting) | 37,671 | 5 W |
+| Limit set but device refusing — full or empty | 78,762 | **5 W** |
+| Limits zero, flag still set | 101 | 30 W |
+
+The 29 W figure from the table above is real but short-lived: it exists only in the window between
+the controller releasing a direction and the rest state taking effect, which is ten seconds. Within
+a zero-limit stretch the cell draw reads 0 W for the first ten seconds, 31 W for the next ten, and
+5 W from twenty seconds on. **Idle cost is therefore 5 W in almost every idle situation**, not 29,
+and a standing-loss estimate that multiplies 29 W by all awake time overstates it by a wide margin.
+
 **And the device does not clear the flag by itself.** In `manual` with both limits at zero it
 stayed clear for as long as nothing wrote to it. What sets it back is this controller: at the
 start of every smart cycle, and again before any limit write in any mode — so a limit and a set
 flag cannot be separated from Home Assistant. Reports elsewhere of the device reverting the flag
 on its own were not reproducible here; what looked like that turned out to be the device's own
 energy manager still running alongside.
+
+**At a state-of-charge limit the controller keeps ordering, and reports success.** The device
+refuses outright — not a taper, a flat zero — while the loop carries on writing a limit and
+reports `discharge at 143 W, within 10 W` or `charging at maximum`, because it reads the limit
+back rather than the power. Observed at both ends: 630 samples in `quick_charge` at 100% with an
+ordered 3000 W and `battery_ac_w` exactly 0, and 4380 samples in `smart_discharge_only` at 9% with
+an ordered 58–178 W and the same flat zero.
+
+Nothing breaks, but two things follow. In a charge mode at the top the discharge limit stays at
+zero, so the battery cannot cover a household peak while sitting full; at the bottom the mirror
+applies to solar surplus. And the rest state never engages, because the limit is not zero. Watch
+`SOC limit status` rather than the reported power if you need to know whether an order is landing.
 
 **`acCouplingState` bit 15 is undocumented.** It is set on every sample from a 3000 Mix AC+ and
 its meaning is unknown. Reported as-is.
@@ -648,6 +755,8 @@ its meaning is unknown. Reported as-is.
 and the fixed part dominates. Treating it as a constant, in either direction, gives wrong answers
 at the other end of the range. The fixed part also depends on Backup mode: around 27 W with
 `closed`, around 41 W with `economic`, so a curve measured under one does not describe the other.
+Discharging under `closed` it works out at `P_DC = 1.027 × P_AC + 32.9`; charging does not follow
+that line and needs its own figures — see [Conversion efficiency](#conversion-efficiency).
 
 **Efficiency cannot be read off a trace with transients in it.** `battery_ac_w` and `pack_dc_w`
 are 5 to 10 seconds out of step, so on any edge the same division returns nonsense — in one
@@ -662,6 +771,41 @@ to average out the sampling offset between the AC and cell readings.
 
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.4.3 — Measurements added to the documentation, and `soc_limit` in the trace
+
+One column added to the trace; the control loops are untouched.
+
+- **`soc_limit` is now a trace column**, carrying the raw `socLimit` value — 0 none, 1 upper
+  limit, 2 lower limit — next to `soc`. The value was already in the polled payload, so nothing
+  extra is requested and the poll load is unchanged. It makes the relation between the flag and
+  what the device actually accepts readable straight from the file instead of having to be
+  reconstructed from Home Assistant history. **The header gains a twenty-first column:** anything
+  reading the CSV by position needs adjusting, reading by name does not.
+
+- **The fixed and proportional parts of the conversion loss are now separated.** Measured on
+  thirty-three AC/DC pairs that each held still for at least five seconds, so both readings
+  describe the same moment: `P_DC = 1.027 × P_AC + 32.9`. A fixed term of 33 W and a marginal
+  conversion of 97.4%. The loss itself sits between 36 and 40 W across the whole 31–190 W range —
+  there is no poor efficiency at low power, there is one fixed cost that dominates when little is
+  flowing. See [Conversion efficiency](#conversion-efficiency).
+- **The charge side does not follow that line.** Three `quick_charge` windows at 3000 W, on two
+  days and across a state of charge from 26% to 99%, gave 143 to 146 W of loss where the discharge
+  fit predicts about 100 W. Documented as its own characteristic rather than folded into one curve.
+- **Usable capacity derived from charge windows:** 93.2 Wh at the AC port per percentage point,
+  88.3 Wh on the cell side — 9.3 kWh to fill from empty, 8.8 kWh available from the cells. Both
+  figures are given because the right one depends on the question.
+- **Idle draw corrected.** At a state-of-charge limit the device drops to 5 W by itself, flag or no
+  flag: 78,762 samples with a limit set and the device refusing. The 29 W figure is real but lives
+  only in the ten seconds between the controller releasing a direction and the rest state taking
+  effect — 101 samples in 58.9 hours. A standing-loss estimate that multiplies 29 W by all awake
+  time overstates it by a wide margin.
+- **`SOC limit status` documented.** All three values occur; `upper_limit` arrives one second
+  before the device stops accepting charge, `lower_limit` in the same sample as the meter. Treat
+  `unavailable` separately from `none`.
+- **New known limitation:** at either state-of-charge limit the controller keeps ordering and
+  reports success, because it reads the limit back rather than the power. Nothing breaks, but the
+  opposite direction stays unavailable and the rest state never engages.
 
 ### v1.4.2 — Settings brought in line with what the measurements showed
 
