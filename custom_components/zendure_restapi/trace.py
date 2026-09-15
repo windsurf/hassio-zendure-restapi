@@ -59,6 +59,7 @@ COLUMNS = (
     "pack_dc_w",         # sum of packN.power at the cells, positive discharging
     "pack_state",        # 1 charging, 2 discharging, as the packs report it
     "soc",               # electricLevel
+    "soc_limit",         # socLimit: 0 none, 1 upper limit, 2 lower limit
     "input_limit",       # charge limit as the device reports it
     "output_limit",      # discharge limit as the device reports it
     "ac_mode",           # 1 charge, 2 discharge
