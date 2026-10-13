@@ -16,6 +16,10 @@ from that same cycle — a loop on its own timer would eventually correct twice
 for one deviation, which is how charge/discharge oscillation gets built. The
 trim loop is subscribed to the meter coordinator instead, and follows the grid
 between battery polls without ever changing direction. See controller.py.
+
+A battery entry can also poll an external P1 reader, configured under
+Configure on that entry. Which meter feeds the loops is the `Meter source`
+select; see p1meter.py for why a second meter is worth having.
 """
 
 from __future__ import annotations
@@ -30,11 +34,16 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
+    CONF_EXTERNAL_HOST,
+    CONF_EXTERNAL_INTERVAL,
+    CONF_EXTERNAL_TYPE,
     CONF_HOST,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
     CONF_SN,
     DEFAULT_PORT,
+    DEFAULT_EXTERNAL_INTERVAL,
+    DEFAULT_EXTERNAL_TYPE,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_TYPE_METER,
     DOMAIN,
@@ -42,6 +51,7 @@ from .const import (
 )
 from .controller import ZendureController
 from .coordinator import ZendureCoordinator
+from .p1meter import ADAPTERS
 from .settings import ZendureSettings
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,10 +92,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if coordinator.device_type != DEVICE_TYPE_METER:
         settings = ZendureSettings(hass, entry)
         controller = ZendureController(coordinator, settings)
-        store[f"{entry.entry_id}{RUNTIME_SUFFIX}"] = {
+        runtime = {
             "settings": settings,
             "controller": controller,
+            "external": None,
+            "external_config": None,
         }
+        store[f"{entry.entry_id}{RUNTIME_SUFFIX}"] = runtime
+        _setup_external(hass, entry, runtime)
+        entry.async_on_unload(lambda: _stop_external(runtime))
 
         @callback
         def _on_update() -> None:
@@ -128,11 +143,70 @@ def _link_meters(hass: HomeAssistant) -> None:
             runtime["controller"].attach_meter(meter)
 
 
+def _external_config(entry: ConfigEntry) -> tuple[str, str, int] | None:
+    """The external meter as configured, or None when there is none.
+
+    Only an address actually saved in the options counts. The form pre-fills
+    one, but an entry that never submitted it polls nothing.
+    """
+    host = str(entry.options.get(CONF_EXTERNAL_HOST) or "").strip()
+    if not host:
+        return None
+    kind = entry.options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE)
+    if kind not in ADAPTERS:
+        _LOGGER.warning("Unknown external meter type '%s', not polling", kind)
+        return None
+    try:
+        interval = int(entry.options.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL))
+    except (TypeError, ValueError):
+        interval = DEFAULT_EXTERNAL_INTERVAL
+    return kind, host, interval
+
+
+@callback
+def _setup_external(hass: HomeAssistant, entry: ConfigEntry, runtime: dict) -> None:
+    """Start, restart or stop the external meter to match the options.
+
+    Called on setup and on every options change. Most option changes are a
+    controller setting moving, which must not touch the poller, so it is only
+    rebuilt when its own configuration differs.
+    """
+    config = _external_config(entry)
+    if config == runtime["external_config"] and (
+        config is None or runtime["external"] is not None
+    ):
+        return
+
+    _stop_external(runtime)
+    runtime["external_config"] = config
+    if config is None:
+        runtime["controller"].attach_external(None)
+        return
+
+    kind, host, interval = config
+    meter = ADAPTERS[kind](hass, async_get_clientsession(hass), host, interval)
+    runtime["external"] = meter
+    runtime["controller"].attach_external(meter)
+    meter.async_start()
+
+
+@callback
+def _stop_external(runtime: dict) -> None:
+    meter = runtime.get("external")
+    if meter is not None:
+        meter.async_stop()
+        runtime["external"] = None
+    runtime["controller"].attach_external(None)
+
+
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Apply changed options in place."""
     coordinator: ZendureCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None:
         return
+    runtime = hass.data.get(DOMAIN, {}).get(f"{entry.entry_id}{RUNTIME_SUFFIX}")
+    if runtime is not None:
+        _setup_external(hass, entry, runtime)
     interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator.set_scan_interval(interval)
     _LOGGER.debug("Polling interval set to %ss", interval)
@@ -151,6 +225,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Home Assistant considers unloaded.
         runtime = store.pop(f"{entry.entry_id}{RUNTIME_SUFFIX}", None)
         if runtime is not None:
+            _stop_external(runtime)
             runtime["controller"].detach_meter()
         _link_meters(hass)
     return unloaded
