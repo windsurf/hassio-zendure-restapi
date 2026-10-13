@@ -69,8 +69,12 @@ from .const import (
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
     CONTROL_REST_MIN_SECONDS,
+    METER_FALLBACK_AGE,
     METER_MAX_AGE,
     METER_SANE_LIMIT,
+    METER_SOURCE_AUTO,
+    METER_SOURCE_EXTERNAL,
+    METER_SOURCE_ZENDURE,
     MODE_MANUAL,
     MODE_QUICK_CHARGE,
     MODE_QUICK_DISCHARGE,
@@ -88,6 +92,7 @@ from .const import (
     OPT_TRIM_THRESHOLD,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
+    OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
     OPT_SOC_PROTECTION,
     OPT_START_CHARGE_AT,
@@ -96,6 +101,7 @@ from .const import (
     SMART_MODES,
 )
 from .coordinator import ZendureCoordinator
+from .p1meter import ExternalMeter
 from .settings import ZendureSettings
 from .trace import ZendureTrace
 
@@ -153,6 +159,7 @@ class ZendureController:
         self.settings = settings
         self.state = ControllerState()
         self.meter: ZendureCoordinator | None = None
+        self.external: ExternalMeter | None = None
 
         self._busy = False
         self._hold = 0
@@ -190,6 +197,15 @@ class ZendureController:
         self._prev_grid: float | None = None
         self._trim_writes = 0
         self._unsub_meter: Any = None
+        self._unsub_external: Any = None
+
+        # ── Meter source ─────────────────────────────────────────────
+        # Which meter the last accepted reading came from. A change of source
+        # resets `_prev_grid`: the step between two different meters is their
+        # offset and their lag, not movement of the grid, and crediting it
+        # against `_pending` would book watts that never arrived.
+        self._source_used = "none"
+        self._trim_source = "none"
 
         # ── Rest state ───────────────────────────────────────────────
         # When this controller has both of its own limits at zero across two
@@ -222,7 +238,7 @@ class ZendureController:
     # ── Wiring ───────────────────────────────────────────────────────────
 
     def attach_meter(self, meter: ZendureCoordinator | None) -> None:
-        """Link the meter coordinator and subscribe the trim loop to it.
+        """Link the Zendure meter coordinator and subscribe the trim loop to it.
 
         Linking runs again on every setup and unload, because the order in
         which the battery and the meter are configured is not fixed. Any
@@ -230,18 +246,21 @@ class ZendureController:
         would run the trim loop twice per sample, which is not merely wasteful
         but doubles every correction.
         """
-        self.detach_meter()
+        if self._unsub_meter is not None:
+            self._unsub_meter()
+            self._unsub_meter = None
+        self._trim_direction = None
         self.meter = meter
         if meter is None:
             _LOGGER.info(
                 "No Zendure meter linked. Smart modes need a grid reading and "
-                "will stay blocked until a meter entry is added."
+                "stay blocked unless an external meter supplies one."
             )
             return
 
         @callback
         def _on_meter() -> None:
-            meter.hass.async_create_task(self.async_sample())
+            self._on_sample(METER_SOURCE_ZENDURE)
 
         self._unsub_meter = meter.async_add_listener(_on_meter)
         _LOGGER.debug(
@@ -249,11 +268,45 @@ class ZendureController:
             meter.update_interval.total_seconds() if meter.update_interval else "?",
         )
 
+    def attach_external(self, meter: ExternalMeter | None) -> None:
+        """Link an external P1 reader, replacing any previous one."""
+        if self._unsub_external is not None:
+            self._unsub_external()
+            self._unsub_external = None
+        self._trim_direction = None
+        self.external = meter
+        if meter is None:
+            return
+
+        @callback
+        def _on_external() -> None:
+            self._on_sample(METER_SOURCE_EXTERNAL)
+
+        self._unsub_external = meter.async_add_listener(_on_external)
+        _LOGGER.debug("Trim loop subscribed to the external meter at %s", meter.host)
+
+    @callback
+    def _on_sample(self, source: str) -> None:
+        """One meter delivered a sample. Act on it only if it is the source.
+
+        Both meters stay subscribed whatever the setting, and the choice is
+        made per sample. That keeps a fallback in `auto` instantaneous — the
+        next Zendure sample after the external meter goes quiet is acted on,
+        with no resubscription — and it means one sample per telegram reaches
+        the trim loop and the trace, never two.
+        """
+        if self._active_source() != source:
+            return
+        self.coordinator.hass.async_create_task(self.async_sample())
+
     def detach_meter(self) -> None:
-        """Drop the meter subscription, if there is one."""
+        """Drop both meter subscriptions."""
         if self._unsub_meter is not None:
             self._unsub_meter()
             self._unsub_meter = None
+        if self._unsub_external is not None:
+            self._unsub_external()
+            self._unsub_external = None
         self._trim_direction = None
         if self.trace.active:
             self.coordinator.hass.async_create_task(self.trace.async_close())
@@ -394,6 +447,14 @@ class ZendureController:
             # Nothing is running any more; the mode loop decides what is next.
             self._trim_direction = None
             return
+
+        if self._source_used != self._trim_source:
+            # The first source seen is not a switch: resetting there would make
+            # the default `zendure` behave differently from v1.4.3 on the first
+            # trim after every start.
+            if self._trim_source != "none":
+                self._prev_grid = None
+            self._trim_source = self._source_used
 
         # ── What has arrived since the last look ─────────────────────
         # Movement in the direction the outstanding order predicted counts as
@@ -1168,7 +1229,44 @@ class ZendureController:
     # ── Readings ─────────────────────────────────────────────────────────
 
     def _meter_power(self) -> float | None:
-        """Signed grid power from the linked meter: positive is import.
+        """Signed grid power from the selected meter: positive is import.
+
+        Both loops read through here, so they always steer on the same meter.
+        The source actually used is kept in `_source_used` for the status and
+        the trace.
+        """
+        power, source = self._meter_reading()
+        self._source_used = source
+        return power
+
+    def _active_source(self) -> str:
+        """Which meter feeds the loops right now: zendure, external or none."""
+        return self._meter_reading()[1]
+
+    def _meter_reading(self) -> tuple[float | None, str]:
+        """The reading the setting asks for, with the meter it came from.
+
+        `auto` takes the external reading while it has a telegram younger than
+        METER_FALLBACK_AGE and the Zendure one otherwise. A forced source never
+        falls back; when its meter goes quiet the result is None, which stops
+        the battery exactly as a silent Zendure meter always has.
+        """
+        wanted = self.settings.get(OPT_METER_SOURCE)
+        if wanted == METER_SOURCE_ZENDURE:
+            return self._zendure_power(), METER_SOURCE_ZENDURE
+        if wanted == METER_SOURCE_EXTERNAL:
+            return self._external_power(METER_MAX_AGE), METER_SOURCE_EXTERNAL
+
+        external = self._external_power(METER_FALLBACK_AGE)
+        if external is not None:
+            return external, METER_SOURCE_EXTERNAL
+        zendure = self._zendure_power()
+        if zendure is not None:
+            return zendure, METER_SOURCE_ZENDURE
+        return None, "none"
+
+    def _zendure_power(self) -> float | None:
+        """Grid power from the Zendure P1 meter.
 
         The sign is taken as reported. Verified against a second meter on the
         same connection: 2088 W on the Zendure against 2059 W on the YouLess,
@@ -1178,20 +1276,41 @@ class ZendureController:
             return None
         if self.meter.last_update_success is False:
             return None
+        return self._checked(
+            self.meter.updated_at,
+            (self.meter.data or {}).get("total_power"),
+            METER_MAX_AGE,
+        )
 
-        # A coordinator that has stopped updating still reports its last
-        # success as True for a while, so "did the last poll work" is not the
-        # same question as "is this reading current". Closed-loop control needs
-        # the second one.
-        updated = self.meter.updated_at
+    def _external_power(self, max_age: float) -> float | None:
+        """Grid power from the external P1 reader.
+
+        A single failed poll does not count against it: at four polls a second
+        one lost request is noise, and the age of the last new telegram already
+        says everything about whether the reading is current.
+        """
+        if self.external is None:
+            return None
+        return self._checked(
+            self.external.updated_at,
+            self.external.data.get("power"),
+            max_age,
+        )
+
+    @staticmethod
+    def _checked(updated: Any, value: Any, max_age: float) -> float | None:
+        """Apply the age, type and plausibility checks every meter must pass."""
+        # A source that has stopped updating can still report its last value
+        # as good for a while, so "did the last poll work" is not the same
+        # question as "is this reading current". Closed-loop control needs the
+        # second one.
         if updated is None:
             return None
         age = (dt_util.utcnow() - updated).total_seconds()
-        if age > METER_MAX_AGE:
-            _LOGGER.debug("meter reading %.0fs old, beyond %ss", age, METER_MAX_AGE)
+        if age > max_age:
+            _LOGGER.debug("meter reading %.0fs old, beyond %ss", age, max_age)
             return None
 
-        value = (self.meter.data or {}).get("total_power")
         if value is None:
             return None
         try:
@@ -1308,6 +1427,10 @@ class ZendureController:
             "pending_w": round(self._pending),
             "trim_writes": self._trim_writes,
             "foreign_writes": self._foreign_writes,
+            "meter_source": self._source_used,
+            "external_w": _as_int(
+                self.external.data.get("power") if self.external is not None else None
+            ),
         })
 
     def _pack_power(self, data: dict[str, Any]) -> tuple[int | str, int | str]:
@@ -1465,6 +1588,8 @@ class ZendureController:
             # normal operation; the count is what makes an on-device manager
             # visible while the operation mode sits in standby.
             "foreign_writes": self._foreign_writes,
+            "meter_source": self.settings.get(OPT_METER_SOURCE),
+            "meter_active": self._source_used,
             "trace_file": self.trace.path,
         }
 
