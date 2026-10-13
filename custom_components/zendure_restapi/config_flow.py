@@ -12,10 +12,11 @@ from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
+import aiohttp
+
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
     CONF_DEVICE_TYPE,
-    CONF_EXTERNAL_HOST,
     CONF_EXTERNAL_INTERVAL,
     CONF_EXTERNAL_TYPE,
     CONF_HOST,
@@ -24,13 +25,17 @@ from .const import (
     CONF_PRODUCT,
     CONF_SCAN_INTERVAL,
     CONF_SN,
-    DEFAULT_EXTERNAL_HOST,
     DEFAULT_EXTERNAL_INTERVAL,
     DEFAULT_EXTERNAL_TYPE,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_TYPE_BATTERY,
+    DEVICE_TYPE_EXTERNAL,
     DEVICE_TYPE_METER,
+    EXTERNAL_DEVICE_NAME,
+    EXTERNAL_TYPE_HOMEWIZARD_V1,
+    HOMEWIZARD_P1_PRODUCT,
+    ZEROCONF_HOMEWIZARD,
     DOMAIN,
     EXTERNAL_TYPE_LABELS,
     MAX_EXTERNAL_INTERVAL,
@@ -39,6 +44,7 @@ from .const import (
     MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
+from .p1meter import ADAPTERS
 from .registry import is_known_model, meter_name, model_name, parse_service_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -89,6 +95,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._host: str | None = None
         self._port: int = DEFAULT_PORT
         self._result: ProbeResult | None = None
+        self._discovered: dict[str, Any] = {}
 
     def _entry_data(self) -> dict[str, Any]:
         result = self._result
@@ -103,6 +110,14 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose what to add: a Zendure device or an external P1 meter."""
+        return self.async_show_menu(
+            step_id="user", menu_options=["zendure", "external_meter"]
+        )
+
+    async def async_step_zendure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manual entry of host and port."""
@@ -139,12 +154,135 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="zendure", data_schema=schema, errors=errors)
+
+    # ── External P1 meter ────────────────────────────────────────────────
+
+    async def _async_probe_external(self, kind: str, host: str) -> str | None:
+        """One request to the reader. Returns an error key, or None if it answers."""
+        meter = ADAPTERS[kind](self.hass, async_get_clientsession(self.hass), host, 1000)
+        try:
+            await meter.async_probe()
+        except (aiohttp.ClientError, TimeoutError):
+            return "cannot_connect"
+        except (ValueError, TypeError, KeyError, IndexError):
+            return "wrong_meter_type"
+        return None
+
+    def _external_entry(self, kind: str, host: str, interval: int) -> ConfigFlowResult:
+        return self.async_create_entry(
+            title=f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_TYPE_LABELS.get(kind, kind)})",
+            data={
+                CONF_DEVICE_TYPE: DEVICE_TYPE_EXTERNAL,
+                CONF_EXTERNAL_TYPE: kind,
+                CONF_HOST: host,
+            },
+            options={CONF_EXTERNAL_INTERVAL: interval},
+        )
+
+    async def async_step_external_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """An external P1 reader: type, address, poll interval."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            kind = user_input[CONF_EXTERNAL_TYPE]
+            host = str(user_input[CONF_HOST]).strip()
+            interval = int(user_input[CONF_EXTERNAL_INTERVAL])
+            self._async_abort_entries_match({CONF_HOST: host})
+            error = await self._async_probe_external(kind, host)
+            if error:
+                errors["base"] = error
+            else:
+                await self.async_set_unique_id(f"{kind}_{host}")
+                self._abort_if_unique_id_configured()
+                return self._external_entry(kind, host, interval)
+
+        current = user_input or {}
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_EXTERNAL_TYPE,
+                    default=current.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE),
+                ): vol.In(EXTERNAL_TYPE_LABELS),
+                vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
+                vol.Required(
+                    CONF_EXTERNAL_INTERVAL,
+                    default=current.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL),
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_EXTERNAL_INTERVAL, max=MAX_EXTERNAL_INTERVAL),
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="external_meter", data_schema=schema, errors=errors
+        )
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
+        """An external meter moved out of a v1.5.0/v1.5.1 battery entry.
+
+        No probe: the address was already in use, and a reader that happens to
+        be off at this moment should still keep its configuration.
+        """
+        kind = import_data[CONF_EXTERNAL_TYPE]
+        host = import_data[CONF_HOST]
+        if kind not in ADAPTERS:
+            return self.async_abort(reason="wrong_meter_type")
+        self._async_abort_entries_match({CONF_HOST: host})
+        await self.async_set_unique_id(f"{kind}_{host}")
+        self._abort_if_unique_id_configured()
+        return self._external_entry(
+            kind, host, int(import_data.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL))
+        )
+
+    async def _async_step_homewizard(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """A HomeWizard P1 meter announcing its local API v1.
+
+        HomeWizard sockets, kWh meters and water meters announce themselves on
+        the same service; only the P1 meter measures the grid connection.
+        """
+        props = discovery_info.properties or {}
+        if props.get("product_type") != HOMEWIZARD_P1_PRODUCT:
+            return self.async_abort(reason="not_a_p1_meter")
+        host = discovery_info.host
+        self._async_abort_entries_match({CONF_HOST: host})
+        serial = props.get("serial") or host
+        await self.async_set_unique_id(f"{EXTERNAL_TYPE_HOMEWIZARD_V1}_{serial}")
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+        self._discovered = {"host": host, "serial": serial}
+        self.context["title_placeholders"] = {"name": "HomeWizard P1 meter"}
+        return await self.async_step_homewizard_confirm()
+
+    async def async_step_homewizard_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer a discovered HomeWizard P1 meter as external meter."""
+        host = self._discovered["host"]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            error = await self._async_probe_external(EXTERNAL_TYPE_HOMEWIZARD_V1, host)
+            if error:
+                # Most often the local API is switched off in the app.
+                errors["base"] = "homewizard_api_off" if error == "cannot_connect" else error
+            else:
+                return self._external_entry(
+                    EXTERNAL_TYPE_HOMEWIZARD_V1, host, DEFAULT_EXTERNAL_INTERVAL
+                )
+        return self.async_show_form(
+            step_id="homewizard_confirm",
+            description_placeholders={"host": host, "serial": self._discovered["serial"]},
+            errors=errors,
+        )
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
         """Handle a device found through mDNS."""
+        if discovery_info.type == ZEROCONF_HOMEWIZARD:
+            return await self._async_step_homewizard(discovery_info)
         host = discovery_info.host
         port = discovery_info.port or DEFAULT_PORT
         token, serial_hint = parse_service_name(discovery_info.name)
@@ -209,7 +347,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class ZendureOptionsFlow(config_entries.OptionsFlow):
-    """Adjust the polling interval and the external meter.
+    """Adjust polling, or the address and interval of an external meter.
 
     The entry options hold more than this form shows: the controller keeps its
     operation mode, power ceilings, thresholds and buffers there too. An
@@ -223,49 +361,56 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        entry = self.config_entry
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
+            return await self.async_step_external(user_input)
+
         if user_input is not None:
-            if CONF_EXTERNAL_TYPE in user_input:
-                # An emptied optional field is left out of the submission
-                # altogether, and the merge below would then keep the old
-                # address. It means "no external meter", so it is stored as an
-                # empty string — which also stops the form from filling the
-                # default back in next time.
-                user_input[CONF_EXTERNAL_HOST] = str(
-                    user_input.get(CONF_EXTERNAL_HOST) or ""
-                ).strip()
-            merged = {**self.config_entry.options, **user_input}
+            merged = {**entry.options, **user_input}
             return self.async_create_entry(title="", data=merged)
 
-        options = self.config_entry.options
-        current = options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        fields: dict[Any, Any] = {
-            vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-            )
-        }
+        current = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+                )
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
-        # Only a battery has a controller to feed, so only a battery entry
-        # offers the external meter.
-        if self.config_entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_METER:
-            fields[vol.Required(
-                CONF_EXTERNAL_TYPE,
-                default=options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE),
-            )] = vol.In(EXTERNAL_TYPE_LABELS)
-            fields[vol.Optional(
-                CONF_EXTERNAL_HOST,
-                description={
-                    "suggested_value": options.get(
-                        CONF_EXTERNAL_HOST, DEFAULT_EXTERNAL_HOST
-                    )
-                },
-            )] = str
-            fields[vol.Required(
-                CONF_EXTERNAL_INTERVAL,
-                default=options.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL),
-            )] = vol.All(
-                vol.Coerce(int),
-                vol.Range(min=MIN_EXTERNAL_INTERVAL, max=MAX_EXTERNAL_INTERVAL),
+    async def async_step_external(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """External meter: a new address goes into the entry data, the interval
+        into the options. Either change reloads the entry.
+
+        The form is shown under step_id "external", so Home Assistant sends the
+        submitted values here, not to async_step_init."""
+        entry = self.config_entry
+        if user_input is not None:
+            host = str(user_input[CONF_HOST]).strip()
+            if host and host != entry.data.get(CONF_HOST):
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_HOST: host}
+                )
+            return self.async_create_entry(
+                title="",
+                data={**entry.options,
+                      CONF_EXTERNAL_INTERVAL: int(user_input[CONF_EXTERNAL_INTERVAL])},
             )
 
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST, "")): str,
+                vol.Required(
+                    CONF_EXTERNAL_INTERVAL,
+                    default=entry.options.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL),
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_EXTERNAL_INTERVAL, max=MAX_EXTERNAL_INTERVAL),
+                ),
+            }
+        )
+        return self.async_show_form(step_id="external", data_schema=schema)
