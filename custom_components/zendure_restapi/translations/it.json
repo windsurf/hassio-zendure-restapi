@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Cosa vuoi aggiungere?",
+        "menu_options": {
+          "zendure": "Dispositivo Zendure (batteria o contatore P1)",
+          "external_meter": "Contatore P1 esterno (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Dispositivo Zendure",
+        "description": "Inserisci l'indirizzo IP del dispositivo Zendure. L'API locale deve essere attiva: nell'app Zendure aggiungi HEMS e poi esci dall'app.",
+        "data": {
+          "host": "Indirizzo IP",
+          "port": "Porta HTTP"
+        }
+      },
+      "confirm": {
+        "title": "Dispositivo Zendure trovato",
+        "description": "Aggiungere {model} su {host} (numero di serie {sn})?"
+      },
+      "external_meter": {
+        "title": "Contatore P1 esterno",
+        "description": "Un secondo contatore di rete per la regolazione della batteria. Il contatore da usare si sceglie con Meter source sulla batteria (predefinito: auto). HomeWizard: attiva prima l'API locale nell'app HomeWizard Energy.",
+        "data": {
+          "external_meter_type": "Tipo di contatore",
+          "host": "Indirizzo IP",
+          "external_meter_interval_ms": "Millisecondi tra le interrogazioni (100-1000; sotto 1000 solo per YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "Contatore HomeWizard P1 trovato",
+        "description": "Usare il contatore HomeWizard P1 su {host} (numero di serie {serial}) come contatore di rete per la batteria? L'API locale deve essere attiva nell'app HomeWizard Energy."
+      }
+    },
+    "error": {
+      "cannot_connect": "Nessuna risposta. Controlla l'indirizzo IP e che l'API locale sia attiva.",
+      "no_identity": "Il dispositivo ha risposto ma non ha indicato né numero di serie né ID.",
+      "wrong_meter_type": "L'indirizzo risponde, ma non come questo tipo di contatore. Controlla il tipo di contatore.",
+      "homewizard_api_off": "Il contatore non risponde. Attiva l'API locale nell'app HomeWizard Energy e riprova."
+    },
+    "abort": {
+      "already_configured": "Questo dispositivo è già configurato.",
+      "cannot_connect": "Nessuna risposta. Controlla l'indirizzo IP e che l'API locale sia attiva.",
+      "no_identity": "Il dispositivo ha risposto ma non ha indicato né numero di serie né ID.",
+      "wrong_meter_type": "L'indirizzo risponde, ma non come questo tipo di contatore. Controlla il tipo di contatore.",
+      "not_a_p1_meter": "Questo dispositivo HomeWizard non è un contatore P1."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Intervallo di interrogazione",
+        "data": {
+          "scan_interval": "Secondi tra le interrogazioni (1-60)"
+        }
+      },
+      "external": {
+        "title": "Contatore P1 esterno",
+        "data": {
+          "host": "Indirizzo IP",
+          "external_meter_interval_ms": "Millisecondi tra le interrogazioni (100-1000; sotto 1000 solo per YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Contatore Zendure",
+          "external": "Contatore esterno",
+          "auto": "Auto (esterno, altrimenti Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Carica",
+          "discharge": "Scarica"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standard",
+          "economic": "Economico",
+          "closed": "Chiuso"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Spento",
+          "allowed": "Consentito",
+          "forbidden": "Vietato"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Livello 1",
+          "gear_2": "Livello 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Livello 1",
+          "gear_2": "Livello 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "In carica",
+          "discharging": "In scarica"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "In carica",
+          "discharging": "In scarica"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Spento",
+          "input": "Ingresso",
+          "output": "Uscita"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Spento",
+          "input": "Ingresso",
+          "output": "Uscita"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Spento",
+          "on": "Acceso"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "Nessuno",
+          "upper_limit": "Limite superiore (piena)",
+          "lower_limit": "Limite inferiore (vuota)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Non calibrato",
+          "calibrated": "Calibrato"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Inattivo",
+          "waiting": "In attesa",
+          "standby": "Standby",
+          "manual": "Manuale",
+          "quick": "Piena potenza",
+          "tracking": "Inseguimento",
+          "balancing": "Bilanciamento",
+          "starting": "Avvio",
+          "holding": "Stabilizzazione",
+          "reversing": "Inversione",
+          "released": "Rilasciato",
+          "blocked": "Bloccato",
+          "protecting": "Protezione",
+          "error": "Errore"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "In tempo reale",
+          "stale": "Nessun dato nuovo",
+          "unreachable": "Irraggiungibile"
+        }
+      }
+    }
+  }
+}
