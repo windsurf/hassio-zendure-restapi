@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import CONF_EXTERNAL_HOST, CONF_HOST, DOMAIN, INTEGRATION_VERSION
 from .coordinator import ZendureCoordinator
+from .p1meter import ExternalMeter
 
 REDACT = {
     "sn", "deviceId", "deviceKey", "productKey", "password", "username",
@@ -63,7 +64,17 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: ZendureCoordinator = hass.data[DOMAIN][entry.entry_id]
+    stored = hass.data[DOMAIN][entry.entry_id]
+    if isinstance(stored, ExternalMeter):
+        return {
+            "integration_version": INTEGRATION_VERSION,
+            "entry": {
+                "data": async_redact_data(dict(entry.data), REDACT),
+                "options": dict(entry.options),
+            },
+            "external_meter": stored.diagnostics(),
+        }
+    coordinator: ZendureCoordinator = stored
 
     mqtt_status: Any
     try:
@@ -90,7 +101,7 @@ async def async_get_config_entry_diagnostics(
 
 
 def _external(hass: HomeAssistant, entry: ConfigEntry) -> Any:
-    """Counters of the external meter, if this entry polls one."""
+    """Counters of the external meter linked to this battery, if any."""
     runtime = hass.data.get(DOMAIN, {}).get(f"{entry.entry_id}_runtime")
-    meter = runtime.get("external") if runtime else None
+    meter = runtime["controller"].external if runtime else None
     return meter.diagnostics() if meter is not None else None
