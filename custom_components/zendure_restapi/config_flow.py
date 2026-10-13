@@ -32,7 +32,7 @@ from .const import (
     DEVICE_TYPE_BATTERY,
     DEVICE_TYPE_METER,
     DOMAIN,
-    EXTERNAL_TYPES,
+    EXTERNAL_TYPE_LABELS,
     MAX_EXTERNAL_INTERVAL,
     MAX_SCAN_INTERVAL,
     METER_MARKER_KEY,
@@ -251,7 +251,7 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Required(
                 CONF_EXTERNAL_TYPE,
                 default=options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE),
-            )] = vol.In(list(EXTERNAL_TYPES))
+            )] = vol.In(EXTERNAL_TYPE_LABELS)
             fields[vol.Optional(
                 CONF_EXTERNAL_HOST,
                 description={
