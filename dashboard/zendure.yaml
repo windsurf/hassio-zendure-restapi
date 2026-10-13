@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE DASHBOARD - v1.0.0 | August 2026
+# ZENDURE DASHBOARD - v1.5.2 | October 2026
 # ============================================================
 #
 # One view covering the SolarFlow 3000 Mix AC+ and the Zendure
@@ -14,6 +14,15 @@
 #   Battery  - sensor./number./select./switch.
 #              zendure_solarflow_3000_mix_ac_*
 #   P1 meter - sensor.zendure_p1_meter_3_phase_*
+#   External - sensor.external_p1_meter_* (since v1.5.2: a
+#              HomeWizard, YouLess, EcoTracker or Shelly reader
+#              added as External P1 meter in the integration)
+#
+# EXTERNAL P1 METER:
+#   The External P1 Meter section shows only when such a meter
+#   is configured; without one it stays hidden. Energy tiles
+#   appear for readers that report meter registers (HomeWizard,
+#   YouLess).
 #
 #   These were derived from the device name "Zendure SolarFlow
 #   3000 Mix AC+" and the entity names in the integration. Home
@@ -385,6 +394,43 @@ sections:
     entity: sensor.zendure_p1_meter_3_phase_phase_c_apparent_power
   - type: tile
     entity: sensor.zendure_p1_meter_3_phase_meter_type
+- type: grid
+  column_span: 2
+  visibility:
+  - condition: state
+    entity: sensor.external_p1_meter_status
+    state:
+    - live
+    - stale
+    - unreachable
+  cards:
+  - type: heading
+    heading: External P1 Meter
+    heading_style: title
+    icon: mdi:meter-electric-outline
+    badges:
+    - type: entity
+      entity: sensor.external_p1_meter_status
+  - type: tile
+    entity: sensor.external_p1_meter_power
+    icon: mdi:transmission-tower
+    features_position: bottom
+  - type: tile
+    entity: sensor.external_p1_meter_status
+  - type: tile
+    entity: sensor.external_p1_meter_telegram_age
+  - type: tile
+    entity: sensor.external_p1_meter_energy_imported
+    visibility:
+    - condition: state
+      entity: sensor.external_p1_meter_energy_imported
+      state_not: unavailable
+  - type: tile
+    entity: sensor.external_p1_meter_energy_exported
+    visibility:
+    - condition: state
+      entity: sensor.external_p1_meter_energy_exported
+      state_not: unavailable
 - type: grid
   column_span: 2
   cards:
