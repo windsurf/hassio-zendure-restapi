@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Hvad vil du tilføje?",
+        "menu_options": {
+          "zendure": "Zendure-enhed (batteri eller P1-måler)",
+          "external_meter": "Ekstern P1-måler (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Zendure-enhed",
+        "description": "Indtast IP-adressen på Zendure-enheden. Den lokale API skal være slået til: tilføj HEMS i Zendure-appen og luk derefter appen.",
+        "data": {
+          "host": "IP-adresse",
+          "port": "HTTP-port"
+        }
+      },
+      "confirm": {
+        "title": "Zendure-enhed fundet",
+        "description": "Tilføj {model} på {host} (serienummer {sn})?"
+      },
+      "external_meter": {
+        "title": "Ekstern P1-måler",
+        "description": "En anden netmåler til batteristyringen. Hvilken måler der bruges, vælges med Meter source på batteriet (standard: auto). HomeWizard: slå først Lokal API til i HomeWizard Energy-appen.",
+        "data": {
+          "external_meter_type": "Målertype",
+          "host": "IP-adresse",
+          "external_meter_interval_ms": "Millisekunder mellem aflæsninger (100-1000; under 1000 kun for YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "HomeWizard P1-måler fundet",
+        "description": "Brug HomeWizard P1-måleren på {host} (serienummer {serial}) som netmåler til batteriet? Lokal API skal være slået til i HomeWizard Energy-appen."
+      }
+    },
+    "error": {
+      "cannot_connect": "Intet svar. Kontrollér IP-adressen, og at den lokale API er slået til.",
+      "no_identity": "Enheden svarede, men angav hverken serienummer eller enheds-id.",
+      "wrong_meter_type": "Adressen svarer, men ikke som denne målertype. Kontrollér målertypen.",
+      "homewizard_api_off": "Måleren svarer ikke. Slå Lokal API til i HomeWizard Energy-appen, og prøv igen."
+    },
+    "abort": {
+      "already_configured": "Denne enhed er allerede konfigureret.",
+      "cannot_connect": "Intet svar. Kontrollér IP-adressen, og at den lokale API er slået til.",
+      "no_identity": "Enheden svarede, men angav hverken serienummer eller enheds-id.",
+      "wrong_meter_type": "Adressen svarer, men ikke som denne målertype. Kontrollér målertypen.",
+      "not_a_p1_meter": "Denne HomeWizard-enhed er ikke en P1-måler."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Aflæsningsinterval",
+        "data": {
+          "scan_interval": "Sekunder mellem aflæsninger (1-60)"
+        }
+      },
+      "external": {
+        "title": "Ekstern P1-måler",
+        "data": {
+          "host": "IP-adresse",
+          "external_meter_interval_ms": "Millisekunder mellem aflæsninger (100-1000; under 1000 kun for YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Zendure-måler",
+          "external": "Ekstern måler",
+          "auto": "Auto (ekstern, ellers Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Opladning",
+          "discharge": "Afladning"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standard",
+          "economic": "Økonomisk",
+          "closed": "Lukket"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Fra",
+          "allowed": "Tilladt",
+          "forbidden": "Forbudt"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Trin 1",
+          "gear_2": "Trin 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Trin 1",
+          "gear_2": "Trin 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "Oplader",
+          "discharging": "Aflader"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "Oplader",
+          "discharging": "Aflader"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Fra",
+          "input": "Indgang",
+          "output": "Udgang"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Fra",
+          "input": "Indgang",
+          "output": "Udgang"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Fra",
+          "on": "Til"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "Ingen",
+          "upper_limit": "Øvre grænse (fuld)",
+          "lower_limit": "Nedre grænse (tom)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Ikke kalibreret",
+          "calibrated": "Kalibreret"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Inaktiv",
+          "waiting": "Venter",
+          "standby": "Standby",
+          "manual": "Manuel",
+          "quick": "Fuld effekt",
+          "tracking": "Følger",
+          "balancing": "Balancerer",
+          "starting": "Starter",
+          "holding": "Stabiliserer",
+          "reversing": "Vender",
+          "released": "Frigivet",
+          "blocked": "Blokeret",
+          "protecting": "Beskytter",
+          "error": "Fejl"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "Aktuel",
+          "stale": "Ingen nye data",
+          "unreachable": "Utilgængelig"
+        }
+      }
+    }
+  }
+}
