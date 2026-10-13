@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.5.0"
+INTEGRATION_VERSION = "1.5.1"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -32,6 +32,13 @@ DEFAULT_EXTERNAL_INTERVAL = 250  # ms; a DSMR 5 telegram arrives once a second
 MIN_EXTERNAL_INTERVAL = 100
 MAX_EXTERNAL_INTERVAL = 1000
 
+# Upper bound for every power entry: device limits, controller ceilings and
+# manual power. The device's own ceiling still applies where it reports one;
+# this only stops the slider from ending below what the hardware can do. The
+# 4000 Mix models take 4 kW and the 4000 Mix AC+ up to 5 kW on its AC input,
+# which a bound of 3600 W cut off.
+POWER_CEILING = 5000            # W
+
 # ── Device types ─────────────────────────────────────────────────────────
 # The meter reports a flat payload with meterType and no serial number; the
 # battery reports a properties envelope with sn, product and packData.
@@ -58,9 +65,22 @@ RPC_MQTT_SET_CONFIG = "HA.Mqtt.SetConfig"
 # ── External P1 meters ───────────────────────────────────────────────────
 # Supported readers. Each is one adapter class in p1meter.py: an endpoint and
 # a parser, nothing else. Adding a reader means adding an adapter.
+EXTERNAL_TYPE_HOMEWIZARD_V1 = "homewizard_v1"
 EXTERNAL_TYPE_YOULESS = "youless"
-EXTERNAL_TYPES = (EXTERNAL_TYPE_YOULESS,)
-DEFAULT_EXTERNAL_TYPE = EXTERNAL_TYPE_YOULESS
+EXTERNAL_TYPE_ECOTRACKER = "ecotracker"
+EXTERNAL_TYPE_SHELLY_PRO_3EM = "shelly_pro_3em"
+EXTERNAL_TYPE_ZENDURE = "zendure"
+# Labels for the options form, in the order offered. HomeWizard first because
+# it is the reader most Zendure owners in the Netherlands already have.
+EXTERNAL_TYPE_LABELS = {
+    EXTERNAL_TYPE_HOMEWIZARD_V1: "HomeWizard P1 meter (local API v1)",
+    EXTERNAL_TYPE_YOULESS: "YouLess LS120",
+    EXTERNAL_TYPE_ECOTRACKER: "EcoTracker (everHome)",
+    EXTERNAL_TYPE_SHELLY_PRO_3EM: "Shelly Pro 3EM",
+    EXTERNAL_TYPE_ZENDURE: "Zendure P1 meter or Smart Meter 3CT",
+}
+EXTERNAL_TYPES = tuple(EXTERNAL_TYPE_LABELS)
+DEFAULT_EXTERNAL_TYPE = EXTERNAL_TYPE_HOMEWIZARD_V1
 
 # A request normally takes tens of milliseconds, so the timeout is far below
 # the Zendure one: a poll that hangs for seconds holds up every one behind it.
@@ -116,9 +136,12 @@ OPERATION_MODES = (
 SMART_MODES = frozenset({MODE_SMART_MATCHING, MODE_SMART_DISCHARGE, MODE_SMART_CHARGE})
 
 # ── Meter source ─────────────────────────────────────────────────────────
-# Which meter feeds both loops. `zendure` is how every version before 1.5.0
-# behaved and stays the default, so an upgrade changes nothing until a source
-# is chosen. `external` uses the external P1 reader only and blocks like any
+# Which meter feeds both loops. The default is `auto` since v1.5.1. Without an
+# external meter configured `auto` is exactly `zendure`, so an installation
+# that never set up an external meter behaves as it always has; one that has
+# set one up uses it — which is what someone with a HomeWizard and no Zendure
+# meter needs to get the smart modes working at all. In v1.5.0 the default was
+# `zendure`. `external` uses the external P1 reader only and blocks like any
 # meter would when it goes quiet — the setting for a clean comparison run,
 # where a silent switch to the other meter would contaminate the block. `auto`
 # prefers the external reader and falls back to the Zendure meter while the
@@ -183,7 +206,7 @@ DEFAULTS = {
     OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
     OPT_SOC_PROTECTION: True,
     OPT_TRIM_FACTOR: 80,                # % of the remaining error per sample
-    OPT_METER_SOURCE: METER_SOURCE_ZENDURE,
+    OPT_METER_SOURCE: METER_SOURCE_AUTO,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────
