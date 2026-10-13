@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Co chcete přidat?",
+        "menu_options": {
+          "zendure": "Zařízení Zendure (baterie nebo elektroměr P1)",
+          "external_meter": "Externí elektroměr P1 (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Zařízení Zendure",
+        "description": "Zadejte IP adresu zařízení Zendure. Místní API musí být zapnuté: v aplikaci Zendure přidejte HEMS a aplikaci ukončete.",
+        "data": {
+          "host": "IP adresa",
+          "port": "HTTP port"
+        }
+      },
+      "confirm": {
+        "title": "Nalezeno zařízení Zendure",
+        "description": "Přidat {model} na adrese {host} (sériové číslo {sn})?"
+      },
+      "external_meter": {
+        "title": "Externí elektroměr P1",
+        "description": "Druhý síťový elektroměr pro řízení baterie. Který se použije, zvolíte v Meter source u baterie (výchozí: auto). HomeWizard: nejprve zapněte místní API v aplikaci HomeWizard Energy.",
+        "data": {
+          "external_meter_type": "Typ elektroměru",
+          "host": "IP adresa",
+          "external_meter_interval_ms": "Milisekundy mezi dotazy (100-1000; pod 1000 jen pro YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "Nalezen elektroměr HomeWizard P1",
+        "description": "Použít elektroměr HomeWizard P1 na adrese {host} (sériové číslo {serial}) jako síťový elektroměr baterie? Místní API musí být zapnuté v aplikaci HomeWizard Energy."
+      }
+    },
+    "error": {
+      "cannot_connect": "Žádná odpověď. Zkontrolujte IP adresu a zda je místní API zapnuté.",
+      "no_identity": "Zařízení odpovědělo, ale neuvedlo sériové číslo ani ID zařízení.",
+      "wrong_meter_type": "Adresa odpovídá, ale ne jako tento typ elektroměru. Zkontrolujte typ elektroměru.",
+      "homewizard_api_off": "Elektroměr neodpovídá. Zapněte místní API v aplikaci HomeWizard Energy a zkuste to znovu."
+    },
+    "abort": {
+      "already_configured": "Toto zařízení je již nastaveno.",
+      "cannot_connect": "Žádná odpověď. Zkontrolujte IP adresu a zda je místní API zapnuté.",
+      "no_identity": "Zařízení odpovědělo, ale neuvedlo sériové číslo ani ID zařízení.",
+      "wrong_meter_type": "Adresa odpovídá, ale ne jako tento typ elektroměru. Zkontrolujte typ elektroměru.",
+      "not_a_p1_meter": "Toto zařízení HomeWizard není elektroměr P1."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Interval dotazování",
+        "data": {
+          "scan_interval": "Sekundy mezi dotazy (1-60)"
+        }
+      },
+      "external": {
+        "title": "Externí elektroměr P1",
+        "data": {
+          "host": "IP adresa",
+          "external_meter_interval_ms": "Milisekundy mezi dotazy (100-1000; pod 1000 jen pro YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Elektroměr Zendure",
+          "external": "Externí elektroměr",
+          "auto": "Auto (externí, jinak Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Nabíjení",
+          "discharge": "Vybíjení"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standardní",
+          "economic": "Úsporný",
+          "closed": "Zavřeno"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Vypnuto",
+          "allowed": "Povoleno",
+          "forbidden": "Zakázáno"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Stupeň 1",
+          "gear_2": "Stupeň 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Stupeň 1",
+          "gear_2": "Stupeň 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Pohotovost",
+          "charging": "Nabíjí se",
+          "discharging": "Vybíjí se"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Pohotovost",
+          "charging": "Nabíjí se",
+          "discharging": "Vybíjí se"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Vypnuto",
+          "input": "Vstup",
+          "output": "Výstup"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Vypnuto",
+          "input": "Vstup",
+          "output": "Výstup"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Vypnuto",
+          "on": "Zapnuto"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "Žádný",
+          "upper_limit": "Horní mez (plná)",
+          "lower_limit": "Dolní mez (prázdná)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Nekalibrováno",
+          "calibrated": "Kalibrováno"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Nečinný",
+          "waiting": "Čeká",
+          "standby": "Pohotovost",
+          "manual": "Ruční",
+          "quick": "Plný výkon",
+          "tracking": "Sledování",
+          "balancing": "Vyrovnávání",
+          "starting": "Spouštění",
+          "holding": "Ustalování",
+          "reversing": "Obracení směru",
+          "released": "Uvolněno",
+          "blocked": "Blokováno",
+          "protecting": "Ochrana",
+          "error": "Chyba"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "Aktuální",
+          "stale": "Žádná nová data",
+          "unreachable": "Nedostupný"
+        }
+      }
+    }
+  }
+}
