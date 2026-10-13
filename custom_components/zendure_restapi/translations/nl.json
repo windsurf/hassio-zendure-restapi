@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Wat wil je toevoegen?",
+        "menu_options": {
+          "zendure": "Zendure-apparaat (accu of P1-meter)",
+          "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Zendure-apparaat",
+        "description": "Vul het IP-adres van het Zendure-apparaat in. De lokale API moet aan staan: voeg in de Zendure-app HEMS toe en sluit de app af.",
+        "data": {
+          "host": "IP-adres",
+          "port": "HTTP-poort"
+        }
+      },
+      "confirm": {
+        "title": "Zendure-apparaat gevonden",
+        "description": "{model} op {host} (serienummer {sn}) toevoegen?"
+      },
+      "external_meter": {
+        "title": "Externe P1-meter",
+        "description": "Een tweede netmeter voor de accuregeling. Welke meter gebruikt wordt kies je met Meter source op de accu (standaard: auto). HomeWizard: zet eerst Lokale API aan in de HomeWizard Energy-app.",
+        "data": {
+          "external_meter_type": "Metertype",
+          "host": "IP-adres",
+          "external_meter_interval_ms": "Milliseconden tussen bevragingen (100-1000; onder 1000 alleen voor YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "HomeWizard P1-meter gevonden",
+        "description": "De HomeWizard P1-meter op {host} (serienummer {serial}) als netmeter voor de accu gebruiken? Lokale API moet aan staan in de HomeWizard Energy-app."
+      }
+    },
+    "error": {
+      "cannot_connect": "Geen antwoord. Controleer het IP-adres en of de lokale API aan staat.",
+      "no_identity": "Het apparaat antwoordde, maar meldde geen serienummer en geen apparaat-id.",
+      "wrong_meter_type": "Het adres antwoordt, maar niet als dit metertype. Controleer het metertype.",
+      "homewizard_api_off": "De meter antwoordt niet. Zet Lokale API aan in de HomeWizard Energy-app en probeer opnieuw."
+    },
+    "abort": {
+      "already_configured": "Dit apparaat is al geconfigureerd.",
+      "cannot_connect": "Geen antwoord. Controleer het IP-adres en of de lokale API aan staat.",
+      "no_identity": "Het apparaat antwoordde, maar meldde geen serienummer en geen apparaat-id.",
+      "wrong_meter_type": "Het adres antwoordt, maar niet als dit metertype. Controleer het metertype.",
+      "not_a_p1_meter": "Dit HomeWizard-apparaat is geen P1-meter."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bevragingsinterval",
+        "data": {
+          "scan_interval": "Seconden tussen bevragingen (1-60)"
+        }
+      },
+      "external": {
+        "title": "Externe P1-meter",
+        "data": {
+          "host": "IP-adres",
+          "external_meter_interval_ms": "Milliseconden tussen bevragingen (100-1000; onder 1000 alleen voor YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Zendure-meter",
+          "external": "Externe meter",
+          "auto": "Auto (extern, anders Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Laden",
+          "discharge": "Ontladen"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standaard",
+          "economic": "Zuinig",
+          "closed": "Gesloten"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Uit",
+          "allowed": "Toegestaan",
+          "forbidden": "Verboden"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Stand 1",
+          "gear_2": "Stand 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Stand 1",
+          "gear_2": "Stand 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Stand-by",
+          "charging": "Laden",
+          "discharging": "Ontladen"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Stand-by",
+          "charging": "Laden",
+          "discharging": "Ontladen"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Uit",
+          "input": "Invoer",
+          "output": "Uitvoer"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Uit",
+          "input": "Invoer",
+          "output": "Uitvoer"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Uit",
+          "on": "Aan"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "Geen",
+          "upper_limit": "Bovengrens (vol)",
+          "lower_limit": "Ondergrens (leeg)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Niet gekalibreerd",
+          "calibrated": "Gekalibreerd"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Inactief",
+          "waiting": "Wachten",
+          "standby": "Stand-by",
+          "manual": "Handmatig",
+          "quick": "Vol vermogen",
+          "tracking": "Volgen",
+          "balancing": "Bijsturen",
+          "starting": "Starten",
+          "holding": "Stabiliseren",
+          "reversing": "Omkeren",
+          "released": "Vrijgegeven",
+          "blocked": "Geblokkeerd",
+          "protecting": "Beschermen",
+          "error": "Fout"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "Actueel",
+          "stale": "Geen nieuwe gegevens",
+          "unreachable": "Onbereikbaar"
+        }
+      }
+    }
+  }
+}
