@@ -46,6 +46,7 @@ class ZendureSelectDescription(SelectEntityDescription):
 SELECTS: tuple[ZendureSelectDescription, ...] = (
     ZendureSelectDescription(
         key="acMode",
+        translation_key="converter_mode",
         name="Converter mode",
         options=list(AC_MODE_MAP.values()),
         value_map=AC_MODE_MAP,
@@ -53,6 +54,7 @@ SELECTS: tuple[ZendureSelectDescription, ...] = (
     ),
     ZendureSelectDescription(
         key="gridOffMode",
+        translation_key="backup_mode",
         name="Backup mode",
         options=list(GRID_OFF_MODE_MAP.values()),
         value_map=GRID_OFF_MODE_MAP,
@@ -61,6 +63,7 @@ SELECTS: tuple[ZendureSelectDescription, ...] = (
     ),
     ZendureSelectDescription(
         key="gridReverse",
+        translation_key="pv_export",
         name="PV export",
         options=list(GRID_REVERSE_MAP.values()),
         value_map=GRID_REVERSE_MAP,
@@ -69,6 +72,7 @@ SELECTS: tuple[ZendureSelectDescription, ...] = (
     ),
     ZendureSelectDescription(
         key="Fanspeed",
+        translation_key="fan_speed_mode",
         name="Fan speed mode",
         options=list(FAN_SPEED_MAP.values()),
         value_map=FAN_SPEED_MAP,
@@ -197,6 +201,7 @@ class ZendureOperationMode(ZendureEntity, SelectEntity):
 
 METER_SOURCE_DESCRIPTION = SelectEntityDescription(
     key="meter_source",
+    translation_key="meter_source",
     name="Meter source",
     options=list(METER_SOURCES),
     icon="mdi:meter-electric-outline",
