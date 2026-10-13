@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.4.3"
+INTEGRATION_VERSION = "1.5.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -13,11 +13,24 @@ CONF_PRODUCT = "product"
 CONF_DEVICE_TYPE = "device_type"
 CONF_SCAN_INTERVAL = "scan_interval"
 
+# An external P1 reader as a second grid meter, configured on the battery
+# entry. Polling starts only once an address has been saved under Configure;
+# the default address below pre-fills that form and does nothing on its own,
+# so an upgrade polls nothing until someone asks for it.
+CONF_EXTERNAL_TYPE = "external_meter_type"
+CONF_EXTERNAL_HOST = "external_meter_host"
+CONF_EXTERNAL_INTERVAL = "external_meter_interval_ms"
+
 # ── Defaults ─────────────────────────────────────────────────────────────
 DEFAULT_PORT = 80
 DEFAULT_SCAN_INTERVAL = 10
 MIN_SCAN_INTERVAL = 1
 MAX_SCAN_INTERVAL = 60
+
+DEFAULT_EXTERNAL_HOST = "192.168.2.15"
+DEFAULT_EXTERNAL_INTERVAL = 250  # ms; a DSMR 5 telegram arrives once a second
+MIN_EXTERNAL_INTERVAL = 100
+MAX_EXTERNAL_INTERVAL = 1000
 
 # ── Device types ─────────────────────────────────────────────────────────
 # The meter reports a flat payload with meterType and no serial number; the
@@ -41,6 +54,19 @@ PATH_RPC = "/rpc"
 RPC_MQTT_STATUS = "HA.Mqtt.GetStatus"
 RPC_MQTT_GET_CONFIG = "HA.Mqtt.GetConfig"
 RPC_MQTT_SET_CONFIG = "HA.Mqtt.SetConfig"
+
+# ── External P1 meters ───────────────────────────────────────────────────
+# Supported readers. Each is one adapter class in p1meter.py: an endpoint and
+# a parser, nothing else. Adding a reader means adding an adapter.
+EXTERNAL_TYPE_YOULESS = "youless"
+EXTERNAL_TYPES = (EXTERNAL_TYPE_YOULESS,)
+DEFAULT_EXTERNAL_TYPE = EXTERNAL_TYPE_YOULESS
+
+# A request normally takes tens of milliseconds, so the timeout is far below
+# the Zendure one: a poll that hangs for seconds holds up every one behind it.
+EXTERNAL_TIMEOUT = 2            # s
+EXTERNAL_BACKOFF_AFTER = 8      # failed polls in a row, two seconds at 250 ms
+EXTERNAL_BACKOFF_SECONDS = 5    # s between retries once backed off
 
 # ── mDNS ─────────────────────────────────────────────────────────────────
 ZEROCONF_TYPE = "_zendure._tcp.local."
@@ -89,6 +115,19 @@ OPERATION_MODES = (
 # Modes in which the closed-loop controller tracks the meter.
 SMART_MODES = frozenset({MODE_SMART_MATCHING, MODE_SMART_DISCHARGE, MODE_SMART_CHARGE})
 
+# ── Meter source ─────────────────────────────────────────────────────────
+# Which meter feeds both loops. `zendure` is how every version before 1.5.0
+# behaved and stays the default, so an upgrade changes nothing until a source
+# is chosen. `external` uses the external P1 reader only and blocks like any
+# meter would when it goes quiet — the setting for a clean comparison run,
+# where a silent switch to the other meter would contaminate the block. `auto`
+# prefers the external reader and falls back to the Zendure meter while the
+# external one has no fresh telegram.
+METER_SOURCE_ZENDURE = "zendure"
+METER_SOURCE_EXTERNAL = "external"
+METER_SOURCE_AUTO = "auto"
+METER_SOURCES = (METER_SOURCE_ZENDURE, METER_SOURCE_EXTERNAL, METER_SOURCE_AUTO)
+
 # ── Device property values ───────────────────────────────────────────────
 AC_MODE_CHARGE = 1
 AC_MODE_DISCHARGE = 2
@@ -109,6 +148,7 @@ OPT_CHARGE_BUFFER = "charge_buffer"
 OPT_DISCHARGE_BUFFER = "discharge_buffer"
 OPT_SOC_PROTECTION = "soc_protection"
 OPT_TRIM_FACTOR = "trim_factor"
+OPT_METER_SOURCE = "meter_source"
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -143,6 +183,7 @@ DEFAULTS = {
     OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
     OPT_SOC_PROTECTION: True,
     OPT_TRIM_FACTOR: 80,                # % of the remaining error per sample
+    OPT_METER_SOURCE: METER_SOURCE_ZENDURE,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────
@@ -224,6 +265,14 @@ METER_SANE_LIMIT = 17250        # W, three phases of 25 A at 230 V
 # battery poll and had no timestamp to compare against. The trim loop runs on
 # the meter itself, so the age is now both knowable and load-bearing.
 METER_MAX_AGE = 60              # seconds
+
+# How long `auto` keeps trusting the external meter without a new telegram
+# before it moves to the Zendure meter. Far tighter than METER_MAX_AGE on purpose: that
+# limit decides when to stop the battery, this one only when to listen to the
+# other meter, and with a second meter at hand there is no reason to steer on a
+# reading five telegrams old. A forced `external` source keeps METER_MAX_AGE,
+# exactly like the Zendure meter always has.
+METER_FALLBACK_AGE = 5          # seconds, five missed telegrams
 
 # ── Trace recording ──────────────────────────────────────────────────────
 # One CSV row per meter sample, started and stopped by the Trace recording
