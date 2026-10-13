@@ -17,16 +17,21 @@ for one deviation, which is how charge/discharge oscillation gets built. The
 trim loop is subscribed to the meter coordinator instead, and follows the grid
 between battery polls without ever changing direction. See controller.py.
 
-A battery entry can also poll an external P1 reader, configured under
-Configure on that entry. Which meter feeds the loops is the `Meter source`
-select; see p1meter.py for why a second meter is worth having.
+An external P1 reader — HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, or a
+Zendure meter read directly — is a third kind of entry since v1.5.2, with a
+device and sensors of its own. Every battery controller is linked to it, the
+same way it is linked to the Zendure meter, and the `Meter source` select on
+the battery decides which of the two feeds the loops. See p1meter.py for why a
+second meter is worth having. In v1.5.0 and v1.5.1 the external meter lived in
+the battery entry's options; those are moved into an entry of its own on the
+first start.
 """
 
 from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -34,6 +39,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
+    CONF_DEVICE_TYPE,
     CONF_EXTERNAL_HOST,
     CONF_EXTERNAL_INTERVAL,
     CONF_EXTERNAL_TYPE,
@@ -45,13 +51,14 @@ from .const import (
     DEFAULT_EXTERNAL_INTERVAL,
     DEFAULT_EXTERNAL_TYPE,
     DEFAULT_SCAN_INTERVAL,
+    DEVICE_TYPE_EXTERNAL,
     DEVICE_TYPE_METER,
     DOMAIN,
     INTEGRATION_VERSION,
 )
 from .controller import ZendureController
 from .coordinator import ZendureCoordinator
-from .p1meter import ADAPTERS
+from .p1meter import ADAPTERS, ExternalMeter
 from .settings import ZendureSettings
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,12 +71,18 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
 ]
 
+# An external meter entry has no switches, selects or numbers of its own.
+EXTERNAL_PLATFORMS: list[Platform] = [Platform.SENSOR]
+
 RUNTIME_SUFFIX = "_runtime"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up one Zendure device from a config entry."""
+    """Set up one Zendure device, or an external meter, from a config entry."""
     _LOGGER.debug("Setting up Zendure RestAPI v%s", INTEGRATION_VERSION)
+
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
+        return await _async_setup_external(hass, entry)
 
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
@@ -90,17 +103,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Only a battery gets a controller; a meter has nothing to control.
     if coordinator.device_type != DEVICE_TYPE_METER:
+        _migrate_external_options(hass, entry)
         settings = ZendureSettings(hass, entry)
         controller = ZendureController(coordinator, settings)
-        runtime = {
+        store[f"{entry.entry_id}{RUNTIME_SUFFIX}"] = {
             "settings": settings,
             "controller": controller,
-            "external": None,
-            "external_config": None,
         }
-        store[f"{entry.entry_id}{RUNTIME_SUFFIX}"] = runtime
-        _setup_external(hass, entry, runtime)
-        entry.async_on_unload(lambda: _stop_external(runtime))
 
         @callback
         def _on_update() -> None:
@@ -115,13 +124,88 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Start polling an external P1 reader and link it to the controllers."""
+    kind = entry.data.get(CONF_EXTERNAL_TYPE)
+    if kind not in ADAPTERS:
+        _LOGGER.error("Unknown external meter type '%s'", kind)
+        return False
+    interval = _as_int(
+        entry.options.get(CONF_EXTERNAL_INTERVAL), DEFAULT_EXTERNAL_INTERVAL
+    )
+    meter = ADAPTERS[kind](
+        hass, async_get_clientsession(hass), entry.data[CONF_HOST], interval
+    )
+    meter.entry_id = entry.entry_id
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = meter
+    meter.async_start()
+    entry.async_on_unload(meter.async_stop)
+
+    _link_meters(hass)
+
+    await hass.config_entries.async_forward_entry_setups(entry, EXTERNAL_PLATFORMS)
+    # The interval and the address belong to the poller, which is cheapest to
+    # rebuild by reloading the entry; nothing else hangs off it.
+    entry.async_on_unload(entry.add_update_listener(_async_reload))
+    return True
+
+
+async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _as_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@callback
+def _migrate_external_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Move an external meter from the battery's options into its own entry.
+
+    v1.5.0 and v1.5.1 kept the reader's type, address and interval in the
+    battery entry's options. If an address was saved there, an entry of its
+    own is created through the import step — which aborts when one for that
+    address already exists — and the three keys leave the battery options in
+    any case, so this runs once.
+    """
+    keys = (CONF_EXTERNAL_TYPE, CONF_EXTERNAL_HOST, CONF_EXTERNAL_INTERVAL)
+    if not any(key in entry.options for key in keys):
+        return
+
+    host = str(entry.options.get(CONF_EXTERNAL_HOST) or "").strip()
+    if host:
+        data = {
+            CONF_EXTERNAL_TYPE: entry.options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE),
+            CONF_HOST: host,
+            CONF_EXTERNAL_INTERVAL: _as_int(
+                entry.options.get(CONF_EXTERNAL_INTERVAL), DEFAULT_EXTERNAL_INTERVAL
+            ),
+        }
+        _LOGGER.info(
+            "Moving the external meter at %s from the battery options into an "
+            "entry of its own", host,
+        )
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT}, data=data
+            )
+        )
+
+    options = {k: v for k, v in entry.options.items() if k not in keys}
+    hass.config_entries.async_update_entry(entry, options=options)
+
+
 @callback
 def _link_meters(hass: HomeAssistant) -> None:
-    """Point every controller at the meter coordinator, if there is one.
+    """Point every controller at the Zendure meter and the external meter.
 
-    Linking happens on each setup because the order in which the battery and
-    the meter are configured is not fixed: whichever comes second completes the
-    pairing for both.
+    Linking happens on each setup and unload because the order in which the
+    entries come up is not fixed: whichever comes last completes the pairing.
+    Each kind is linked only when exactly one is configured; with two of the
+    same kind there is no telling which one measures the grid connection.
     """
     store = hass.data.get(DOMAIN, {})
     meters = [
@@ -130,83 +214,32 @@ def _link_meters(hass: HomeAssistant) -> None:
         and isinstance(c, ZendureCoordinator)
         and c.device_type == DEVICE_TYPE_METER
     ]
+    externals = [c for c in store.values() if isinstance(c, ExternalMeter)]
     meter = meters[0] if len(meters) == 1 else None
+    external = externals[0] if len(externals) == 1 else None
 
     if len(meters) > 1:
         _LOGGER.warning(
-            "%d Zendure meters configured. Automatic linking needs exactly one; "
-            "smart modes will stay blocked.", len(meters)
+            "%d Zendure meters configured. Automatic linking needs exactly one.",
+            len(meters),
+        )
+    if len(externals) > 1:
+        _LOGGER.warning(
+            "%d external meters configured. Automatic linking needs exactly one; "
+            "none is used.", len(externals),
         )
 
     for key, runtime in store.items():
         if key.endswith(RUNTIME_SUFFIX):
             runtime["controller"].attach_meter(meter)
-
-
-def _external_config(entry: ConfigEntry) -> tuple[str, str, int] | None:
-    """The external meter as configured, or None when there is none.
-
-    Only an address actually saved in the options counts. The form pre-fills
-    one, but an entry that never submitted it polls nothing.
-    """
-    host = str(entry.options.get(CONF_EXTERNAL_HOST) or "").strip()
-    if not host:
-        return None
-    kind = entry.options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE)
-    if kind not in ADAPTERS:
-        _LOGGER.warning("Unknown external meter type '%s', not polling", kind)
-        return None
-    try:
-        interval = int(entry.options.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL))
-    except (TypeError, ValueError):
-        interval = DEFAULT_EXTERNAL_INTERVAL
-    return kind, host, interval
-
-
-@callback
-def _setup_external(hass: HomeAssistant, entry: ConfigEntry, runtime: dict) -> None:
-    """Start, restart or stop the external meter to match the options.
-
-    Called on setup and on every options change. Most option changes are a
-    controller setting moving, which must not touch the poller, so it is only
-    rebuilt when its own configuration differs.
-    """
-    config = _external_config(entry)
-    if config == runtime["external_config"] and (
-        config is None or runtime["external"] is not None
-    ):
-        return
-
-    _stop_external(runtime)
-    runtime["external_config"] = config
-    if config is None:
-        runtime["controller"].attach_external(None)
-        return
-
-    kind, host, interval = config
-    meter = ADAPTERS[kind](hass, async_get_clientsession(hass), host, interval)
-    runtime["external"] = meter
-    runtime["controller"].attach_external(meter)
-    meter.async_start()
-
-
-@callback
-def _stop_external(runtime: dict) -> None:
-    meter = runtime.get("external")
-    if meter is not None:
-        meter.async_stop()
-        runtime["external"] = None
-    runtime["controller"].attach_external(None)
+            runtime["controller"].attach_external(external)
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Apply changed options in place."""
     coordinator: ZendureCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if coordinator is None:
+    if not isinstance(coordinator, ZendureCoordinator):
         return
-    runtime = hass.data.get(DOMAIN, {}).get(f"{entry.entry_id}{RUNTIME_SUFFIX}")
-    if runtime is not None:
-        _setup_external(hass, entry, runtime)
     interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator.set_scan_interval(interval)
     _LOGGER.debug("Polling interval set to %ss", interval)
@@ -215,17 +248,19 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    external = entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
+    unloaded = await hass.config_entries.async_unload_platforms(
+        entry, EXTERNAL_PLATFORMS if external else PLATFORMS
+    )
     if unloaded:
         store = hass.data.get(DOMAIN, {})
         store.pop(entry.entry_id, None)
-        # Drop the meter subscription before the controller leaves the store.
+        # Drop the meter subscriptions before the controller leaves the store.
         # After the pop, _link_meters can no longer reach it, so a listener
         # left behind here would outlive the entry and keep trimming a device
         # Home Assistant considers unloaded.
         runtime = store.pop(f"{entry.entry_id}{RUNTIME_SUFFIX}", None)
         if runtime is not None:
-            _stop_external(runtime)
             runtime["controller"].detach_meter()
         _link_meters(hass)
     return unloaded
