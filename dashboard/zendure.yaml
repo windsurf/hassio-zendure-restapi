@@ -130,6 +130,11 @@ sections:
       }} W | **Battery** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''battery_power'')
       }} W
 
+
+      **Meter** {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''meter_active'')
+      }} (set: {{ state_attr(''sensor.zendure_solarflow_3000_mix_ac_controller_status'', ''meter_source'')
+      }})
+
       '
     grid_options:
       columns: full
@@ -140,6 +145,15 @@ sections:
     heading: Controller settings
     heading_style: title
     icon: mdi:tune
+  - type: tile
+    entity: select.zendure_solarflow_3000_mix_ac_meter_source
+    icon: mdi:meter-electric-outline
+    features_position: bottom
+    features:
+    - type: select-options
+    grid_options:
+      columns: 12
+      rows: 2
   - type: tile
     entity: number.zendure_solarflow_3000_mix_ac_max_charge_power
     features_position: bottom
