@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
     DEVICE_TYPE_BATTERY,
+    IDENTITY_KEYS,
     DEVICE_TYPE_METER,
     DOMAIN,
     METER_MARKER_KEY,
@@ -189,6 +190,10 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         for key in flat:
             base = key.split(".", 1)[1] if key.startswith(PACK_PREFIX) and "." in key else key
+            if base in IDENTITY_KEYS:
+                # Identity, not telemetry: read by the integration itself and
+                # never meant to become an entity of its own.
+                continue
             if key in self._known_keys or base in self._known_keys or base in PACK_KEYS:
                 continue
             self.unknown_keys.add(key)
