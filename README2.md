@@ -1,6 +1,6 @@
 # Zendure RestAPI – Technical reference
 
-*The short version with installation in three steps is in [README.md](README.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog.*
+*The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog.*
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
@@ -34,7 +34,7 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 | SolarFlow 4000 Mix Pro | yes | **experimental** | as above, and not yet in Zendure's own integration either |
 | Zendure P1 meter | – | **reference** | the grid meter this integration was built on |
 | YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster; integration path new in v1.5.0 |
-| HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second by the Gielz1986 package; new in v1.5.1 |
+| HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second; new in v1.5.1 |
 | EcoTracker, Shelly Pro 3EM (external grid meter) | – | **experimental** | documented local APIs; new in v1.5.1 |
 | Smart Meter 3CT | – | **experimental** | same `/properties/report` and `total_power` as the P1 meter; read it as external meter type *Zendure* |
 | Hyper 2000, Hub 1200/2000, AIO 2400, Ace 1500 | – | **not possible** | no local HTTP API; MQTT or Bluetooth only |
@@ -85,13 +85,20 @@ Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custo
 
 Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
-Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. With a HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM instead, no meter entry is needed: configure it on the battery entry, see [An external P1 meter](#an-external-p1-meter).
+Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. A HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM is an entry of its own too — **Add integration → Zendure RestAPI → External P1 meter** — and is linked the same way; see [An external P1 meter](#an-external-p1-meter).
 
 The polling interval is configurable from 1 to 60 seconds under **Configure**. The default is 10 seconds, and it doubles as the control interval.
 
-An **external P1 reader** can be added on the battery entry under **Configure**: type, IP
-address and poll interval. Nothing is polled until an address has been saved there. See
-[An external P1 meter](#an-external-p1-meter).
+### Languages
+
+The setup and options screens, error messages and the states of selects and status sensors are
+translated into English, Dutch, German, French, Italian, Spanish, Portuguese, Polish, Czech,
+Swedish and Danish; Home Assistant picks the language of your user profile. Entity names stay
+English for now, so entity IDs are the same in every language and the dashboards work unchanged.
+The operation modes keep their technical names (`smart_matching`, …) in every language, because
+automations and documentation refer to them by those names. Translations other than English and
+Dutch were made without a native speaker: corrections are very welcome as an issue or pull
+request against `custom_components/zendure_restapi/translations/`.
 
 ### Device support
 
@@ -238,19 +245,12 @@ fields, units and sign conventions would remove a class of integration errors en
 
 ## Dashboard
 
-`dashboard/zendure.yaml` is the view in the screenshot above: twelve sections covering
-operation, controller settings, power flow, energy, the P1 meter, per-battery detail,
-diagnostics and device configuration.
+`dashboard/zendure.yaml` is the view in the screenshot above: sections covering operation,
+controller settings, power flow, energy, the P1 meter, per-battery detail, diagnostics and device
+configuration. An **External P1 Meter** section — power, status, telegram age and, for HomeWizard
+and YouLess, the energy registers — shows only when an external meter is configured.
 
-`dashboard/zendure_charts.yaml` is the same view with a **Charts** section added under the
-heading: **Live** (grid power, battery power with positive as discharging, and both limits over the
-last ten minutes, refreshed every five seconds), **Energy per day** (daily change of the four energy
-counters over the last week, from Home Assistant's long-term statistics) and **Today** (five-minute
-means of grid and battery power with the state of charge on its own axis). Use one file or the
-other. The charts need [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS
-(Frontend → search *apexcharts-card*); without it only those three cards fail.
-
-Paste either view under `views:` in a dashboard in YAML mode, or open **Edit dashboard →
+Paste the view under `views:` in a dashboard in YAML mode, or open **Edit dashboard →
 three-dot menu → Raw configuration editor** and add it there.
 
 Cards carry no `name:` override on purpose, so every label comes from the integration. Renaming
@@ -271,15 +271,41 @@ configured and the meter source on `auto` (the default), the smart modes run on 
 
 | Reader | Endpoint | Field | Telegram time | Poll interval | Status |
 |---|---|---|---|---|---|
-| HomeWizard P1 meter, local API v1 | `/api/v1/data` | `active_power_w` | no | 1 s | supported; the API Gielz1986's package reads every second |
+| HomeWizard P1 meter, local API v1 | `/api/v1/data` | `active_power_w` | no | 1 s | supported; documented local API |
 | YouLess LS120 | `/e?f=j` | `pwr` | yes, `tm` | 250 ms (100–1000) | measured by the author |
 | Zendure P1 meter / Smart Meter 3CT | `/properties/report` | `total_power` | no | 1 s | P1 measured by the author; 3CT same API, unseen |
 | EcoTracker (everHome) | `/v1/json` | `power` | no | 1 s | experimental |
 | Shelly Pro 3EM | `/rpc/EM.GetStatus?id=0` | `total_act_power` | no | 1 s | experimental; the clamps must sit on the grid connection |
 
-Endpoints and fields follow each maker's documentation and the configurations the
-[Gielz1986 community](https://github.com/Gielz1986/Zendure-HA-zenSDK/wiki/Global-and-NL-%E2%80%90-P1-CT-meters-(API's))
-runs daily. HomeWizard needs *Local API* switched on in the HomeWizard Energy app, EcoTracker its
+### Adding it
+
+**Settings → Devices & Services → Add integration → Zendure RestAPI → External P1 meter**: choose
+the type, enter the IP address and, for a YouLess, the poll interval. The address is tried once
+before the entry is saved, so a wrong address or a wrong type is caught on the form. A HomeWizard
+P1 meter is **discovered** by itself: it is offered under *Discovered* as soon as its local API is
+on. Its sockets, kWh meters and water meters announce themselves on the same service and are
+ignored. Address and interval can be changed later under **Configure** on the entry.
+
+The entry is a device named **External P1 meter**, whatever the reader, with these sensors:
+
+| Sensor | Entity ID | Notes |
+|---|---|---|
+| Power | `sensor.external_p1_meter_power` | W, import positive; unavailable unless status is `live` |
+| Status | `sensor.external_p1_meter_status` | `live` (telegram younger than 5 s), `stale`, or `unreachable` (eight failed polls in a row) |
+| Telegram age | `sensor.external_p1_meter_telegram_age` | seconds since the last new telegram; diagnostic |
+| Energy imported / exported | `sensor.external_p1_meter_energy_imported` / `_exported` | kWh, HomeWizard and YouLess only; usable in the Energy dashboard |
+
+Every battery is linked to the external meter when exactly one is configured, as with the Zendure
+meter; with two, neither is used and the log says so.
+
+**Upgrading from v1.5.0 or v1.5.1**, where the reader was configured on the battery under
+**Configure**: on the first start of v1.5.2 it moves into an entry of its own, with the same type,
+address and interval, and the battery's options lose the three fields. Nothing needs doing; the
+**Meter source** setting is kept.
+
+### Readers
+
+Endpoints and fields follow each maker's documentation. HomeWizard needs *Local API* switched on in the HomeWizard Energy app, EcoTracker its
 local HTTP server switched on in its app.
 
 **Telegram time matters for the interval.** A reader that reports when each telegram arrived — the
@@ -586,6 +612,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 18 | Operation mode, Meter source, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
+| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
@@ -906,6 +933,35 @@ to average out the sampling offset between the AC and cell readings.
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.5.2 — The external meter as a device of its own, and eleven languages
+
+No change to the control loop: the controller is byte-for-byte the v1.5.1 one, and the replay of
+nine runs gives identical writes.
+
+- **The external P1 meter is an entry of its own**, added through **Add integration → Zendure
+  RestAPI → External P1 meter**, with a device and sensors: power, status (`live`, `stale`,
+  `unreachable`), telegram age, and for HomeWizard and YouLess the energy registers. Fixed entity
+  IDs `sensor.external_p1_meter_*`, whatever the reader. Before, it lived in the battery's options
+  and was visible only in the controller status and the trace.
+- **Migration.** A reader configured on the battery in v1.5.0 or v1.5.1 is moved into its own
+  entry on the first start, with the same settings; the battery's options keep everything else.
+- **HomeWizard P1 meters are discovered.** Other HomeWizard products on the same service are
+  ignored. If the local API is off, the confirmation says where to switch it on.
+- **The address is tried before saving.** A wrong address or a wrong reader type shows on the form
+  instead of as a silent poller later.
+- **Adding a device starts with a choice**: a Zendure device, or an external P1 meter.
+- **Translations** for setup, options, errors and the states of selects and status sensors, in
+  English, Dutch, German, French, Italian, Spanish, Portuguese, Polish, Czech, Swedish and Danish.
+  Entity names and the operation modes stay English. See [Languages](#languages).
+- **Dashboard.** Shows an **External P1 Meter** section when one is configured.
+- **README.nl.md**, a Dutch version of the short README.
+- **Minimum Home Assistant version 2025.2.0** in `hacs.json`, corrected from 2024.10.0: the
+  discovery code has imported `ZeroconfServiceInfo` from `helpers.service_info` since v1.4.3, which
+  exists from 2025.2 on.
+- **Validation workflow** `.github/workflows/validate.yml`: the HACS action and hassfest on every push,
+  pull request and daily, as HACS requires for its default list. Checked locally with hassfest from
+  Home Assistant `master`: no errors.
+
 ### v1.5.1 — Works with HomeWizard, more models, and one battery steering at a time
 
 No change to the control loop for a single battery.
@@ -914,10 +970,10 @@ No change to the control loop for a single battery.
 - **`Meter source` now defaults to `auto`.** Without an external meter configured that is exactly the old `zendure`, so existing installations are unchanged; with one configured it is used. Set `zendure` explicitly to keep the Zendure meter while an external one is configured. The meter type in the options form defaults to HomeWizard.
 - **Model names** for the SolarFlow 800 Pro 2, 4000 Mix AC+ and 4000 Mix Pro, under both spellings the 4000 AC+ is known by.
 - **Power entries run to 5,000 W** instead of 3,600, so the 4 kW and 5 kW Mix models are not cut off. The device's own ceiling still applies.
-- **The dashboard with charts**, `dashboard/zendure_charts.yaml`: the standard view plus live grid and battery power with both limits, energy per day over the last week, and today with the state of charge. Uses apexcharts-card from HACS. `dashboard/zendure.yaml` stays as it was, without charts.
 - **Battery pack model and capacity**, derived from the serial number and `packType`: one `Model` sensor per pack.
 - **Supported devices** documented per model with a confidence level, in [Device support](#device-support).
 - **New model report** issue template asking for the diagnostics download.
+- `hacs.json` sets `hide_default_branch`, so HACS offers releases only and never an unreleased state of the main branch.
 - **An external meter counts as live only once its telegram time moves.** Found on the author's installation: a YouLess whose P1 cable had been out for 52 days kept answering with the same `tm` and a fixed −7 W. The freshness test already ignored it after the first telegram, but that first one was accepted, so for the first seconds after a restart a weeks-old reading could steer. Readers without a telegram time are unaffected.
 - **`external_w` in the trace is empty while the external meter has no current telegram**, by the same 5 s rule `auto` uses, instead of repeating the last value it ever saw.
 - `product` and `version` are no longer reported as unknown properties in the diagnostics; they are identity fields.
