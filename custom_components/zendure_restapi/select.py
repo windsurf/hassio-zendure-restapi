@@ -15,7 +15,9 @@ from .api import ZendureApiError
 from .const import (
     CONF_MODEL,
     DOMAIN,
+    METER_SOURCES,
     OPERATION_MODES,
+    OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
 )
 from .coordinator import ZendureCoordinator
@@ -114,6 +116,12 @@ async def async_setup_entry(
                 runtime["settings"],
             )
         )
+        entities.append(
+            ZendureMeterSource(
+                coordinator, METER_SOURCE_DESCRIPTION, device_id, model,
+                runtime["settings"],
+            )
+        )
 
     async_add_entities(entities)
 
@@ -184,4 +192,34 @@ class ZendureOperationMode(ZendureEntity, SelectEntity):
             _LOGGER.error("Unknown operation mode %s", option)
             return
         self._settings.set(OPT_OPERATION_MODE, option)
+        self.async_write_ha_state()
+
+
+METER_SOURCE_DESCRIPTION = SelectEntityDescription(
+    key="meter_source",
+    name="Meter source",
+    options=list(METER_SOURCES),
+    icon="mdi:meter-electric-outline",
+    entity_category=EntityCategory.CONFIG,
+)
+
+
+class ZendureMeterSource(ZendureOperationMode):
+    """Which meter feeds both control loops.
+
+    `zendure` is the Zendure P1 meter, `external` the reader configured under
+    Configure, `auto` the external one with the Zendure meter as fallback. The
+    controller status carries `meter_active`, which says which one is in use
+    at this moment — under `auto` that is the part worth watching.
+    """
+
+    @property
+    def current_option(self) -> str | None:
+        return self._settings.get(OPT_METER_SOURCE)
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in METER_SOURCES:
+            _LOGGER.error("Unknown meter source %s", option)
+            return
+        self._settings.set(OPT_METER_SOURCE, option)
         self.async_write_ha_state()
