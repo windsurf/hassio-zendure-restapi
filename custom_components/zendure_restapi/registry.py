@@ -25,6 +25,7 @@ MODEL_NAMES: dict[str, str] = {
     "solarflow800": "SolarFlow 800",
     "solarflow800plus": "SolarFlow 800 Plus",
     "solarflow800pro": "SolarFlow 800 Pro",
+    "solarflow800pro2": "SolarFlow 800 Pro 2",
     "solarflow1600ac": "SolarFlow 1600 AC",
     "solarflow1600acplus": "SolarFlow 1600 AC+",
     "solarflow2400ac": "SolarFlow 2400 AC",
@@ -32,6 +33,13 @@ MODEL_NAMES: dict[str, str] = {
     "solarflow2400pro": "SolarFlow 2400 Pro",
     "solarflow3000mixac": "SolarFlow 3000 Mix AC",
     "solarflow3000mixacplus": "SolarFlow 3000 Mix AC+",
+    # The 4000 Mix models launched in April 2026. Zendure's own integration
+    # names the AC+ `solarflow4000ac+`, without "Mix"; both spellings are kept
+    # because the local `product` field has not been seen on this hardware.
+    "solarflow4000acplus": "SolarFlow 4000 Mix AC+",
+    "solarflow4000mixacplus": "SolarFlow 4000 Mix AC+",
+    "solarflow4000pro": "SolarFlow 4000 Mix Pro",
+    "solarflow4000mixpro": "SolarFlow 4000 Mix Pro",
     "smartmeter3ct": "Smart Meter 3CT",
     "hyper2000": "Hyper 2000",
     "aio2400": "AIO 2400",
@@ -83,3 +91,51 @@ def meter_name(meter_type: object) -> str:
 def is_known_model(token: str | None) -> bool:
     """Whether the model token appears in the registry."""
     return bool(token) and normalise(token) in MODEL_NAMES
+
+
+# ── Battery packs ────────────────────────────────────────────────────────
+# A pack reports a serial number and a packType, not a model name. The first
+# letter of the serial identifies the family, and in two cases a second
+# character or packType is needed to tell packs apart that share a prefix.
+#
+# The table follows Zendure's own Home Assistant integration (Zendure-HA,
+# MIT licence), devices/device.py ZendureBattery.get_battery_type, as of
+# October 2026. Verified here on one point only: this installation's 3000 Mix
+# AC+ reports serial BEAAVCDLA200107 with packType 70, its internal 8 kWh pack.
+# Everything else is taken on Zendure's word.
+
+PACK_TYPE_MIX_INTERNAL = 70
+
+
+def pack_model(serial: object, pack_type: object = None) -> tuple[str, float | None]:
+    """Model name and nominal capacity in kWh for one battery pack.
+
+    Returns ("unknown", None) for a serial this table does not cover, so the
+    entity still exists and says so rather than guessing.
+    """
+    if not isinstance(serial, str) or len(serial) < 4:
+        return "unknown", None
+    try:
+        kind = int(pack_type) if pack_type is not None else None
+    except (TypeError, ValueError):
+        kind = None
+
+    first, fourth = serial[0].upper(), serial[3].upper()
+    if first == "A":
+        return ("AIO2400", 2.4) if fourth == "3" else ("AB1000", 0.96)
+    if first == "B":
+        # The Mix series' internal pack shares its prefix with the AB1000S.
+        if kind == PACK_TYPE_MIX_INTERNAL:
+            return "I8000 (Mix internal)", 8.0
+        return "AB1000S", 0.96
+    if first == "C":
+        suffix = "S" if fourth == "F" else "X" if fourth == "E" else ""
+        return f"AB2000{suffix}", 1.92
+    if first == "F":
+        return "AB3000", 2.88
+    if first == "G":
+        return "AB3000L", 2.88
+    if first == "J":
+        # Internal pack of the 2400 Pro (JO2A) and 2400 AC+ (JO4A).
+        return "I2400 (internal)", 2.4
+    return "unknown", None
