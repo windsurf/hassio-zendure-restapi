@@ -3,7 +3,15 @@
     "step": {
       "user": {
         "title": "Zendure RestAPI",
-        "description": "Enter the IP address of the Zendure device. {note}",
+        "description": "What would you like to add?",
+        "menu_options": {
+          "zendure": "Zendure device (battery or P1 meter)",
+          "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Zendure device",
+        "description": "Enter the IP address of the Zendure device. The local API must be enabled: in the Zendure app add HEMS, then exit the app.",
         "data": {
           "host": "IP address",
           "port": "HTTP port"
@@ -12,28 +20,167 @@
       "confirm": {
         "title": "Zendure device found",
         "description": "Add {model} at {host} (serial {sn})?"
+      },
+      "external_meter": {
+        "title": "External P1 meter",
+        "description": "A second grid meter for the battery controller. Which meter is used is chosen with the Meter source select on the battery (default: auto). HomeWizard: switch on Local API in the HomeWizard Energy app first.",
+        "data": {
+          "external_meter_type": "Meter type",
+          "host": "IP address",
+          "external_meter_interval_ms": "Milliseconds between polls (100-1000; below 1000 only for YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "HomeWizard P1 meter found",
+        "description": "Use the HomeWizard P1 meter at {host} (serial {serial}) as grid meter for the battery? Local API must be switched on in the HomeWizard Energy app."
       }
     },
     "error": {
-      "cannot_connect": "No response from the device. Check the IP address and confirm the local API is enabled (add HEMS in the Zendure app, then exit).",
-      "no_identity": "The device answered but reported neither a serial number nor a device id."
+      "cannot_connect": "No response. Check the IP address and that the local API is enabled.",
+      "no_identity": "The device answered but reported neither a serial number nor a device id.",
+      "wrong_meter_type": "The address answers, but not as this meter type. Check the meter type.",
+      "homewizard_api_off": "The meter does not answer. Switch on Local API in the HomeWizard Energy app and try again."
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "cannot_connect": "The device did not respond.",
-      "no_identity": "The device reported neither a serial number nor a device id."
+      "cannot_connect": "No response. Check the IP address and that the local API is enabled.",
+      "no_identity": "The device answered but reported neither a serial number nor a device id.",
+      "wrong_meter_type": "The address answers, but not as this meter type. Check the meter type.",
+      "not_a_p1_meter": "This HomeWizard device is not a P1 meter."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Polling and external meter",
-        "description": "An external P1 reader — HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or a Zendure meter — can feed the controller instead of, or alongside, the Zendure P1 meter. Which one is used is chosen with the Meter source select (default: auto). Leave the address empty to poll no external meter. Readers that do not report the time of each telegram are polled at most once a second, whatever the interval below.",
+        "title": "Polling interval",
         "data": {
-          "scan_interval": "Seconds between polls (1-60)",
-          "external_meter_type": "External meter type",
-          "external_meter_host": "External meter IP address",
-          "external_meter_interval_ms": "Milliseconds between external meter polls (100-1000; YouLess only below 1000)"
+          "scan_interval": "Seconds between polls (1-60)"
+        }
+      },
+      "external": {
+        "title": "External P1 meter",
+        "data": {
+          "host": "IP address",
+          "external_meter_interval_ms": "Milliseconds between polls (100-1000; below 1000 only for YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Zendure meter",
+          "external": "External meter",
+          "auto": "Auto (external, else Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Charge",
+          "discharge": "Discharge"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standard",
+          "economic": "Economic",
+          "closed": "Closed"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Off",
+          "allowed": "Allowed",
+          "forbidden": "Forbidden"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Gear 1",
+          "gear_2": "Gear 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Gear 1",
+          "gear_2": "Gear 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Standby",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Off",
+          "input": "Input",
+          "output": "Output"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Off",
+          "input": "Input",
+          "output": "Output"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Off",
+          "on": "On"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "None",
+          "upper_limit": "Upper limit (full)",
+          "lower_limit": "Lower limit (empty)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Uncalibrated",
+          "calibrated": "Calibrated"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Idle",
+          "waiting": "Waiting",
+          "standby": "Standby",
+          "manual": "Manual",
+          "quick": "Full power",
+          "tracking": "Tracking",
+          "balancing": "Balancing",
+          "starting": "Starting",
+          "holding": "Settling",
+          "reversing": "Reversing",
+          "released": "Released",
+          "blocked": "Blocked",
+          "protecting": "Protecting",
+          "error": "Error"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "Live",
+          "stale": "No new data",
+          "unreachable": "Unreachable"
         }
       }
     }
