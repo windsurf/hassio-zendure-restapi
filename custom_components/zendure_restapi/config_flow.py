@@ -15,19 +15,28 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
     CONF_DEVICE_TYPE,
+    CONF_EXTERNAL_HOST,
+    CONF_EXTERNAL_INTERVAL,
+    CONF_EXTERNAL_TYPE,
     CONF_HOST,
     CONF_MODEL,
     CONF_PORT,
     CONF_PRODUCT,
     CONF_SCAN_INTERVAL,
     CONF_SN,
+    DEFAULT_EXTERNAL_HOST,
+    DEFAULT_EXTERNAL_INTERVAL,
+    DEFAULT_EXTERNAL_TYPE,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_TYPE_BATTERY,
     DEVICE_TYPE_METER,
     DOMAIN,
+    EXTERNAL_TYPES,
+    MAX_EXTERNAL_INTERVAL,
     MAX_SCAN_INTERVAL,
     METER_MARKER_KEY,
+    MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
 from .registry import is_known_model, meter_name, model_name, parse_service_name
@@ -200,7 +209,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class ZendureOptionsFlow(config_entries.OptionsFlow):
-    """Adjust the polling interval without removing the device.
+    """Adjust the polling interval and the external meter.
 
     The entry options hold more than this form shows: the controller keeps its
     operation mode, power ceilings, thresholds and buffers there too. An
@@ -215,16 +224,48 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            if CONF_EXTERNAL_TYPE in user_input:
+                # An emptied optional field is left out of the submission
+                # altogether, and the merge below would then keep the old
+                # address. It means "no external meter", so it is stored as an
+                # empty string — which also stops the form from filling the
+                # default back in next time.
+                user_input[CONF_EXTERNAL_HOST] = str(
+                    user_input.get(CONF_EXTERNAL_HOST) or ""
+                ).strip()
             merged = {**self.config_entry.options, **user_input}
             return self.async_create_entry(title="", data=merged)
 
-        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
-                    vol.Coerce(int),
-                    vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                )
-            }
-        )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        options = self.config_entry.options
+        current = options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        fields: dict[Any, Any] = {
+            vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+            )
+        }
+
+        # Only a battery has a controller to feed, so only a battery entry
+        # offers the external meter.
+        if self.config_entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_METER:
+            fields[vol.Required(
+                CONF_EXTERNAL_TYPE,
+                default=options.get(CONF_EXTERNAL_TYPE, DEFAULT_EXTERNAL_TYPE),
+            )] = vol.In(list(EXTERNAL_TYPES))
+            fields[vol.Optional(
+                CONF_EXTERNAL_HOST,
+                description={
+                    "suggested_value": options.get(
+                        CONF_EXTERNAL_HOST, DEFAULT_EXTERNAL_HOST
+                    )
+                },
+            )] = str
+            fields[vol.Required(
+                CONF_EXTERNAL_INTERVAL,
+                default=options.get(CONF_EXTERNAL_INTERVAL, DEFAULT_EXTERNAL_INTERVAL),
+            )] = vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_EXTERNAL_INTERVAL, max=MAX_EXTERNAL_INTERVAL),
+            )
+
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
