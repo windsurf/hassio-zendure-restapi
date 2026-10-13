@@ -21,10 +21,13 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOST, DOMAIN, INTEGRATION_VERSION
+from .const import CONF_EXTERNAL_HOST, CONF_HOST, DOMAIN, INTEGRATION_VERSION
 from .coordinator import ZendureCoordinator
 
-REDACT = {"sn", "deviceId", "deviceKey", "productKey", "password", "username", CONF_HOST}
+REDACT = {
+    "sn", "deviceId", "deviceKey", "productKey", "password", "username",
+    CONF_HOST, CONF_EXTERNAL_HOST,
+}
 
 # Matches the flattened per-pack form of anything in REDACT: pack1.sn, pack2.sn
 # and so on. Without this the battery serial travels in flat_data untouched.
@@ -72,7 +75,7 @@ async def async_get_config_entry_diagnostics(
         "integration_version": INTEGRATION_VERSION,
         "entry": {
             "data": async_redact_data(dict(entry.data), REDACT),
-            "options": dict(entry.options),
+            "options": async_redact_data(dict(entry.options), REDACT),
         },
         "device_type": coordinator.device_type,
         "product": coordinator.product,
@@ -82,4 +85,12 @@ async def async_get_config_entry_diagnostics(
         "flat_data": _redact_flat(coordinator.data or {}),
         "raw_report": async_redact_data(dict(coordinator.raw or {}), REDACT),
         "mqtt_status": _summarise_mqtt(mqtt_status),
+        "external_meter": _external(hass, entry),
     }
+
+
+def _external(hass: HomeAssistant, entry: ConfigEntry) -> Any:
+    """Counters of the external meter, if this entry polls one."""
+    runtime = hass.data.get(DOMAIN, {}).get(f"{entry.entry_id}_runtime")
+    meter = runtime.get("external") if runtime else None
+    return meter.diagnostics() if meter is not None else None
