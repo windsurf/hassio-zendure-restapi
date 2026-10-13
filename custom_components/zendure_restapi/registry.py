@@ -100,8 +100,8 @@ def is_known_model(token: str | None) -> bool:
 #
 # The table follows Zendure's own Home Assistant integration (Zendure-HA,
 # MIT licence), devices/device.py ZendureBattery.get_battery_type, as of
-# October 2026. Verified here on one point only: this installation's 3000 Mix
-# AC+ reports serial BEAAVCDLA200107 with packType 70, its internal 8 kWh pack.
+# October 2026. Verified here on one point only: a 3000 Mix AC+ reports a
+# serial starting with B and packType 70 for its internal 8 kWh pack.
 # Everything else is taken on Zendure's word.
 
 PACK_TYPE_MIX_INTERNAL = 70
