@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -26,10 +27,23 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_MODEL, DEVICE_TYPE_METER, DOMAIN, PACK_PREFIX
+from .const import (
+    CONF_MODEL,
+    DEVICE_TYPE_METER,
+    DOMAIN,
+    EXTERNAL_DEVICE_NAME,
+    EXTERNAL_STATUS_LIVE,
+    EXTERNAL_STATUS_STALE,
+    EXTERNAL_STATUS_UNREACHABLE,
+    EXTERNAL_TYPE_LABELS,
+    PACK_PREFIX,
+)
+from .p1meter import ExternalMeter
 from .registry import pack_model
 from .energy import EnergyAccumulator, split_signed
 from .coordinator import ZendureCoordinator
@@ -150,6 +164,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="Fanspeed",
+        translation_key="fan_speed_step",
         name="Fan speed step",
         device_class=SensorDeviceClass.ENUM,
         options=list(FAN_SPEED_MAP.values()),
@@ -166,6 +181,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     # ── State enumerations ───────────────────────────────────────────────
     ZendureSensorDescription(
         key="packState",
+        translation_key="battery_state",
         name="Battery state",
         device_class=SensorDeviceClass.ENUM,
         options=list(PACK_STATE_MAP.values()),
@@ -174,6 +190,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="dcStatus",
+        translation_key="dc_state",
         name="DC state",
         device_class=SensorDeviceClass.ENUM,
         options=list(DC_STATUS_MAP.values()),
@@ -182,6 +199,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="acStatus",
+        translation_key="ac_state",
         name="AC state",
         device_class=SensorDeviceClass.ENUM,
         options=list(AC_STATUS_MAP.values()),
@@ -190,6 +208,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="pvStatus",
+        translation_key="pv_state",
         name="PV state",
         device_class=SensorDeviceClass.ENUM,
         options=list(PV_STATUS_MAP.values()),
@@ -198,6 +217,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="socLimit",
+        translation_key="soc_limit_status",
         name="SOC limit status",
         device_class=SensorDeviceClass.ENUM,
         options=list(SOC_LIMIT_MAP.values()),
@@ -206,6 +226,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="socStatus",
+        translation_key="soc_calibration_status",
         name="SOC calibration status",
         device_class=SensorDeviceClass.ENUM,
         options=list(SOC_STATUS_MAP.values()),
@@ -297,6 +318,7 @@ PACK_SENSORS: tuple[ZendureSensorDescription, ...] = (
     _power("power", "Power"),
     ZendureSensorDescription(
         key="state",
+        translation_key="pack_state",
         name="State",
         device_class=SensorDeviceClass.ENUM,
         options=list(PACK_STATE_MAP.values()),
@@ -354,7 +376,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create sensors for every reported key."""
-    coordinator: ZendureCoordinator = hass.data[DOMAIN][entry.entry_id]
+    stored = hass.data[DOMAIN][entry.entry_id]
+    if isinstance(stored, ExternalMeter):
+        async_add_entities(_external_sensors(stored, entry))
+        return
+    coordinator: ZendureCoordinator = stored
     device_id = coordinator.device_id or entry.unique_id or entry.entry_id
     model = entry.data.get(CONF_MODEL) or "SolarFlow"
     data = coordinator.data or {}
@@ -522,6 +548,7 @@ class ZendurePackModelSensor(ZendureSensor):
 
 CONTROLLER_DESCRIPTION = ZendureSensorDescription(
     key="controller_status",
+    translation_key="controller_status",
     name="Controller status",
     icon="mdi:cog-sync-outline",
 )
@@ -829,3 +856,132 @@ class ZendureEfficiencySensor(ZendureEntity, SensorEntity):
         ratio = (dc / ac) if description.pack_state == 1 else (ac / dc)
         return round(min(100.0, max(0.0, ratio * 100.0)), 1)
 
+
+
+# ── External P1 meter ────────────────────────────────────────────────────
+# One device per external meter entry, always named EXTERNAL_DEVICE_NAME, so
+# the entity ids are sensor.external_p1_meter_* whatever the reader is and the
+# dashboards need no editing per meter type.
+
+EXTERNAL_TICK = timedelta(seconds=5)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ExternalSensorDescription(SensorEntityDescription):
+    """Description with the function that reads the value off the meter."""
+
+    value: Any = None
+    live_only: bool = False
+
+
+EXTERNAL_SENSORS: tuple[ExternalSensorDescription, ...] = (
+    ExternalSensorDescription(
+        key="power",
+        name="Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower",
+        value=lambda m: m.recent_power(10**9),
+        live_only=True,
+    ),
+    ExternalSensorDescription(
+        key="energy_imported",
+        name="Energy imported",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+        value=lambda m: m.energy()[0],
+    ),
+    ExternalSensorDescription(
+        key="energy_exported",
+        name="Energy exported",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+        value=lambda m: m.energy()[1],
+    ),
+    ExternalSensorDescription(
+        key="status",
+        name="Status",
+        translation_key="external_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=[EXTERNAL_STATUS_LIVE, EXTERNAL_STATUS_STALE, EXTERNAL_STATUS_UNREACHABLE],
+        icon="mdi:access-point-check",
+        value=lambda m: m.status,
+    ),
+    ExternalSensorDescription(
+        key="telegram_age",
+        name="Telegram age",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sand",
+        value=lambda m: m.telegram_age(),
+    ),
+)
+
+# Readers that report cumulative registers. The others get no energy sensors
+# rather than two that are unavailable for ever.
+_ENERGY_TYPES = {"youless", "homewizard_v1"}
+
+
+def _external_sensors(meter: ExternalMeter, entry: ConfigEntry) -> list[SensorEntity]:
+    return [
+        ExternalMeterSensor(meter, entry, description)
+        for description in EXTERNAL_SENSORS
+        if not description.key.startswith("energy_") or meter.kind in _ENERGY_TYPES
+    ]
+
+
+class ExternalMeterSensor(SensorEntity):
+    """One reading of an external P1 meter.
+
+    Updated on every new telegram, and every five seconds besides, so the
+    status and the telegram age keep moving while the meter is silent — which
+    is when they matter.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    entity_description: ExternalSensorDescription
+
+    def __init__(
+        self, meter: ExternalMeter, entry: ConfigEntry, description: ExternalSensorDescription
+    ) -> None:
+        self.entity_description = description
+        self._meter = meter
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"external_{entry.entry_id}")},
+            name=EXTERNAL_DEVICE_NAME,
+            manufacturer=meter.manufacturer,
+            model=EXTERNAL_TYPE_LABELS.get(meter.kind, meter.kind),
+            configuration_url=f"http://{meter.host}",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._meter.async_add_listener(self._refresh))
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._tick, EXTERNAL_TICK)
+        )
+
+    @callback
+    def _refresh(self) -> None:
+        self.async_write_ha_state()
+
+    @callback
+    def _tick(self, _now: Any) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        if self.entity_description.live_only:
+            return self._meter.status == EXTERNAL_STATUS_LIVE
+        return self.native_value is not None
+
+    @property
+    def native_value(self) -> Any:
+        return self.entity_description.value(self._meter)
