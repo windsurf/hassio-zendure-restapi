@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zendure RestAPI",
+        "description": "Co chcesz dodać?",
+        "menu_options": {
+          "zendure": "Urządzenie Zendure (bateria lub licznik P1)",
+          "external_meter": "Zewnętrzny licznik P1 (HomeWizard, YouLess, EcoTracker, Shelly)"
+        }
+      },
+      "zendure": {
+        "title": "Urządzenie Zendure",
+        "description": "Podaj adres IP urządzenia Zendure. Lokalne API musi być włączone: w aplikacji Zendure dodaj HEMS, a następnie zamknij aplikację.",
+        "data": {
+          "host": "Adres IP",
+          "port": "Port HTTP"
+        }
+      },
+      "confirm": {
+        "title": "Znaleziono urządzenie Zendure",
+        "description": "Dodać {model} pod adresem {host} (numer seryjny {sn})?"
+      },
+      "external_meter": {
+        "title": "Zewnętrzny licznik P1",
+        "description": "Drugi licznik sieciowy dla sterowania baterią. Używany licznik wybiera się w Meter source przy baterii (domyślnie: auto). HomeWizard: najpierw włącz lokalne API w aplikacji HomeWizard Energy.",
+        "data": {
+          "external_meter_type": "Typ licznika",
+          "host": "Adres IP",
+          "external_meter_interval_ms": "Milisekundy między odpytaniami (100-1000; poniżej 1000 tylko dla YouLess)"
+        }
+      },
+      "homewizard_confirm": {
+        "title": "Znaleziono licznik HomeWizard P1",
+        "description": "Użyć licznika HomeWizard P1 pod adresem {host} (numer seryjny {serial}) jako licznika sieciowego baterii? Lokalne API musi być włączone w aplikacji HomeWizard Energy."
+      }
+    },
+    "error": {
+      "cannot_connect": "Brak odpowiedzi. Sprawdź adres IP i czy lokalne API jest włączone.",
+      "no_identity": "Urządzenie odpowiedziało, ale nie podało numeru seryjnego ani identyfikatora.",
+      "wrong_meter_type": "Adres odpowiada, ale nie jak ten typ licznika. Sprawdź typ licznika.",
+      "homewizard_api_off": "Licznik nie odpowiada. Włącz lokalne API w aplikacji HomeWizard Energy i spróbuj ponownie."
+    },
+    "abort": {
+      "already_configured": "To urządzenie jest już skonfigurowane.",
+      "cannot_connect": "Brak odpowiedzi. Sprawdź adres IP i czy lokalne API jest włączone.",
+      "no_identity": "Urządzenie odpowiedziało, ale nie podało numeru seryjnego ani identyfikatora.",
+      "wrong_meter_type": "Adres odpowiada, ale nie jak ten typ licznika. Sprawdź typ licznika.",
+      "not_a_p1_meter": "To urządzenie HomeWizard nie jest licznikiem P1."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Interwał odpytywania",
+        "data": {
+          "scan_interval": "Sekundy między odpytaniami (1-60)"
+        }
+      },
+      "external": {
+        "title": "Zewnętrzny licznik P1",
+        "data": {
+          "host": "Adres IP",
+          "external_meter_interval_ms": "Milisekundy między odpytaniami (100-1000; poniżej 1000 tylko dla YouLess)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "meter_source": {
+        "state": {
+          "zendure": "Licznik Zendure",
+          "external": "Licznik zewnętrzny",
+          "auto": "Auto (zewnętrzny, w przeciwnym razie Zendure)"
+        }
+      },
+      "converter_mode": {
+        "state": {
+          "charge": "Ładowanie",
+          "discharge": "Rozładowanie"
+        }
+      },
+      "backup_mode": {
+        "state": {
+          "standard": "Standardowy",
+          "economic": "Oszczędny",
+          "closed": "Zamknięty"
+        }
+      },
+      "pv_export": {
+        "state": {
+          "off": "Wyłączony",
+          "allowed": "Dozwolony",
+          "forbidden": "Zabroniony"
+        }
+      },
+      "fan_speed_mode": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Bieg 1",
+          "gear_2": "Bieg 2"
+        }
+      }
+    },
+    "sensor": {
+      "fan_speed_step": {
+        "state": {
+          "auto": "Auto",
+          "gear_1": "Bieg 1",
+          "gear_2": "Bieg 2"
+        }
+      },
+      "battery_state": {
+        "state": {
+          "standby": "Czuwanie",
+          "charging": "Ładowanie",
+          "discharging": "Rozładowywanie"
+        }
+      },
+      "pack_state": {
+        "state": {
+          "standby": "Czuwanie",
+          "charging": "Ładowanie",
+          "discharging": "Rozładowywanie"
+        }
+      },
+      "ac_state": {
+        "state": {
+          "off": "Wyłączony",
+          "input": "Wejście",
+          "output": "Wyjście"
+        }
+      },
+      "dc_state": {
+        "state": {
+          "off": "Wyłączony",
+          "input": "Wejście",
+          "output": "Wyjście"
+        }
+      },
+      "pv_state": {
+        "state": {
+          "off": "Wyłączony",
+          "on": "Włączony"
+        }
+      },
+      "soc_limit_status": {
+        "state": {
+          "none": "Brak",
+          "upper_limit": "Górna granica (pełna)",
+          "lower_limit": "Dolna granica (pusta)"
+        }
+      },
+      "soc_calibration_status": {
+        "state": {
+          "uncalibrated": "Nieskalibrowany",
+          "calibrated": "Skalibrowany"
+        }
+      },
+      "controller_status": {
+        "state": {
+          "idle": "Bezczynny",
+          "waiting": "Oczekiwanie",
+          "standby": "Czuwanie",
+          "manual": "Ręczny",
+          "quick": "Pełna moc",
+          "tracking": "Śledzenie",
+          "balancing": "Równoważenie",
+          "starting": "Uruchamianie",
+          "holding": "Stabilizacja",
+          "reversing": "Odwracanie",
+          "released": "Zwolniony",
+          "blocked": "Zablokowany",
+          "protecting": "Ochrona",
+          "error": "Błąd"
+        }
+      },
+      "external_status": {
+        "state": {
+          "live": "Na żywo",
+          "stale": "Brak nowych danych",
+          "unreachable": "Nieosiągalny"
+        }
+      }
+    }
+  }
+}
