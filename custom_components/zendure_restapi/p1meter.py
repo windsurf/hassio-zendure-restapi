@@ -40,9 +40,8 @@ as a new reading, and `min_interval_ms` keeps it at the telegram rate.
 
 Readers since v1.5.1: HomeWizard P1 (API v1), YouLess LS120, EcoTracker,
 Shelly Pro 3EM, and the Zendure P1 meter or Smart Meter 3CT. Endpoints and
-fields follow each maker's documentation and the configurations the
-Gielz1986/Zendure-HA-zenSDK community runs daily; only the YouLess and the
-Zendure P1 meter have been measured by the author.
+fields follow each maker's documentation; only the YouLess and the Zendure
+P1 meter have been measured by the author.
 """
 
 from __future__ import annotations
@@ -60,6 +59,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    EXTERNAL_STATUS_LIVE,
+    EXTERNAL_STATUS_STALE,
+    EXTERNAL_STATUS_UNREACHABLE,
+    METER_FALLBACK_AGE,
     EXTERNAL_BACKOFF_AFTER,
     EXTERNAL_BACKOFF_SECONDS,
     EXTERNAL_TIMEOUT,
@@ -88,6 +91,7 @@ class ExternalMeter:
 
     kind = "generic"
     path = "/"
+    manufacturer = "unknown"
     # Floor under the poll interval. A reader without a telegram stamp of its
     # own cannot tell a new telegram from the same one fetched again, so every
     # poll counts as a reading; polled faster than the telegram it would hand
@@ -119,6 +123,8 @@ class ExternalMeter:
         self._last_stamp: Any = _UNSEEN
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task | None = None
+        # The config entry this meter belongs to, set on setup.
+        self.entry_id: str | None = None
 
     # ── Adapter ──────────────────────────────────────────────────────────
 
@@ -128,6 +134,39 @@ class ExternalMeter:
         Raises ValueError when the payload is unusable.
         """
         raise NotImplementedError
+
+    def energy(self) -> tuple[float | None, float | None]:
+        """Cumulative import and export in kWh, where the reader has them."""
+        return None, None
+
+    @property
+    def status(self) -> str:
+        """live, stale or unreachable — the same 5 s rule `auto` applies."""
+        if self._failures_in_row >= EXTERNAL_BACKOFF_AFTER:
+            return EXTERNAL_STATUS_UNREACHABLE
+        if self.recent_power(METER_FALLBACK_AGE) is None:
+            return EXTERNAL_STATUS_STALE
+        return EXTERNAL_STATUS_LIVE
+
+    def telegram_age(self) -> float | None:
+        """Seconds since the last new telegram, None before the first."""
+        if self.updated_at is None:
+            return None
+        return round((dt_util.utcnow() - self.updated_at).total_seconds(), 1)
+
+    async def async_probe(self) -> dict[str, Any]:
+        """One request, for the config flow: the parsed reading or an error.
+
+        Raises ValueError, TimeoutError or aiohttp.ClientError when the
+        address does not answer as this reader type does.
+        """
+        async with asyncio.timeout(EXTERNAL_TIMEOUT):
+            async with self._session.get(self._url) as response:
+                if response.status != 200:
+                    raise ValueError(f"HTTP {response.status}")
+                payload = await response.json(content_type=None)
+        stamp, power, extra = self.parse(payload)
+        return {"stamp": stamp, "power": power, **extra}
 
     # ── Listeners ────────────────────────────────────────────────────────
 
@@ -260,11 +299,10 @@ class ExternalMeter:
 
     def diagnostics(self) -> dict[str, Any]:
         """Counters and the last telegram, for the diagnostics download."""
-        age = None
-        if self.updated_at is not None:
-            age = round((dt_util.utcnow() - self.updated_at).total_seconds(), 1)
+        age = self.telegram_age()
         return {
             "type": self.kind,
+            "status": self.status,
             "interval_ms": round(self.interval * 1000),
             "polls": self.polls,
             "telegrams": self.telegrams,
@@ -293,6 +331,7 @@ class YoulessMeter(ExternalMeter):
     `p1 + p2 - n1 - n2` equals `net` to the Wh. They are recorded, not yet used.
     """
 
+    manufacturer = "YouLess"
     kind = EXTERNAL_TYPE_YOULESS
     path = "/e?f=j"
     min_interval_ms = 100      # `tm` tells new telegrams apart; poll freely
@@ -310,6 +349,15 @@ class YoulessMeter(ExternalMeter):
             raise ValueError("payload without tm")
         power = float(payload["pwr"])
         return stamp, power, {key: payload.get(key) for key in self._EXTRA}
+
+    def energy(self) -> tuple[float | None, float | None]:
+        """Import p1 + p2 and export n1 + n2. Empty while the P1 port is silent."""
+        def total(a: str, b: str) -> float | None:
+            try:
+                return round(float(self.data[a]) + float(self.data[b]), 3)
+            except (KeyError, TypeError, ValueError):
+                return None
+        return total("p1", "p2"), total("n1", "n2")
 
 
 def _number(payload: Any, key: str) -> float:
@@ -330,6 +378,7 @@ class HomeWizardV1Meter(ExternalMeter):
     and HTTPS and is planned separately.
     """
 
+    manufacturer = "HomeWizard"
     kind = EXTERNAL_TYPE_HOMEWIZARD_V1
     path = "/api/v1/data"
 
@@ -339,6 +388,14 @@ class HomeWizardV1Meter(ExternalMeter):
         power = _number(payload, "active_power_w")
         return None, power, {key: payload.get(key) for key in self._EXTRA}
 
+    def energy(self) -> tuple[float | None, float | None]:
+        def value(key: str) -> float | None:
+            try:
+                return round(float(self.data[key]), 3)
+            except (KeyError, TypeError, ValueError):
+                return None
+        return value("total_power_import_kwh"), value("total_power_export_kwh")
+
 
 class EcoTrackerMeter(ExternalMeter):
     """EcoTracker by everHome: ``/v1/json``, field `power`.
@@ -346,6 +403,7 @@ class EcoTrackerMeter(ExternalMeter):
     The local HTTP server has to be switched on in the EcoTracker app.
     """
 
+    manufacturer = "everHome"
     kind = EXTERNAL_TYPE_ECOTRACKER
     path = "/v1/json"
 
@@ -361,6 +419,7 @@ class ShellyPro3EMMeter(ExternalMeter):
     to be the grid reading.
     """
 
+    manufacturer = "Shelly"
     kind = EXTERNAL_TYPE_SHELLY_PRO_3EM
     path = "/rpc/EM.GetStatus?id=0"
 
@@ -378,6 +437,7 @@ class ZendureMeterExternal(ExternalMeter):
     way it needs nothing but the power field.
     """
 
+    manufacturer = "Zendure"
     kind = EXTERNAL_TYPE_ZENDURE
     path = "/properties/report"
 
