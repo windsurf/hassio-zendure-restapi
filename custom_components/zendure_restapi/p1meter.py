@@ -35,9 +35,14 @@ last successful request.
 Adding a reader is adding an adapter: a subclass of ExternalMeter with a path
 and a parser that returns the telegram stamp, the net power in W with import
 positive, and whatever else is worth recording. A reader without a telegram
-stamp of its own has to return None as the stamp; every successful poll then
-counts as a new reading, and it should be polled at the telegram rate rather
-than faster.
+stamp of its own returns None as the stamp; every successful poll then counts
+as a new reading, and `min_interval_ms` keeps it at the telegram rate.
+
+Readers since v1.5.1: HomeWizard P1 (API v1), YouLess LS120, EcoTracker,
+Shelly Pro 3EM, and the Zendure P1 meter or Smart Meter 3CT. Endpoints and
+fields follow each maker's documentation and the configurations the
+Gielz1986/Zendure-HA-zenSDK community runs daily; only the YouLess and the
+Zendure P1 meter have been measured by the author.
 """
 
 from __future__ import annotations
@@ -58,10 +63,18 @@ from .const import (
     EXTERNAL_BACKOFF_AFTER,
     EXTERNAL_BACKOFF_SECONDS,
     EXTERNAL_TIMEOUT,
+    EXTERNAL_TYPE_ECOTRACKER,
+    EXTERNAL_TYPE_HOMEWIZARD_V1,
+    EXTERNAL_TYPE_SHELLY_PRO_3EM,
     EXTERNAL_TYPE_YOULESS,
+    EXTERNAL_TYPE_ZENDURE,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Marks "no telegram seen since the poller started".
+_UNSEEN = object()
 
 
 class ExternalMeter:
@@ -75,6 +88,12 @@ class ExternalMeter:
 
     kind = "generic"
     path = "/"
+    # Floor under the poll interval. A reader without a telegram stamp of its
+    # own cannot tell a new telegram from the same one fetched again, so every
+    # poll counts as a reading; polled faster than the telegram it would hand
+    # the trim loop the same measurement several times. One second is the DSMR 5
+    # telegram rate.
+    min_interval_ms = 1000
 
     def __init__(
         self,
@@ -85,7 +104,7 @@ class ExternalMeter:
     ) -> None:
         self.hass = hass
         self.host = host
-        self.interval = max(0.05, interval_ms / 1000.0)
+        self.interval = max(interval_ms, self.min_interval_ms) / 1000.0
         self._session = session
         self._url = f"http://{host}{self.path}"
 
@@ -97,7 +116,7 @@ class ExternalMeter:
         self.failures = 0
 
         self._failures_in_row = 0
-        self._last_stamp: Any = object()   # matches nothing, not even None
+        self._last_stamp: Any = _UNSEEN
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task | None = None
 
@@ -192,6 +211,19 @@ class ExternalMeter:
         # Same telegram as last time: not a new measurement.
         if stamp is not None and stamp == self._last_stamp:
             return
+
+        # The first telegram after a start proves only that the reader answers,
+        # not that its data is current: its stamp has nothing to move away
+        # from yet. Seen on this installation on 13 October 2026 — a YouLess
+        # whose P1 cable had been out since 22 August kept answering with that
+        # morning's `tm` and a fixed `pwr`. Accepted as new, that reading would
+        # have steered the battery for the first seconds after every restart.
+        # So a stamped reader counts as live from the first stamp that moves.
+        # It is kept for the diagnostics, without an age and without listeners.
+        if stamp is not None and self._last_stamp is _UNSEEN:
+            self._last_stamp = stamp
+            self.data = {"stamp": stamp, "power": power, **extra}
+            return
         self._last_stamp = stamp
         self.data = {"stamp": stamp, "power": power, **extra}
         self.updated_at = dt_util.utcnow()
@@ -213,6 +245,18 @@ class ExternalMeter:
             )
 
     # ── Reporting ────────────────────────────────────────────────────────
+
+    def recent_power(self, max_age: float) -> Any:
+        """The last reported power if its telegram is younger than max_age.
+
+        For recording only. A reading that is not current reads as missing,
+        so a stale value cannot sit in the trace looking like a measurement.
+        """
+        if self.updated_at is None:
+            return None
+        if (dt_util.utcnow() - self.updated_at).total_seconds() > max_age:
+            return None
+        return self.data.get("power")
 
     def diagnostics(self) -> dict[str, Any]:
         """Counters and the last telegram, for the diagnostics download."""
@@ -251,6 +295,7 @@ class YoulessMeter(ExternalMeter):
 
     kind = EXTERNAL_TYPE_YOULESS
     path = "/e?f=j"
+    min_interval_ms = 100      # `tm` tells new telegrams apart; poll freely
 
     _EXTRA = ("net", "p1", "p2", "n1", "n2")
 
@@ -267,6 +312,86 @@ class YoulessMeter(ExternalMeter):
         return stamp, power, {key: payload.get(key) for key in self._EXTRA}
 
 
+def _number(payload: Any, key: str) -> float:
+    """A required numeric field, or ValueError."""
+    if not isinstance(payload, dict) or payload.get(key) in (None, ""):
+        raise ValueError(f"payload without {key}")
+    return float(payload[key])
+
+
+class HomeWizardV1Meter(ExternalMeter):
+    """HomeWizard P1 meter, local API v1: ``/api/v1/data``.
+
+    The local API has to be switched on in the HomeWizard Energy app. Fields per
+    HomeWizard's API documentation: `active_power_w` is net power with import
+    positive; the cumulative registers are kept for the diagnostics. The v1
+    payload carries no time of the telegram, so this reader is polled once a
+    second. API v2 does carry one, and a websocket besides; it needs a token
+    and HTTPS and is planned separately.
+    """
+
+    kind = EXTERNAL_TYPE_HOMEWIZARD_V1
+    path = "/api/v1/data"
+
+    _EXTRA = ("total_power_import_kwh", "total_power_export_kwh", "active_tariff")
+
+    def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
+        power = _number(payload, "active_power_w")
+        return None, power, {key: payload.get(key) for key in self._EXTRA}
+
+
+class EcoTrackerMeter(ExternalMeter):
+    """EcoTracker by everHome: ``/v1/json``, field `power`.
+
+    The local HTTP server has to be switched on in the EcoTracker app.
+    """
+
+    kind = EXTERNAL_TYPE_ECOTRACKER
+    path = "/v1/json"
+
+    def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
+        return None, _number(payload, "power"), {}
+
+
+class ShellyPro3EMMeter(ExternalMeter):
+    """Shelly Pro 3EM, current clamps: ``/rpc/EM.GetStatus?id=0``.
+
+    `total_act_power` is the sum of the three phases. A clamp meter measures
+    where its clamps are, so they have to sit on the grid connection for this
+    to be the grid reading.
+    """
+
+    kind = EXTERNAL_TYPE_SHELLY_PRO_3EM
+    path = "/rpc/EM.GetStatus?id=0"
+
+    def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
+        return None, _number(payload, "total_act_power"), {}
+
+
+class ZendureMeterExternal(ExternalMeter):
+    """Zendure P1 meter or Smart Meter 3CT, read as an external meter.
+
+    Same endpoint and field as the meter entry this integration has always
+    had: ``/properties/report``, `total_power`. Offered here as well because
+    the Smart Meter 3CT has never been seen by this integration and may not
+    carry the `meterType` marker the meter entry is recognised by; read this
+    way it needs nothing but the power field.
+    """
+
+    kind = EXTERNAL_TYPE_ZENDURE
+    path = "/properties/report"
+
+    def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
+        return None, _number(payload, "total_power"), {}
+
+
 ADAPTERS: dict[str, type[ExternalMeter]] = {
-    YoulessMeter.kind: YoulessMeter,
+    adapter.kind: adapter
+    for adapter in (
+        HomeWizardV1Meter,
+        YoulessMeter,
+        EcoTrackerMeter,
+        ShellyPro3EMMeter,
+        ZendureMeterExternal,
+    )
 }
