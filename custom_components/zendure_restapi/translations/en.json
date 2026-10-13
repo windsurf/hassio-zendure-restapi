@@ -27,9 +27,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Polling interval",
+        "title": "Polling and external meter",
+        "description": "The external P1 reader is a second grid meter for the controller. Which meter is used is chosen with the Meter source select. Leave the address empty to poll no external meter.",
         "data": {
-          "scan_interval": "Seconds between polls (1-60)"
+          "scan_interval": "Seconds between polls (1-60)",
+          "external_meter_type": "External meter type",
+          "external_meter_host": "External meter IP address",
+          "external_meter_interval_ms": "Milliseconds between external meter polls (100-1000)"
         }
       }
     }
