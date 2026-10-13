@@ -5,6 +5,8 @@
 [![100% local](https://img.shields.io/badge/100%25-local-brightgreen.svg)](#why-this-integration)
 [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-supported-meters)
 
+🇳🇱 [Nederlandse versie](README.nl.md)
+
 **Your Zendure SolarFlow battery in Home Assistant, 100% local, in three steps.**
 No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS, add your battery, pick a mode — the battery holds your grid at zero, once a second.
 
@@ -42,14 +44,14 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 
 | Meter | Status |
 |---|---|
-| **HomeWizard P1 meter** (local API v1) | ✅ **Works with HomeWizard** — the same local API and field the Gielz1986 package reads every second; new here in v1.5.1 |
+| **HomeWizard P1 meter** (local API v1) | ✅ **Works with HomeWizard** — found automatically on your network; documented local API, read every second |
 | **YouLess LS120** | ✅ Measured by the author — sees every load step up to a second earlier than the Zendure meter |
 | **Zendure P1 meter** | ✅ Tested daily by the author |
 | **Zendure Smart Meter 3CT** | 🧪 Same API as the Zendure P1 meter |
 | **EcoTracker** (everHome) | 🧪 Documented local API, one reading per second |
 | **Shelly Pro 3EM** (clamps on the grid connection) | 🧪 Documented local API, one reading per second |
 
-Set it up in one go: battery → **Configure** → choose your meter, enter its IP address. The **Meter source** select is on `auto`, so the battery uses it straight away.
+Set it up in one go: **Add integration → Zendure RestAPI → External P1 meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
 HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 
 *Not affiliated with HomeWizard, YouLess, everHome or Shelly; these are compatibility notes.*
@@ -64,7 +66,8 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 - **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — read directly over your network, once a second, not through a slower Home Assistant sensor.
 - **Safe by design.** No valid meter reading, no movement: the battery stops. Two batteries never fight over the same meter.
 - **Low standby draw.** Hands the battery back to its low-power state when there is nothing to do.
-- **Everything visible.** Ready-made dashboard with live and daily charts, a controller status that says *why*, and an optional per-second CSV trace for the curious.
+- **Everything visible.** Ready-made dashboard, a controller status that says *why*, and an optional per-second CSV trace for the curious.
+- **Speaks your language.** Setup screens and states in English, Nederlands, Deutsch, Français, Italiano, Español, Português, Polski, Čeština, Svenska and Dansk.
 
 ---
 
@@ -83,7 +86,7 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 **3. Add your devices**
 Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI** and enter the IP address. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
-**Your meter:** battery → **Configure** → choose **HomeWizard P1 meter** (or YouLess, EcoTracker, Shelly, Zendure) and enter its IP address. Done — `auto` picks it up. With a Zendure P1 meter as a separate entry nothing needs configuring.
+**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External P1 meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
@@ -108,11 +111,12 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [Device support](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#device-support) — what differs between models, and why solar panels on the device are experimental
 - [How the controller works](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#how-the-controller-works) — the two loops, the bookkeeping, the safeguards
 - [External meters](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#an-external-p1-meter) — HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, Zendure 3CT
+- [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) — eleven, corrections welcome
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) and [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug logging and the sample trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.5.1:** works with HomeWizard, EcoTracker and Shelly Pro 3EM; more SolarFlow models; power settings up to 5 kW; battery pack model and capacity; one battery steering at a time.
+**Latest release – v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
 
 ## More
 
