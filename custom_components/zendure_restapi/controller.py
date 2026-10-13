@@ -60,6 +60,7 @@ from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
 from .const import (
+    DOMAIN,
     PACK_PREFIX,
     PACK_STATE_CHARGING,
     AC_MODE_CHARGE,
@@ -147,6 +148,11 @@ DEVICE_CAP_KEY = {True: "chargeMaxLimit", False: "inverseMaxPower"}
 WRITE_HISTORY = 6
 
 
+# Where the controller currently steering on the grid is registered, in
+# hass.data[DOMAIN]. See ZendureController._claim_grid.
+GRID_OWNER_KEY = "_grid_owner"
+
+
 class ZendureController:
     """Turns an operation mode into device writes."""
 
@@ -206,6 +212,11 @@ class ZendureController:
         # against `_pending` would book watts that never arrived.
         self._source_used = "none"
         self._trim_source = "none"
+
+        # ── One battery steers on the grid ───────────────────────────
+        # Set once the entry unloads, so a claim it still holds lapses.
+        self._unloaded = False
+        self._aside_logged = False
 
         # ── Rest state ───────────────────────────────────────────────
         # When this controller has both of its own limits at zero across two
@@ -300,7 +311,9 @@ class ZendureController:
         self.coordinator.hass.async_create_task(self.async_sample())
 
     def detach_meter(self) -> None:
-        """Drop both meter subscriptions."""
+        """Drop both meter subscriptions. Called when the entry unloads."""
+        self._unloaded = True
+        self._release_grid()
         if self._unsub_meter is not None:
             self._unsub_meter()
             self._unsub_meter = None
@@ -349,6 +362,8 @@ class ZendureController:
             return
 
         mode = self.settings.get(OPT_OPERATION_MODE)
+        if mode not in SMART_MODES:
+            self._release_grid()
 
 
         # Refresh the readings on every cycle, in every mode. Updating them only
@@ -690,6 +705,12 @@ class ZendureController:
 
     async def _apply_smart(self, data: dict[str, Any], mode: str) -> None:
         """Track the grid meter towards zero exchange."""
+        other = self._claim_grid()
+        if other is not None:
+            await self._stand_aside(data, other)
+            return
+        self._aside_logged = False
+
         grid = self._meter_power()
         if grid is None:
             await self._fail_safe(data, "no valid meter reading")
@@ -849,6 +870,66 @@ class ZendureController:
                 reason,
                 direction=self._last_direction,
             )
+
+    # ── One battery steers on the grid ───────────────────────────────────
+
+    def _claim_grid(self) -> "ZendureController | None":
+        """Take the grid for this controller, or name the one that has it.
+
+        Two controllers that both track the grid towards zero each see the
+        whole deviation and neither knows what the other ordered. With 1000 W
+        of import both discharge 1000 W, the grid swings to -1000 W, both back
+        off, and the pair oscillates. The bookkeeping that makes one loop
+        immune to double-ordering (`_pending`) only covers its own orders.
+
+        So one battery steers and any other stands aside: the first controller
+        to enter a smart mode holds the grid until it leaves the smart modes or
+        its entry unloads. One Home Assistant instance is taken to be one grid
+        connection, which is why the claim does not depend on the meter: two
+        batteries each on a meter of their own still share one connection.
+        Manual, quick and standby are unaffected — they do not steer on the
+        grid.
+
+        Sharing the deviation between batteries is the proper answer and is
+        deliberately not attempted here: it changes the loop, and no
+        installation with two devices has been measured.
+        """
+        store = self.coordinator.hass.data.setdefault(DOMAIN, {})
+        owner = store.get(GRID_OWNER_KEY)
+        if owner is not None and owner is not self and owner._holds_grid():
+            return owner
+        store[GRID_OWNER_KEY] = self
+        return None
+
+    def _holds_grid(self) -> bool:
+        """Whether a claim by this controller still stands."""
+        return (
+            not self._unloaded
+            and self.settings.get(OPT_OPERATION_MODE) in SMART_MODES
+        )
+
+    def _release_grid(self) -> None:
+        store = self.coordinator.hass.data.get(DOMAIN, {})
+        if store.get(GRID_OWNER_KEY) is self:
+            store.pop(GRID_OWNER_KEY, None)
+
+    async def _stand_aside(self, data: dict[str, Any], other: "ZendureController") -> None:
+        """Stop this battery while another one steers on the grid."""
+        await self._write("inputLimit", 0, data)
+        await self._write("outputLimit", 0, data)
+        self._owns_limits = False
+        self._last_direction = "none"
+        self._pending = 0.0
+        self._prev_grid = None
+        name = other.coordinator.device_id or "another battery"
+        reason = (
+            f"{name} already steers on the grid; smart modes run on one battery "
+            "at a time"
+        )
+        if not self._aside_logged:
+            _LOGGER.warning("Smart mode refused: %s", reason)
+            self._aside_logged = True
+        self._set_state("blocked", reason, blocked=True)
 
     def _wrong_way(self, grid: float) -> bool:
         """Whether the grid has crossed zero against the running direction."""
@@ -1428,8 +1509,13 @@ class ZendureController:
             "trim_writes": self._trim_writes,
             "foreign_writes": self._foreign_writes,
             "meter_source": self._source_used,
+            # Empty while the external meter has no current telegram, by the
+            # same 5 s rule `auto` uses to stop trusting it. A raw value kept
+            # regardless showed -7 W from a reader that had been silent for
+            # 52 days.
             "external_w": _as_int(
-                self.external.data.get("power") if self.external is not None else None
+                self.external.recent_power(METER_FALLBACK_AGE)
+                if self.external is not None else None
             ),
         })
 
