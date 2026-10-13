@@ -30,6 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_MODEL, DEVICE_TYPE_METER, DOMAIN, PACK_PREFIX
+from .registry import pack_model
 from .energy import EnergyAccumulator, split_signed
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
@@ -377,6 +378,13 @@ async def async_setup_entry(
                 ZendurePackSensor(coordinator, description, device_id, model, index, data_key)
             )
 
+        # Model and capacity are derived from the serial, so the entity exists
+        # wherever a pack reports one.
+        if f"{PACK_PREFIX}{index}.sn" in data:
+            entities.append(
+                ZendurePackModelSensor(coordinator, PACK_MODEL_DESCRIPTION, device_id, model, index)
+            )
+
     runtime = hass.data[DOMAIN].get(f"{entry.entry_id}_runtime")
     if runtime is not None:
         entities.append(
@@ -465,6 +473,49 @@ class ZendurePackSensor(ZendureSensor):
         super().__init__(coordinator, description, device_id, model, data_key)
         self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_{description.key}"
         self._attr_name = f"Battery {index} {description.name}"
+
+
+PACK_MODEL_DESCRIPTION = ZendureSensorDescription(
+    key="model",
+    name="Model",
+    icon="mdi:battery-heart-variant",
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+
+class ZendurePackModelSensor(ZendureSensor):
+    """Which battery pack this is, derived from its serial and packType.
+
+    The pack reports no model name of its own. The derivation lives in
+    registry.pack_model; the nominal capacity travels as an attribute so the
+    state stays a short label.
+    """
+
+    def __init__(
+        self,
+        coordinator: ZendureCoordinator,
+        description: ZendureSensorDescription,
+        device_id: str,
+        model: str,
+        index: int,
+    ) -> None:
+        self._prefix = f"{PACK_PREFIX}{index}."
+        super().__init__(coordinator, description, device_id, model, f"{self._prefix}sn")
+        self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_model"
+        self._attr_name = f"Battery {index} Model"
+
+    def _derived(self) -> tuple[str, float | None]:
+        data = self.coordinator.data or {}
+        return pack_model(data.get(f"{self._prefix}sn"), data.get(f"{self._prefix}packType"))
+
+    @property
+    def native_value(self) -> str:
+        return self._derived()[0]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        name, kwh = self._derived()
+        return {"capacity_kwh": kwh}
 
 
 # ── Controller status ────────────────────────────────────────────────────
