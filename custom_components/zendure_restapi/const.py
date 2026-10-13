@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.5.1"
+INTEGRATION_VERSION = "1.5.2"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -27,7 +27,6 @@ DEFAULT_SCAN_INTERVAL = 10
 MIN_SCAN_INTERVAL = 1
 MAX_SCAN_INTERVAL = 60
 
-DEFAULT_EXTERNAL_HOST = "192.168.2.15"
 DEFAULT_EXTERNAL_INTERVAL = 250  # ms; a DSMR 5 telegram arrives once a second
 MIN_EXTERNAL_INTERVAL = 100
 MAX_EXTERNAL_INTERVAL = 1000
@@ -44,6 +43,24 @@ POWER_CEILING = 5000            # W
 # battery reports a properties envelope with sn, product and packData.
 DEVICE_TYPE_BATTERY = "battery"
 DEVICE_TYPE_METER = "meter"
+# An external P1 reader as its own config entry, since v1.5.2. Before that it
+# was configured in the battery entry's options, and those are migrated.
+DEVICE_TYPE_EXTERNAL = "external_meter"
+
+# Name of the external meter's device. The same for every reader type, so
+# its entity ids are too and the dashboards work whatever the meter is.
+EXTERNAL_DEVICE_NAME = "External P1 meter"
+
+# mDNS service of the HomeWizard P1 meter's local API v1. Only the P1 meter
+# (product_type HWE-P1) is offered; HomeWizard sockets and kWh meters announce
+# themselves on the same service.
+ZEROCONF_HOMEWIZARD = "_hwenergy._tcp.local."
+HOMEWIZARD_P1_PRODUCT = "HWE-P1"
+
+# Status of an external meter, also a sensor.
+EXTERNAL_STATUS_LIVE = "live"
+EXTERNAL_STATUS_STALE = "stale"
+EXTERNAL_STATUS_UNREACHABLE = "unreachable"
 
 # Presence of this key identifies a meter payload.
 METER_MARKER_KEY = "meterType"
