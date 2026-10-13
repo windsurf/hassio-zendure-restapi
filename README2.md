@@ -7,7 +7,7 @@
 
 > **Disclaimer:** This software is not affiliated with or endorsed by Zendure in any way. It is provided "as-is" without warranty or support, for the educational use of developers and enthusiasts. Use at your own risk.
 
-Local monitoring and control of Zendure SolarFlow batteries and the Zendure P1 meter over the zenSDK HTTP API. No cloud account, no MQTT broker, no Bluetooth pairing — the device runs a plain JSON REST server on your LAN and this integration talks to it directly.
+Local monitoring and control of Zendure SolarFlow batteries over the zenSDK HTTP API, with the Zendure P1 meter, a HomeWizard P1 meter, a YouLess, an EcoTracker or a Shelly Pro 3EM as grid reading. No cloud account, no MQTT broker, no Bluetooth pairing — the device runs a plain JSON REST server on your LAN and this integration talks to it directly.
 
 Beyond reading the device, the integration runs an **operation-mode controller**: seven strategies that turn a price decision made elsewhere into charge and discharge limits, tracking a linked meter towards zero grid exchange.
 
@@ -28,20 +28,21 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 | Model | PV on the device | Confidence | Basis |
 |---|---|---|---|
 | SolarFlow 3000 Mix AC+ | no | **reference** | developed and measured on it |
-| SolarFlow 4000 Mix AC+ | no | **high** | same platform and internal 8 kWh pack; driven locally by Zendure's integration. Power settings in this version stop at 3,600 W |
+| SolarFlow 4000 Mix AC+ | no | **high** | same platform and internal 8 kWh pack (`packType` 70); driven locally by Zendure's integration |
 | SolarFlow 2400 AC, 2400 AC+, 1600 AC+ | no | **high** | listed by zenSDK; same AC-coupled layout as the reference |
-| SolarFlow 800, 800 Plus, 800 Pro, 800 Pro 2, 2400 Pro | yes | **experimental** | same protocol, but the control loop has only run on a device without PV of its own: on these the battery reading `outputHomePower − gridInputPower` includes the panels' output |
+| SolarFlow 800, 800 Plus, 800 Pro, 800 Pro 2, 2400 Pro | yes | **experimental** | same protocol, but the control loop has only run on a device without PV of its own — see [Device support](#device-support) |
 | SolarFlow 4000 Mix Pro | yes | **experimental** | as above, and not yet in Zendure's own integration either |
 | Zendure P1 meter | – | **reference** | the grid meter this integration was built on |
 | YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster; integration path new in v1.5.0 |
-| Smart Meter 3CT | – | **unknown** | listed by zenSDK; its payload has not been seen |
+| HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second by the Gielz1986 package; new in v1.5.1 |
+| EcoTracker, Shelly Pro 3EM (external grid meter) | – | **experimental** | documented local APIs; new in v1.5.1 |
+| Smart Meter 3CT | – | **experimental** | same `/properties/report` and `total_power` as the P1 meter; read it as external meter type *Zendure* |
 | Hyper 2000, Hub 1200/2000, AIO 2400, Ace 1500 | – | **not possible** | no local HTTP API; MQTT or Bluetooth only |
 
-The smart modes are built for **one battery per grid connection**: two batteries tracking the same meter would each correct the whole deviation.
-
-**Own one of these?** Every model above the line *not possible* is worth trying — install it, and open an
-[issue](https://github.com/windsurf/hassio-zendure-restapi/issues/new) with your model and the diagnostics download attached,
-whether it works or not. One report is enough to move a model up a level.
+**Own one of these?** Every model above the line *not possible* is worth trying — install it, and open a
+[New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
+with the diagnostics download attached, whether it works or not. One report is enough to move a model up a level.
+Details on what differs per model are under [Device support](#device-support).
 
 ---
 
@@ -84,7 +85,7 @@ Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custo
 
 Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
-Add the battery and the meter as **separate entries**. The controller links to the meter automatically when exactly one is present.
+Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. With a HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM instead, no meter entry is needed: configure it on the battery entry, see [An external P1 meter](#an-external-p1-meter).
 
 The polling interval is configurable from 1 to 60 seconds under **Configure**. The default is 10 seconds, and it doubles as the control interval.
 
@@ -94,9 +95,19 @@ address and poll interval. Nothing is polled until an address has been saved the
 
 ### Device support
 
-Entity creation is driven by the properties the device actually reports, not by a hard-coded model list. Every SolarFlow device shares one generic property set, so an unlisted or brand-new model still gets full entity coverage; it is simply labelled `SolarFlow (generic)` until its name is added to `registry.py`.
+Entity creation is driven by the properties the device actually reports, not by a hard-coded model list. Every SolarFlow device on the local zenSDK API shares one property set, so an unlisted or brand-new model still gets full entity coverage; it is simply labelled `SolarFlow (generic)` until its name is added to `registry.py`. Power ceilings come from the device itself (`chargeMaxLimit`, `inverseMaxPower`), and every power entry runs to 5,000 W.
 
 Model naming prefers the `product` field in the report payload, which is authoritative. The mDNS service name is only a fallback.
+
+The confidence per model is listed under [Supported products](#-supported-products) at the top of this page.
+
+**Why PV on the device is experimental.** The loop reads the battery's contribution as `outputHomePower − gridInputPower`. On an AC-coupled device that is the battery and nothing else. With panels on the device's own inputs it includes their output, so what the loop treats as battery power is battery plus PV. That may well be the right quantity for holding the grid at zero, but it has not been tested, and a trace from such a device is what would settle it.
+
+**One battery steers at a time.** Two batteries in a smart mode would each see the whole grid deviation and correct it twice between them, so the second battery to enter a smart mode is stopped with status `blocked` and a reason naming the first. Manual, quick and standby are unaffected. One Home Assistant instance is assumed to be one grid connection. Sharing a deviation between batteries is a planned extension and needs measurements from a two-device installation first.
+
+**Battery packs** get a `Model` sensor derived from the serial number and `packType`, with the nominal capacity as an attribute. The table follows Zendure's own integration; on this installation only the Mix series' internal pack (`I8000`) has been confirmed.
+
+**Have a model that is not marked reference?** Open a *New model report* issue and attach the diagnostics download (device page → three dots → Download diagnostics). Serial numbers and addresses are redacted, and the file lists every property this version has no entity for.
 
 ### The P1 meter
 
@@ -231,8 +242,16 @@ fields, units and sign conventions would remove a class of integration errors en
 operation, controller settings, power flow, energy, the P1 meter, per-battery detail,
 diagnostics and device configuration.
 
-Paste it under `views:` in a dashboard in YAML mode, or open **Edit dashboard → three-dot menu
-→ Raw configuration editor** and add it there.
+`dashboard/zendure_charts.yaml` is the same view with a **Charts** section added under the
+heading: **Live** (grid power, battery power with positive as discharging, and both limits over the
+last ten minutes, refreshed every five seconds), **Energy per day** (daily change of the four energy
+counters over the last week, from Home Assistant's long-term statistics) and **Today** (five-minute
+means of grid and battery power with the state of charge on its own axis). Use one file or the
+other. The charts need [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS
+(Frontend → search *apexcharts-card*); without it only those three cards fail.
+
+Paste either view under `views:` in a dashboard in YAML mode, or open **Edit dashboard →
+three-dot menu → Raw configuration editor** and add it there.
 
 Cards carry no `name:` override on purpose, so every label comes from the integration. Renaming
 an entity in Home Assistant changes the dashboard along with it and the two cannot drift apart.
@@ -246,8 +265,31 @@ verify under **Developer tools → States** filtered on `zendure` if cards come 
 ## An external P1 meter
 
 The control loops can take their grid reading from a P1 reader other than the Zendure meter.
-Supported in this release: **YouLess LS120**. The structure is generic — one adapter per reader,
-an endpoint and a parser — so other readers can be added without touching the loops.
+The structure is generic — one adapter per reader, an endpoint and a parser — so readers are added
+without touching the loops. **A Zendure P1 meter is not required**: with an external reader
+configured and the meter source on `auto` (the default), the smart modes run on that reader alone.
+
+| Reader | Endpoint | Field | Telegram time | Poll interval | Status |
+|---|---|---|---|---|---|
+| HomeWizard P1 meter, local API v1 | `/api/v1/data` | `active_power_w` | no | 1 s | supported; the API Gielz1986's package reads every second |
+| YouLess LS120 | `/e?f=j` | `pwr` | yes, `tm` | 250 ms (100–1000) | measured by the author |
+| Zendure P1 meter / Smart Meter 3CT | `/properties/report` | `total_power` | no | 1 s | P1 measured by the author; 3CT same API, unseen |
+| EcoTracker (everHome) | `/v1/json` | `power` | no | 1 s | experimental |
+| Shelly Pro 3EM | `/rpc/EM.GetStatus?id=0` | `total_act_power` | no | 1 s | experimental; the clamps must sit on the grid connection |
+
+Endpoints and fields follow each maker's documentation and the configurations the
+[Gielz1986 community](https://github.com/Gielz1986/Zendure-HA-zenSDK/wiki/Global-and-NL-%E2%80%90-P1-CT-meters-(API's))
+runs daily. HomeWizard needs *Local API* switched on in the HomeWizard Energy app, EcoTracker its
+local HTTP server switched on in its app.
+
+**Telegram time matters for the interval.** A reader that reports when each telegram arrived — the
+YouLess with `tm` — can be polled faster than the telegram without counting the same measurement
+twice; only a moved `tm` is a sample. A reader without it cannot tell a new telegram from the same
+one fetched again, so every poll is a reading and the integration holds it to one poll a second
+whatever the interval setting says. HomeWizard's API v2 does report the telegram time, and offers a
+websocket that pushes each new one; it needs a token and HTTPS and is planned for a later release.
+
+Not affiliated with HomeWizard, YouLess, everHome or Shelly; these are compatibility notes.
 
 ### Why
 
@@ -270,9 +312,9 @@ The **Meter source** select decides which meter feeds both loops:
 
 | Source | Behaviour |
 |---|---|
-| `zendure` | The Zendure P1 meter, as in every earlier version. **Default.** |
+| `zendure` | The Zendure P1 meter only, as in every version before 1.5.0. |
 | `external` | The external reader only. When it goes quiet the battery stops, exactly as with a silent Zendure meter. Use this for comparison runs, where a silent fallback would mix two meters in one block. |
-| `auto` | The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. |
+| `auto` | **Default since v1.5.1.** The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. Without an external reader configured this is exactly `zendure`. |
 
 The controller status carries `meter_source` (the setting) and `meter_active` (the meter in use
 at this moment). Both meters stay subscribed whatever the setting, and the choice is made per
@@ -288,15 +330,17 @@ non-numeric or beyond the connection's 17.25 kW stops the battery.
 A reader that does not answer is retried every 5 s after eight failed polls in a row, with one
 warning in the log; it does not keep four requests a second going to an address that is not
 there. A frozen `tm` counts as silence even when requests succeed — with the P1 cable pulled the
-YouLess was seen to keep `pwr` moving while `tm` stood still.
+YouLess was seen to keep answering while `tm` stood still, once for 52 days. Since v1.5.1 the
+first telegram after a start is not trusted either: a reader counts as live from the first `tm`
+that moves.
 
 ### Adding a reader
 
 Subclass `ExternalMeter` in `p1meter.py`, set `kind` and `path`, implement `parse()` returning
-the telegram stamp, net power in W with import positive, and any extra fields, and add it to
-`ADAPTERS` and `EXTERNAL_TYPES`. A reader without a telegram stamp of its own returns `None`;
-every successful poll then counts as a new reading, and it should be polled at the telegram rate
-rather than faster.
+the telegram stamp, net power in W with import positive, and any extra fields; add the class to
+`ADAPTERS` and a label to `EXTERNAL_TYPE_LABELS` in `const.py`. A reader without a telegram stamp
+of its own returns `None` and keeps the default `min_interval_ms` of 1000; one with a stamp may
+lower it.
 
 ---
 
@@ -533,7 +577,7 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | Group | Count | Entities |
 |---|---|---|
 | **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
-| **Per battery** | 11 | Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
+| **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
 | **Binary sensor** | 12 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
@@ -861,6 +905,23 @@ to average out the sampling offset between the AC and cell readings.
 
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.5.1 — Works with HomeWizard, more models, and one battery steering at a time
+
+No change to the control loop for a single battery.
+
+- **Works with HomeWizard.** New external meter types: HomeWizard P1 meter (local API v1), EcoTracker, Shelly Pro 3EM, and the Zendure P1 meter or Smart Meter 3CT read directly. A Zendure P1 meter is no longer needed for the smart modes. Readers without a telegram time are polled once a second.
+- **`Meter source` now defaults to `auto`.** Without an external meter configured that is exactly the old `zendure`, so existing installations are unchanged; with one configured it is used. Set `zendure` explicitly to keep the Zendure meter while an external one is configured. The meter type in the options form defaults to HomeWizard.
+- **Model names** for the SolarFlow 800 Pro 2, 4000 Mix AC+ and 4000 Mix Pro, under both spellings the 4000 AC+ is known by.
+- **Power entries run to 5,000 W** instead of 3,600, so the 4 kW and 5 kW Mix models are not cut off. The device's own ceiling still applies.
+- **The dashboard with charts**, `dashboard/zendure_charts.yaml`: the standard view plus live grid and battery power with both limits, energy per day over the last week, and today with the state of charge. Uses apexcharts-card from HACS. `dashboard/zendure.yaml` stays as it was, without charts.
+- **Battery pack model and capacity**, derived from the serial number and `packType`: one `Model` sensor per pack.
+- **Supported devices** documented per model with a confidence level, in [Device support](#device-support).
+- **New model report** issue template asking for the diagnostics download.
+- **An external meter counts as live only once its telegram time moves.** Found on the author's installation: a YouLess whose P1 cable had been out for 52 days kept answering with the same `tm` and a fixed −7 W. The freshness test already ignored it after the first telegram, but that first one was accepted, so for the first seconds after a restart a weeks-old reading could steer. Readers without a telegram time are unaffected.
+- **`external_w` in the trace is empty while the external meter has no current telegram**, by the same 5 s rule `auto` uses, instead of repeating the last value it ever saw.
+- `product` and `version` are no longer reported as unknown properties in the diagnostics; they are identity fields.
+- **A second battery in a smart mode now stands aside** with status `blocked`, instead of correcting the same deviation a second time. The first battery to enter a smart mode keeps steering until it leaves the smart modes.
 
 ### v1.5.0 — An external P1 meter as the grid reading
 
