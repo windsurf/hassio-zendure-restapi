@@ -54,7 +54,7 @@ COLUMNS = (
     "status",            # controller status
     "reason",            # why that status
     "grid_w",            # meter reading accepted for control, empty if rejected
-    "grid_raw_w",        # the same reading before the sanity and age checks
+    "grid_raw_w",        # Zendure meter total_power, before any check
     "battery_ac_w",      # outputHomePower - gridInputPower, positive discharging
     "pack_dc_w",         # sum of packN.power at the cells, positive discharging
     "pack_state",        # 1 charging, 2 discharging, as the packs report it
@@ -70,6 +70,8 @@ COLUMNS = (
     "pending_w",         # ordered and not yet seen back
     "trim_writes",       # cumulative, this controller
     "foreign_writes",    # cumulative, everything else that moved a limit
+    "meter_source",      # meter grid_w came from: zendure | external | none
+    "external_w",        # external meter power, raw; empty without one
 )
 
 
