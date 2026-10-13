@@ -13,7 +13,13 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DEFAULTS, OPERATION_MODES, OPT_OPERATION_MODE
+from .const import (
+    DEFAULTS,
+    METER_SOURCES,
+    OPERATION_MODES,
+    OPT_METER_SOURCE,
+    OPT_OPERATION_MODE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +45,8 @@ class ZendureSettings:
                 "Stored operation mode '%s' no longer exists, falling back to '%s'",
                 value, DEFAULTS[key],
             )
+            return DEFAULTS[key]
+        if key == OPT_METER_SOURCE and value not in METER_SOURCES:
             return DEFAULTS[key]
         return value
 
