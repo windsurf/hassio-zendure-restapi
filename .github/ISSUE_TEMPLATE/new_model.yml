@@ -1,0 +1,64 @@
+name: New model report
+description: Report how this integration behaves on a Zendure model or grid meter not yet marked as tested.
+title: "[Model] "
+labels: ["model report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A diagnostics download from a real device is what turns a model from
+        "experimental" into "supported". Serial numbers and IP addresses are redacted from it.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: As shown in the Zendure app, e.g. SolarFlow 4000 Mix AC+.
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Device page in Home Assistant, or the Zendure app.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      placeholder: "1.5.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: meter
+    attributes:
+      label: Grid meter
+      options:
+        - Zendure P1 meter
+        - Zendure Smart Meter 3CT
+        - HomeWizard P1 meter
+        - YouLess LS120
+        - EcoTracker
+        - Shelly Pro 3EM
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: pv
+    attributes:
+      label: Solar panels connected to the device's own PV inputs?
+      options:
+        - "No, the device is AC-coupled only"
+        - "Yes"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Device page → three dots → Download diagnostics. Drag the file in here.
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What works, and what does not
+      description: Entities missing or showing nonsense, how the smart modes behave. A trace file (Trace recording switch) from a smart mode is very welcome.
