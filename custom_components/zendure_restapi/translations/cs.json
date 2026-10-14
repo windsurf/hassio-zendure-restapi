@@ -6,7 +6,8 @@
         "description": "Co chcete přidat?",
         "menu_options": {
           "zendure": "Zařízení Zendure (baterie nebo elektroměr P1)",
-          "external_meter": "Externí elektroměr P1 (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Externí elektroměr P1 (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Senzor Home Assistant jako externí elektroměr (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "Nalezen elektroměr HomeWizard P1",
         "description": "Použít elektroměr HomeWizard P1 na adrese {host} (sériové číslo {serial}) jako síťový elektroměr baterie? Místní API musí být zapnuté v aplikaci HomeWizard Energy."
+      },
+      "ha_sensor": {
+        "title": "Senzor Home Assistant",
+        "description": "Senzor výkonu, který už v Home Assistant je, odběr kladný. Jsou-li odběr a dodávka samostatné senzory, oba kladné, zvolte i senzor dodávky. Senzor aktualizovaný méně než jednou za sekundu nemá mezi aktualizacemi nová data; Meter source auto pak použije elektroměr Zendure.",
+        "data": {
+          "source_entity": "Senzor výkonu (odběr kladný)",
+          "export_entity": "Senzor dodávky (volitelný, dodávka kladná)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Žádná odpověď. Zkontrolujte IP adresu a zda je místní API zapnuté.",
       "no_identity": "Zařízení odpovědělo, ale neuvedlo sériové číslo ani ID zařízení.",
       "wrong_meter_type": "Adresa odpovídá, ale ne jako tento typ elektroměru. Zkontrolujte typ elektroměru.",
-      "homewizard_api_off": "Elektroměr neodpovídá. Zapněte místní API v aplikaci HomeWizard Energy a zkuste to znovu."
+      "homewizard_api_off": "Elektroměr neodpovídá. Zapněte místní API v aplikaci HomeWizard Energy a zkuste to znovu.",
+      "not_a_power_sensor": "Tento senzor teď nemá hodnotu výkonu (jednotka W nebo kW, číselný stav).",
+      "same_entity": "Senzor dodávky musí být jiný než senzor výkonu."
     },
     "abort": {
       "already_configured": "Toto zařízení je již nastaveno.",
@@ -63,7 +74,18 @@
           "host": "IP adresa",
           "external_meter_interval_ms": "Milisekundy mezi dotazy (100-1000; pod 1000 jen pro YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Senzor Home Assistant",
+        "data": {
+          "source_entity": "Senzor výkonu (odběr kladný)",
+          "export_entity": "Senzor dodávky (volitelný, dodávka kladná)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Tento senzor teď nemá hodnotu výkonu (jednotka W nebo kW, číselný stav).",
+      "same_entity": "Senzor dodávky musí být jiný než senzor výkonu."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Stupeň 1",
           "gear_2": "Stupeň 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Žádný"
         }
       }
     },
