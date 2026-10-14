@@ -6,7 +6,8 @@
         "description": "O que pretende adicionar?",
         "menu_options": {
           "zendure": "Dispositivo Zendure (bateria ou contador P1)",
-          "external_meter": "Contador P1 externo (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Contador P1 externo (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Sensor do Home Assistant como contador externo (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "Contador HomeWizard P1 encontrado",
         "description": "Usar o contador HomeWizard P1 em {host} (número de série {serial}) como contador de rede da bateria? A API local tem de estar ativa na app HomeWizard Energy."
+      },
+      "ha_sensor": {
+        "title": "Sensor do Home Assistant",
+        "description": "Um sensor de potência que já está no Home Assistant, consumo positivo. Se consumo e injeção são sensores separados, ambos positivos, escolha também o sensor de injeção. Um sensor atualizado menos de uma vez por segundo não tem dados novos entre atualizações; Meter source auto usa então o contador Zendure.",
+        "data": {
+          "source_entity": "Sensor de potência (consumo positivo)",
+          "export_entity": "Sensor de injeção (opcional, injeção positiva)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Sem resposta. Verifique o endereço IP e se a API local está ativa.",
       "no_identity": "O dispositivo respondeu, mas não indicou número de série nem ID.",
       "wrong_meter_type": "O endereço responde, mas não como este tipo de contador. Verifique o tipo de contador.",
-      "homewizard_api_off": "O contador não responde. Ative a API local na app HomeWizard Energy e tente novamente."
+      "homewizard_api_off": "O contador não responde. Ative a API local na app HomeWizard Energy e tente novamente.",
+      "not_a_power_sensor": "Este sensor não tem agora um valor de potência (unidade W ou kW, estado numérico).",
+      "same_entity": "O sensor de injeção tem de ser diferente do sensor de potência."
     },
     "abort": {
       "already_configured": "Este dispositivo já está configurado.",
@@ -63,7 +74,18 @@
           "host": "Endereço IP",
           "external_meter_interval_ms": "Milissegundos entre consultas (100-1000; abaixo de 1000 apenas para YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Sensor do Home Assistant",
+        "data": {
+          "source_entity": "Sensor de potência (consumo positivo)",
+          "export_entity": "Sensor de injeção (opcional, injeção positiva)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Este sensor não tem agora um valor de potência (unidade W ou kW, estado numérico).",
+      "same_entity": "O sensor de injeção tem de ser diferente do sensor de potência."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Nível 1",
           "gear_2": "Nível 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Nenhum"
         }
       }
     },
