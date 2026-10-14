@@ -50,6 +50,7 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 | **Zendure Smart Meter 3CT** | 🧪 Same API as the Zendure P1 meter |
 | **EcoTracker** (everHome) | 🧪 Documented local API, one reading per second |
 | **Shelly Pro 3EM** (clamps on the grid connection) | 🧪 Documented local API, one reading per second |
+| **Any power sensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 New in v1.5.3 — for the dashboard and comparison; steers only if it updates every second |
 
 Set it up in one go: **Add integration → Zendure RestAPI → External P1 meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
 HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
@@ -116,7 +117,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [Debug logging and the sample trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
+**Latest release – v1.5.3:** several external meters side by side, with an *External meter* select on the battery to pick one; any power sensor in Home Assistant as external meter. **v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
 
 ## More
 
