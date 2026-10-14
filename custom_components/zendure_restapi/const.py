@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.5.2"
+INTEGRATION_VERSION = "1.5.3"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -13,13 +13,20 @@ CONF_PRODUCT = "product"
 CONF_DEVICE_TYPE = "device_type"
 CONF_SCAN_INTERVAL = "scan_interval"
 
-# An external P1 reader as a second grid meter, configured on the battery
-# entry. Polling starts only once an address has been saved under Configure;
-# the default address below pre-fills that form and does nothing on its own,
-# so an upgrade polls nothing until someone asks for it.
+# An external P1 reader is an entry of its own since v1.5.2. CONF_EXTERNAL_HOST
+# is the key v1.5.0 and v1.5.1 used in the battery options; it is read once,
+# by the migration, and nowhere else.
 CONF_EXTERNAL_TYPE = "external_meter_type"
 CONF_EXTERNAL_HOST = "external_meter_host"
 CONF_EXTERNAL_INTERVAL = "external_meter_interval_ms"
+# A Home Assistant sensor as external meter (v1.5.3): the power entity, and
+# optionally a second entity with export as a positive number, for
+# integrations such as DSMR that report import and export separately.
+CONF_SOURCE_ENTITY = "source_entity"
+CONF_EXPORT_ENTITY = "export_entity"
+# The device name chosen when the entry was created. Fixed per entry, so the
+# entity IDs derived from it do not move when a second meter is added.
+CONF_DEVICE_NAME = "device_name"
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 DEFAULT_PORT = 80
@@ -56,6 +63,10 @@ EXTERNAL_DEVICE_NAME = "External P1 meter"
 # themselves on the same service.
 ZEROCONF_HOMEWIZARD = "_hwenergy._tcp.local."
 HOMEWIZARD_P1_PRODUCT = "HWE-P1"
+
+# Sent whenever the set of external meters or a battery's choice changes, so
+# the External meter selects refresh their options.
+SIGNAL_EXTERNALS_CHANGED = "zendure_restapi_externals_changed"
 
 # Status of an external meter, also a sensor.
 EXTERNAL_STATUS_LIVE = "live"
@@ -98,6 +109,17 @@ EXTERNAL_TYPE_LABELS = {
 }
 EXTERNAL_TYPES = tuple(EXTERNAL_TYPE_LABELS)
 DEFAULT_EXTERNAL_TYPE = EXTERNAL_TYPE_HOMEWIZARD_V1
+
+# Any power sensor already in Home Assistant. Not on the reader form: it has
+# no address, and is added through its own menu entry.
+EXTERNAL_TYPE_HA_SENSOR = "ha_sensor"
+EXTERNAL_KIND_LABELS = {
+    **EXTERNAL_TYPE_LABELS,
+    EXTERNAL_TYPE_HA_SENSOR: "Home Assistant sensor",
+}
+# A state is read from memory, not over the network, so it can be looked at
+# often; only a new last_reported counts as a reading.
+HA_SENSOR_INTERVAL = 250        # ms
 
 # A request normally takes tens of milliseconds, so the timeout is far below
 # the Zendure one: a poll that hangs for seconds holds up every one behind it.
@@ -189,6 +211,10 @@ OPT_DISCHARGE_BUFFER = "discharge_buffer"
 OPT_SOC_PROTECTION = "soc_protection"
 OPT_TRIM_FACTOR = "trim_factor"
 OPT_METER_SOURCE = "meter_source"
+# The entry_id of the external meter a battery uses, or EXTERNAL_NONE.
+# Unset with one external meter configured means that one.
+OPT_EXTERNAL_METER = "external_meter"
+EXTERNAL_NONE = "none"
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -224,6 +250,7 @@ DEFAULTS = {
     OPT_SOC_PROTECTION: True,
     OPT_TRIM_FACTOR: 80,                # % of the remaining error per sample
     OPT_METER_SOURCE: METER_SOURCE_AUTO,
+    OPT_EXTERNAL_METER: "",
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────
