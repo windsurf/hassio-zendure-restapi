@@ -66,7 +66,9 @@ from .const import (
     EXTERNAL_BACKOFF_AFTER,
     EXTERNAL_BACKOFF_SECONDS,
     EXTERNAL_TIMEOUT,
+    EXTERNAL_KIND_LABELS,
     EXTERNAL_TYPE_ECOTRACKER,
+    EXTERNAL_TYPE_HA_SENSOR,
     EXTERNAL_TYPE_HOMEWIZARD_V1,
     EXTERNAL_TYPE_SHELLY_PRO_3EM,
     EXTERNAL_TYPE_YOULESS,
@@ -154,19 +156,31 @@ class ExternalMeter:
             return None
         return round((dt_util.utcnow() - self.updated_at).total_seconds(), 1)
 
+    async def _async_fetch(self) -> Any:
+        """One request to the reader; the payload for parse()."""
+        async with asyncio.timeout(EXTERNAL_TIMEOUT):
+            async with self._session.get(self._url) as response:
+                if response.status != 200:
+                    raise ValueError(f"HTTP {response.status}")
+                return await response.json(content_type=None)
+
     async def async_probe(self) -> dict[str, Any]:
         """One request, for the config flow: the parsed reading or an error.
 
         Raises ValueError, TimeoutError or aiohttp.ClientError when the
         address does not answer as this reader type does.
         """
-        async with asyncio.timeout(EXTERNAL_TIMEOUT):
-            async with self._session.get(self._url) as response:
-                if response.status != 200:
-                    raise ValueError(f"HTTP {response.status}")
-                payload = await response.json(content_type=None)
-        stamp, power, extra = self.parse(payload)
+        stamp, power, extra = self.parse(await self._async_fetch())
         return {"stamp": stamp, "power": power, **extra}
+
+    @property
+    def label(self) -> str:
+        """How the External meter select names this meter."""
+        return f"{EXTERNAL_KIND_LABELS.get(self.kind, self.kind)} ({self.host})"
+
+    @property
+    def configuration_url(self) -> str | None:
+        return f"http://{self.host}"
 
     # ── Listeners ────────────────────────────────────────────────────────
 
@@ -226,12 +240,7 @@ class ExternalMeter:
     async def _async_poll(self) -> None:
         self.polls += 1
         try:
-            async with asyncio.timeout(EXTERNAL_TIMEOUT):
-                async with self._session.get(self._url) as response:
-                    if response.status != 200:
-                        raise ValueError(f"HTTP {response.status}")
-                    payload = await response.json(content_type=None)
-            stamp, power, extra = self.parse(payload)
+            stamp, power, extra = self.parse(await self._async_fetch())
         except asyncio.CancelledError:
             raise
         except (aiohttp.ClientError, TimeoutError, ValueError, TypeError,
@@ -445,6 +454,82 @@ class ZendureMeterExternal(ExternalMeter):
         return None, _number(payload, "total_power"), {}
 
 
+_POWER_SCALE = {"W": 1.0, "kW": 1000.0, "MW": 1_000_000.0}
+
+
+def state_power(state: Any) -> float:
+    """Power in W from a Home Assistant state, or ValueError.
+
+    Accepts W, kW and MW; anything else — no unit, an energy unit, a state
+    that is unknown or unavailable — is not a power reading.
+    """
+    if state is None:
+        raise ValueError("entity not found")
+    unit = state.attributes.get("unit_of_measurement")
+    if unit not in _POWER_SCALE:
+        raise ValueError(f"unit {unit!r} is not a power unit")
+    try:
+        return float(state.state) * _POWER_SCALE[unit]
+    except (TypeError, ValueError) as err:
+        raise ValueError(f"state {state.state!r} is not a number") from err
+
+
+class HaSensorMeter(ExternalMeter):
+    """A power sensor already in Home Assistant, read as an external meter.
+
+    For meters this integration has no adapter for: a Zonneplan Connect, a DSMR
+    reader, the YouLess integration that ships with Home Assistant. Whether the
+    result can steer depends on how often that sensor is updated, not on this
+    adapter. A sensor refreshed every ten seconds, let alone every five minutes
+    as the Zonneplan cloud does, reads as `stale` between updates, and `auto`
+    then uses the Zendure meter. It is still worth having on the dashboard.
+
+    The telegram stamp is the sensor's `last_reported`: it moves on every
+    report, also when the value is unchanged, so a steady reading is not
+    mistaken for a frozen one. Import is positive. Where import and export are
+    separate sensors, both positive, the export sensor is subtracted.
+    """
+
+    manufacturer = "Home Assistant"
+    kind = EXTERNAL_TYPE_HA_SENSOR
+    path = ""
+    # The state is read from memory and carries its own stamp.
+    min_interval_ms = 100
+
+    def __init__(self, hass, session, host, interval_ms) -> None:
+        super().__init__(hass, session, host, interval_ms)
+        self.export_entity: str | None = None
+
+    async def _async_fetch(self) -> Any:
+        states = [self.hass.states.get(self.host)]
+        if self.export_entity:
+            states.append(self.hass.states.get(self.export_entity))
+        return states
+
+    def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
+        power = state_power(payload[0])
+        stamp = [_reported(payload[0])]
+        extra: dict[str, Any] = {"import_w": power}
+        if len(payload) > 1:
+            export = state_power(payload[1])
+            stamp.append(_reported(payload[1]))
+            extra["export_w"] = export
+            power -= export
+        return tuple(stamp), round(power, 1), extra
+
+    @property
+    def label(self) -> str:
+        return f"{EXTERNAL_KIND_LABELS[self.kind]} ({self.host})"
+
+    @property
+    def configuration_url(self) -> str | None:
+        return None
+
+
+def _reported(state: Any) -> Any:
+    return getattr(state, "last_reported", None) or state.last_updated
+
+
 ADAPTERS: dict[str, type[ExternalMeter]] = {
     adapter.kind: adapter
     for adapter in (
@@ -453,5 +538,6 @@ ADAPTERS: dict[str, type[ExternalMeter]] = {
         EcoTrackerMeter,
         ShellyPro3EMMeter,
         ZendureMeterExternal,
+        HaSensorMeter,
     )
 }
