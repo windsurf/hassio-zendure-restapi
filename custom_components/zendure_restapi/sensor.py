@@ -40,7 +40,8 @@ from .const import (
     EXTERNAL_STATUS_LIVE,
     EXTERNAL_STATUS_STALE,
     EXTERNAL_STATUS_UNREACHABLE,
-    EXTERNAL_TYPE_LABELS,
+    EXTERNAL_KIND_LABELS,
+    CONF_DEVICE_NAME,
     PACK_PREFIX,
 )
 from .p1meter import ExternalMeter
@@ -956,10 +957,11 @@ class ExternalMeterSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"external_{entry.entry_id}")},
-            name=EXTERNAL_DEVICE_NAME,
+            # Entries from v1.5.2 have no stored name; they were the only one.
+            name=entry.data.get(CONF_DEVICE_NAME, EXTERNAL_DEVICE_NAME),
             manufacturer=meter.manufacturer,
-            model=EXTERNAL_TYPE_LABELS.get(meter.kind, meter.kind),
-            configuration_url=f"http://{meter.host}",
+            model=EXTERNAL_KIND_LABELS.get(meter.kind, meter.kind),
+            configuration_url=meter.configuration_url,
         )
 
     async def async_added_to_hass(self) -> None:
