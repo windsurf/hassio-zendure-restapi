@@ -245,10 +245,21 @@ fields, units and sign conventions would remove a class of integration errors en
 
 ## Dashboard
 
-`dashboard/zendure.yaml` is the view in the screenshot above: sections covering operation,
-controller settings, power flow, energy, the P1 meter, per-battery detail, diagnostics and device
-configuration. An **External P1 Meter** section — power, status, telegram age and, for HomeWizard
-and YouLess, the energy registers — shows only when an external meter is configured.
+`dashboard/zendure.yaml` is one view in thirteen sections, built from standard Home Assistant
+cards only:
+
+| Section | Content |
+|---|---|
+| Zendure Home Battery | state of charge, battery power, state, SOC limit, remaining time, error |
+| Operation mode | what the controller does and why, the mode select, controller status, trace recording, trim strength, direction change delay |
+| Overview | gauges for grid, state of charge, AC input and output, both limits, and the conversion efficiencies once measured |
+| Device control | converter mode, SOC limits and protection, charge and discharge limit, Meter source, manual power |
+| Controller settings | the ten controller settings |
+| Power flow, Energy, Configuration, Battery 1, System status, Diagnostics, Zendure P1 Meter | readings and device settings |
+| External P1 Meter | power, status, telegram age, the External meter select and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
+
+The power gauges run to 3000 W, the AC limit of the 3000 Mix AC+; for another model change
+`max:` to its limit, as the comment at the top of the file explains.
 
 Paste the view under `views:` in a dashboard in YAML mode, or open **Edit dashboard →
 three-dot menu → Raw configuration editor** and add it there.
@@ -295,8 +306,41 @@ The entry is a device named **External P1 meter**, whatever the reader, with the
 | Telegram age | `sensor.external_p1_meter_telegram_age` | seconds since the last new telegram; diagnostic |
 | Energy imported / exported | `sensor.external_p1_meter_energy_imported` / `_exported` | kWh, HomeWizard and YouLess only; usable in the Energy dashboard |
 
-Every battery is linked to the external meter when exactly one is configured, as with the Zendure
-meter; with two, neither is used and the log says so.
+### Several external meters
+
+Since v1.5.3 any number of external meters can be added — a YouLess, a HomeWizard and a Home
+Assistant sensor side by side on one splitter, say. Each battery has an **External meter** select,
+next to **Meter source**, listing them by type and address plus `none`:
+
+| Situation | Meter used |
+|---|---|
+| One external meter, nothing chosen | that one, as in v1.5.2 |
+| Several, nothing chosen | none, with a warning in the log, until one is chosen |
+| One chosen | that one; `Meter source` still decides between it and the Zendure meter |
+| `none` chosen | none: `auto` uses the Zendure meter, `external` stops the battery |
+| The chosen meter is removed | as if nothing was chosen |
+
+The select shows the meter the battery is actually linked to, so a choice that cannot be honoured
+reads `none` rather than a wish. Switching takes effect on the next sample, without a restart.
+
+The first external meter keeps the device name **External P1 meter** and its entity IDs
+`sensor.external_p1_meter_*`. Later ones carry their type in the name — *External P1 meter (YouLess
+LS120)*, entity IDs `sensor.external_p1_meter_youless_ls120_*` — so the dashboards keep showing the
+first one and the others are easy to add.
+
+### A Home Assistant sensor as external meter
+
+**Add integration → Zendure RestAPI → Home Assistant sensor as external meter** turns any power
+sensor already in Home Assistant into an external meter: a Zonneplan Connect, a DSMR reader, the
+YouLess integration that ships with Home Assistant. Import is positive. Where import and export are
+separate sensors, both positive, choose the export sensor too and it is subtracted. W, kW and MW are
+accepted.
+
+Whether such a meter can steer depends on how often its sensor is updated, not on this integration.
+A reading counts as new when the sensor's `last_reported` moves — also when the value is unchanged —
+and a reading older than 5 s is `stale`. A sensor refreshed every ten seconds is therefore stale most
+of the time and `auto` uses the Zendure meter in between; the Zonneplan Connect, which reaches Home
+Assistant through the Zonneplan cloud about once every five minutes, is for the dashboard only. A sensor that turns `unavailable` reads as `unreachable` after two seconds.
 
 **Upgrading from v1.5.0 or v1.5.1**, where the reader was configured on the battery under
 **Configure**: on the first start of v1.5.2 it moves into an entry of its own, with the same type,
@@ -610,9 +654,9 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 18 | Operation mode, Meter source, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
-| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported |
+| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
@@ -932,6 +976,25 @@ to average out the sampling offset between the AC and cell readings.
 
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.5.3 — Several external meters, and any Home Assistant sensor as one
+
+No change to the control loop: `controller.py` is the v1.5.2 one, and the replay of nine runs gives
+identical writes.
+
+- **Several external meters.** Each battery gets an **External meter** select that picks which one
+  it uses. With one external meter nothing changes; with several and none chosen, none is used until
+  one is. See [Several external meters](#several-external-meters).
+- **A Home Assistant sensor as external meter**, for meters without an adapter here: Zonneplan,
+  DSMR, the Home Assistant YouLess integration. Optional separate export sensor. See
+  [A Home Assistant sensor as external meter](#a-home-assistant-sensor-as-external-meter).
+- **Device names stay apart.** The first external meter is *External P1 meter*, later ones carry
+  their type, so their entity IDs do not collide.
+- **Dashboard rebuilt** after the author's own: a header row with the battery's state, an
+  Operation mode section that says what the controller does and why, gauges for grid, state of
+  charge, power and limits, and device control apart from the controller settings. The External
+  meter select sits in the External P1 Meter section.
+- Translations for the new screens and the select, in all eleven languages.
 
 ### v1.5.2 — The external meter as a device of its own, and eleven languages
 
