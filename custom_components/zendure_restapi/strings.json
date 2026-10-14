@@ -6,7 +6,8 @@
         "description": "What would you like to add?",
         "menu_options": {
           "zendure": "Zendure device (battery or P1 meter)",
-          "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "HomeWizard P1 meter found",
         "description": "Use the HomeWizard P1 meter at {host} (serial {serial}) as grid meter for the battery? Local API must be switched on in the HomeWizard Energy app."
+      },
+      "ha_sensor": {
+        "title": "Home Assistant sensor",
+        "description": "A power sensor already in Home Assistant, import positive. With separate import and export sensors, both positive, also choose the export sensor. A sensor that updates less than once a second shows as stale between updates; Meter source auto then uses the Zendure meter.",
+        "data": {
+          "source_entity": "Power sensor (import positive)",
+          "export_entity": "Export sensor (optional, export positive)"
+        }
       }
     },
     "error": {
       "cannot_connect": "No response. Check the IP address and that the local API is enabled.",
       "no_identity": "The device answered but reported neither a serial number nor a device id.",
       "wrong_meter_type": "The address answers, but not as this meter type. Check the meter type.",
-      "homewizard_api_off": "The meter does not answer. Switch on Local API in the HomeWizard Energy app and try again."
+      "homewizard_api_off": "The meter does not answer. Switch on Local API in the HomeWizard Energy app and try again.",
+      "not_a_power_sensor": "This sensor has no power reading right now (unit W or kW, numeric state).",
+      "same_entity": "The export sensor must differ from the power sensor."
     },
     "abort": {
       "already_configured": "This device is already configured.",
@@ -63,7 +74,18 @@
           "host": "IP address",
           "external_meter_interval_ms": "Milliseconds between polls (100-1000; below 1000 only for YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Home Assistant sensor",
+        "data": {
+          "source_entity": "Power sensor (import positive)",
+          "export_entity": "Export sensor (optional, export positive)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "This sensor has no power reading right now (unit W or kW, numeric state).",
+      "same_entity": "The export sensor must differ from the power sensor."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Gear 1",
           "gear_2": "Gear 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "None"
         }
       }
     },
