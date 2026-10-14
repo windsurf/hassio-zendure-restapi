@@ -8,14 +8,18 @@ from dataclasses import dataclass, field
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
 from .const import (
     CONF_MODEL,
     DOMAIN,
+    EXTERNAL_NONE,
     METER_SOURCES,
+    OPT_EXTERNAL_METER,
+    SIGNAL_EXTERNALS_CHANGED,
     OPERATION_MODES,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
@@ -126,6 +130,12 @@ async def async_setup_entry(
                 runtime["settings"],
             )
         )
+        entities.append(
+            ZendureExternalMeterSelect(
+                coordinator, EXTERNAL_METER_DESCRIPTION, device_id, model,
+                runtime["settings"], runtime["controller"],
+            )
+        )
 
     async_add_entities(entities)
 
@@ -227,4 +237,68 @@ class ZendureMeterSource(ZendureOperationMode):
             _LOGGER.error("Unknown meter source %s", option)
             return
         self._settings.set(OPT_METER_SOURCE, option)
+        self.async_write_ha_state()
+
+
+EXTERNAL_METER_DESCRIPTION = SelectEntityDescription(
+    key="external_meter",
+    translation_key="external_meter",
+    name="External meter",
+    options=[EXTERNAL_NONE],
+    icon="mdi:meter-electric",
+    entity_category=EntityCategory.CONFIG,
+)
+
+
+class ZendureExternalMeterSelect(ZendureOperationMode):
+    """Which external meter this battery uses, when there are several.
+
+    The options are the external meter entries that are set up, named by type
+    and address, plus `none`. The current option is the meter the controller
+    is actually linked to, so a choice that cannot be honoured — the meter was
+    removed, or several exist and none was chosen — shows as `none` rather
+    than as a wish. With exactly one external meter and no choice made, that
+    one is used, as in v1.5.2.
+    """
+
+    def __init__(self, coordinator, description, device_id, model, settings, controller) -> None:
+        super().__init__(coordinator, description, device_id, model, settings)
+        self._controller = controller
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _changed() -> None:
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_EXTERNALS_CHANGED, _changed)
+        )
+
+    def _externals(self) -> list:
+        from . import external_meters  # the package imports this module
+        return external_meters(self.hass)
+
+    @property
+    def options(self) -> list[str]:
+        return [m.label for m in self._externals()] + [EXTERNAL_NONE]
+
+    @property
+    def current_option(self) -> str | None:
+        meter = getattr(self._controller, "external", None)
+        return meter.label if meter is not None else EXTERNAL_NONE
+
+    async def async_select_option(self, option: str) -> None:
+        if option == EXTERNAL_NONE:
+            choice = EXTERNAL_NONE
+        else:
+            match = [m for m in self._externals() if m.label == option]
+            if not match:
+                _LOGGER.error("Unknown external meter %s", option)
+                return
+            choice = match[0].entry_id
+        self._settings.set(OPT_EXTERNAL_METER, choice)
+        from . import _link_meters
+        _link_meters(self.hass)
         self.async_write_ha_state()
