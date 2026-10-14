@@ -6,7 +6,8 @@
         "description": "Wat wil je toevoegen?",
         "menu_options": {
           "zendure": "Zendure-apparaat (accu of P1-meter)",
-          "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "HomeWizard P1-meter gevonden",
         "description": "De HomeWizard P1-meter op {host} (serienummer {serial}) als netmeter voor de accu gebruiken? Lokale API moet aan staan in de HomeWizard Energy-app."
+      },
+      "ha_sensor": {
+        "title": "Home Assistant-sensor",
+        "description": "Een vermogenssensor die al in Home Assistant staat, afname positief. Zijn afname en teruglevering aparte sensoren, beide positief, kies dan ook de terugleversensor. Een sensor die minder dan eens per seconde ververst, staat tussen twee updates op geen nieuwe gegevens; Meter source auto gebruikt dan de Zendure-meter.",
+        "data": {
+          "source_entity": "Vermogenssensor (afname positief)",
+          "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Geen antwoord. Controleer het IP-adres en of de lokale API aan staat.",
       "no_identity": "Het apparaat antwoordde, maar meldde geen serienummer en geen apparaat-id.",
       "wrong_meter_type": "Het adres antwoordt, maar niet als dit metertype. Controleer het metertype.",
-      "homewizard_api_off": "De meter antwoordt niet. Zet Lokale API aan in de HomeWizard Energy-app en probeer opnieuw."
+      "homewizard_api_off": "De meter antwoordt niet. Zet Lokale API aan in de HomeWizard Energy-app en probeer opnieuw.",
+      "not_a_power_sensor": "Deze sensor heeft nu geen vermogenswaarde (eenheid W of kW, numerieke waarde).",
+      "same_entity": "De terugleversensor moet een andere zijn dan de vermogenssensor."
     },
     "abort": {
       "already_configured": "Dit apparaat is al geconfigureerd.",
@@ -63,7 +74,18 @@
           "host": "IP-adres",
           "external_meter_interval_ms": "Milliseconden tussen bevragingen (100-1000; onder 1000 alleen voor YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Home Assistant-sensor",
+        "data": {
+          "source_entity": "Vermogenssensor (afname positief)",
+          "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Deze sensor heeft nu geen vermogenswaarde (eenheid W of kW, numerieke waarde).",
+      "same_entity": "De terugleversensor moet een andere zijn dan de vermogenssensor."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Stand 1",
           "gear_2": "Stand 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Geen"
         }
       }
     },
