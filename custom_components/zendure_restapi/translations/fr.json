@@ -6,7 +6,8 @@
         "description": "Que voulez-vous ajouter ?",
         "menu_options": {
           "zendure": "Appareil Zendure (batterie ou compteur P1)",
-          "external_meter": "Compteur P1 externe (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Compteur P1 externe (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "Compteur HomeWizard P1 trouvé",
         "description": "Utiliser le compteur HomeWizard P1 à l'adresse {host} (numéro de série {serial}) comme compteur réseau de la batterie ? L'API locale doit être activée dans l'application HomeWizard Energy."
+      },
+      "ha_sensor": {
+        "title": "Capteur Home Assistant",
+        "description": "Un capteur de puissance déjà présent dans Home Assistant, soutirage positif. Si soutirage et injection sont des capteurs séparés, tous deux positifs, choisissez aussi le capteur d'injection. Un capteur mis à jour moins d'une fois par seconde n'a pas de nouvelles données entre deux mises à jour ; Meter source auto utilise alors le compteur Zendure.",
+        "data": {
+          "source_entity": "Capteur de puissance (soutirage positif)",
+          "export_entity": "Capteur d'injection (facultatif, injection positive)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Aucune réponse. Vérifiez l'adresse IP et que l'API locale est activée.",
       "no_identity": "L'appareil a répondu mais n'a indiqué ni numéro de série ni identifiant.",
       "wrong_meter_type": "L'adresse répond, mais pas comme ce type de compteur. Vérifiez le type de compteur.",
-      "homewizard_api_off": "Le compteur ne répond pas. Activez l'API locale dans l'application HomeWizard Energy et réessayez."
+      "homewizard_api_off": "Le compteur ne répond pas. Activez l'API locale dans l'application HomeWizard Energy et réessayez.",
+      "not_a_power_sensor": "Ce capteur n'a pas de valeur de puissance pour l'instant (unité W ou kW, état numérique).",
+      "same_entity": "Le capteur d'injection doit différer du capteur de puissance."
     },
     "abort": {
       "already_configured": "Cet appareil est déjà configuré.",
@@ -63,7 +74,18 @@
           "host": "Adresse IP",
           "external_meter_interval_ms": "Millisecondes entre les interrogations (100-1000 ; sous 1000 uniquement pour YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Capteur Home Assistant",
+        "data": {
+          "source_entity": "Capteur de puissance (soutirage positif)",
+          "export_entity": "Capteur d'injection (facultatif, injection positive)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Ce capteur n'a pas de valeur de puissance pour l'instant (unité W ou kW, état numérique).",
+      "same_entity": "Le capteur d'injection doit différer du capteur de puissance."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Niveau 1",
           "gear_2": "Niveau 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Aucun"
         }
       }
     },
