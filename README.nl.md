@@ -50,6 +50,7 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Zendure Smart Meter 3CT** | 🧪 Zelfde API als de Zendure P1-meter |
 | **EcoTracker** (everHome) | 🧪 Gedocumenteerde lokale API, één meting per seconde |
 | **Shelly Pro 3EM** (klemmen op de netaansluiting) | 🧪 Gedocumenteerde lokale API, één meting per seconde |
+| **Elke vermogenssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Nieuw in v1.5.3 — voor dashboard en vergelijking; regelt alleen als hij elke seconde ververst |
 
 In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
 HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
@@ -118,7 +119,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [Debug logging en de voorbeeldtrace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
+**Laatste release – v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
 
 ## Meer
 
