@@ -6,7 +6,8 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "zendure": "Zendure-Gerät (Batterie oder P1-Zähler)",
-          "external_meter": "Externer P1-Zähler (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Externer P1-Zähler (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Home-Assistant-Sensor als externer Zähler (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "HomeWizard-P1-Zähler gefunden",
         "description": "Den HomeWizard-P1-Zähler unter {host} (Seriennummer {serial}) als Netzzähler für die Batterie verwenden? Lokale API muss in der HomeWizard-Energy-App aktiv sein."
+      },
+      "ha_sensor": {
+        "title": "Home-Assistant-Sensor",
+        "description": "Ein Leistungssensor, der bereits in Home Assistant ist, Bezug positiv. Sind Bezug und Einspeisung getrennte Sensoren, beide positiv, wähle auch den Einspeisesensor. Ein Sensor, der seltener als einmal pro Sekunde aktualisiert, zeigt zwischen Updates keine neuen Daten; Meter source auto nutzt dann den Zendure-Zähler.",
+        "data": {
+          "source_entity": "Leistungssensor (Bezug positiv)",
+          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Keine Antwort. Prüfe die IP-Adresse und ob die lokale API aktiv ist.",
       "no_identity": "Das Gerät antwortete, meldete aber weder Seriennummer noch Geräte-ID.",
       "wrong_meter_type": "Die Adresse antwortet, aber nicht wie dieser Zählertyp. Prüfe den Zählertyp.",
-      "homewizard_api_off": "Der Zähler antwortet nicht. Aktiviere Lokale API in der HomeWizard-Energy-App und versuche es erneut."
+      "homewizard_api_off": "Der Zähler antwortet nicht. Aktiviere Lokale API in der HomeWizard-Energy-App und versuche es erneut.",
+      "not_a_power_sensor": "Dieser Sensor hat gerade keinen Leistungswert (Einheit W oder kW, numerischer Zustand).",
+      "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
@@ -63,7 +74,18 @@
           "host": "IP-Adresse",
           "external_meter_interval_ms": "Millisekunden zwischen Abfragen (100-1000; unter 1000 nur für YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Home-Assistant-Sensor",
+        "data": {
+          "source_entity": "Leistungssensor (Bezug positiv)",
+          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Dieser Sensor hat gerade keinen Leistungswert (Einheit W oder kW, numerischer Zustand).",
+      "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Stufe 1",
           "gear_2": "Stufe 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Keiner"
         }
       }
     },
