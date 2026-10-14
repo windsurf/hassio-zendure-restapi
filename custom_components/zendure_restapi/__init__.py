@@ -25,6 +25,10 @@ the battery decides which of the two feeds the loops. See p1meter.py for why a
 second meter is worth having. In v1.5.0 and v1.5.1 the external meter lived in
 the battery entry's options; those are moved into an entry of its own on the
 first start.
+
+Since v1.5.3 there may be several external meters — a YouLess, a HomeWizard
+and a Home Assistant sensor side by side on one splitter, say — and each
+battery's `External meter` select says which of them it uses.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
@@ -54,7 +59,14 @@ from .const import (
     DEVICE_TYPE_EXTERNAL,
     DEVICE_TYPE_METER,
     DOMAIN,
+    EXTERNAL_NONE,
+    EXTERNAL_TYPE_HA_SENSOR,
+    HA_SENSOR_INTERVAL,
     INTEGRATION_VERSION,
+    OPT_EXTERNAL_METER,
+    SIGNAL_EXTERNALS_CHANGED,
+    CONF_EXPORT_ENTITY,
+    CONF_SOURCE_ENTITY,
 )
 from .controller import ZendureController
 from .coordinator import ZendureCoordinator
@@ -130,12 +142,17 @@ async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool
     if kind not in ADAPTERS:
         _LOGGER.error("Unknown external meter type '%s'", kind)
         return False
-    interval = _as_int(
-        entry.options.get(CONF_EXTERNAL_INTERVAL), DEFAULT_EXTERNAL_INTERVAL
-    )
-    meter = ADAPTERS[kind](
-        hass, async_get_clientsession(hass), entry.data[CONF_HOST], interval
-    )
+    session = async_get_clientsession(hass)
+    if kind == EXTERNAL_TYPE_HA_SENSOR:
+        meter = ADAPTERS[kind](
+            hass, session, entry.data[CONF_SOURCE_ENTITY], HA_SENSOR_INTERVAL
+        )
+        meter.export_entity = entry.data.get(CONF_EXPORT_ENTITY) or None
+    else:
+        interval = _as_int(
+            entry.options.get(CONF_EXTERNAL_INTERVAL), DEFAULT_EXTERNAL_INTERVAL
+        )
+        meter = ADAPTERS[kind](hass, session, entry.data[CONF_HOST], interval)
     meter.entry_id = entry.entry_id
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = meter
     meter.async_start()
@@ -198,14 +215,37 @@ def _migrate_external_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.config_entries.async_update_entry(entry, options=options)
 
 
+def external_meters(hass: HomeAssistant) -> list[ExternalMeter]:
+    """The external meters set up, in the order they came up."""
+    return [m for m in hass.data.get(DOMAIN, {}).values() if isinstance(m, ExternalMeter)]
+
+
+def chosen_external(
+    externals: list[ExternalMeter], choice: str
+) -> ExternalMeter | None:
+    """The external meter a battery uses, given its External meter setting.
+
+    `none` uses none. An entry_id uses that meter while it is set up. Unset —
+    or set to a meter that has since been removed — uses the only external
+    meter if there is exactly one; with several there is no telling which one
+    measures the grid connection, so none is used until one is chosen.
+    """
+    if choice == EXTERNAL_NONE:
+        return None
+    for meter in externals:
+        if meter.entry_id == choice:
+            return meter
+    return externals[0] if len(externals) == 1 else None
+
+
 @callback
 def _link_meters(hass: HomeAssistant) -> None:
-    """Point every controller at the Zendure meter and the external meter.
+    """Point every controller at the Zendure meter and its external meter.
 
     Linking happens on each setup and unload because the order in which the
     entries come up is not fixed: whichever comes last completes the pairing.
-    Each kind is linked only when exactly one is configured; with two of the
-    same kind there is no telling which one measures the grid connection.
+    The Zendure meter is linked only when exactly one is configured. The
+    external meter follows each battery's External meter select.
     """
     store = hass.data.get(DOMAIN, {})
     meters = [
@@ -214,25 +254,32 @@ def _link_meters(hass: HomeAssistant) -> None:
         and isinstance(c, ZendureCoordinator)
         and c.device_type == DEVICE_TYPE_METER
     ]
-    externals = [c for c in store.values() if isinstance(c, ExternalMeter)]
+    externals = external_meters(hass)
     meter = meters[0] if len(meters) == 1 else None
-    external = externals[0] if len(externals) == 1 else None
 
     if len(meters) > 1:
         _LOGGER.warning(
             "%d Zendure meters configured. Automatic linking needs exactly one.",
             len(meters),
         )
-    if len(externals) > 1:
-        _LOGGER.warning(
-            "%d external meters configured. Automatic linking needs exactly one; "
-            "none is used.", len(externals),
-        )
 
     for key, runtime in store.items():
-        if key.endswith(RUNTIME_SUFFIX):
-            runtime["controller"].attach_meter(meter)
-            runtime["controller"].attach_external(external)
+        if not key.endswith(RUNTIME_SUFFIX):
+            continue
+        choice = str(runtime["settings"].get(OPT_EXTERNAL_METER) or "")
+        external = chosen_external(externals, choice)
+        if external is None and len(externals) > 1 and choice != EXTERNAL_NONE:
+            _LOGGER.warning(
+                "%d external meters configured and none chosen on %s; "
+                "set its External meter select", len(externals), key[: -len(RUNTIME_SUFFIX)],
+            )
+        controller = runtime["controller"]
+        controller.attach_meter(meter)
+        # Relinking the same meter would only reset the trim loop's state.
+        if getattr(controller, "external", None) is not external:
+            controller.attach_external(external)
+
+    async_dispatcher_send(hass, SIGNAL_EXTERNALS_CHANGED)
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
