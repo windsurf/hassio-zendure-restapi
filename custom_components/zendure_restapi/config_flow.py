@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -16,7 +17,12 @@ import aiohttp
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
+    CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
+    CONF_EXPORT_ENTITY,
+    CONF_SOURCE_ENTITY,
+    EXTERNAL_KIND_LABELS,
+    EXTERNAL_TYPE_HA_SENSOR,
     CONF_EXTERNAL_INTERVAL,
     CONF_EXTERNAL_TYPE,
     CONF_HOST,
@@ -44,7 +50,7 @@ from .const import (
     MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
-from .p1meter import ADAPTERS
+from .p1meter import ADAPTERS, state_power
 from .registry import is_known_model, meter_name, model_name, parse_service_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -114,7 +120,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Choose what to add: a Zendure device or an external P1 meter."""
         return self.async_show_menu(
-            step_id="user", menu_options=["zendure", "external_meter"]
+            step_id="user", menu_options=["zendure", "external_meter", "ha_sensor"]
         )
 
     async def async_step_zendure(
@@ -169,15 +175,34 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "wrong_meter_type"
         return None
 
-    def _external_entry(self, kind: str, host: str, interval: int) -> ConfigFlowResult:
+    def _device_name(self, kind: str) -> str:
+        """The first external meter is `External P1 meter`, as in v1.5.2, so
+        its entity IDs are sensor.external_p1_meter_*. Later ones carry their
+        type in the name, which keeps their IDs apart and recognisable."""
+        others = [
+            e for e in self._async_current_entries(include_ignore=False)
+            if e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
+        ]
+        if not others:
+            return EXTERNAL_DEVICE_NAME
+        return f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_KIND_LABELS.get(kind, kind)})"
+
+    def _external_entry(
+        self, kind: str, host: str | None, interval: int | None,
+        extra: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        data = {
+            CONF_DEVICE_TYPE: DEVICE_TYPE_EXTERNAL,
+            CONF_EXTERNAL_TYPE: kind,
+            CONF_DEVICE_NAME: self._device_name(kind),
+            **(extra or {}),
+        }
+        if host is not None:
+            data[CONF_HOST] = host
         return self.async_create_entry(
-            title=f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_TYPE_LABELS.get(kind, kind)})",
-            data={
-                CONF_DEVICE_TYPE: DEVICE_TYPE_EXTERNAL,
-                CONF_EXTERNAL_TYPE: kind,
-                CONF_HOST: host,
-            },
-            options={CONF_EXTERNAL_INTERVAL: interval},
+            title=f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_KIND_LABELS.get(kind, kind)})",
+            data=data,
+            options={CONF_EXTERNAL_INTERVAL: interval} if interval is not None else {},
         )
 
     async def async_step_external_meter(
@@ -217,6 +242,29 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(
             step_id="external_meter", data_schema=schema, errors=errors
+        )
+
+    async def async_step_ha_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A power sensor already in Home Assistant as external meter."""
+        errors: dict[str, str] = {}
+        current = user_input or {}
+        if user_input is not None:
+            source = user_input[CONF_SOURCE_ENTITY]
+            export = user_input.get(CONF_EXPORT_ENTITY) or None
+            errors = _check_power_entities(self.hass, source, export)
+            if not errors:
+                await self.async_set_unique_id(f"{EXTERNAL_TYPE_HA_SENSOR}_{source}")
+                self._abort_if_unique_id_configured()
+                extra = {CONF_SOURCE_ENTITY: source}
+                if export:
+                    extra[CONF_EXPORT_ENTITY] = export
+                return self._external_entry(EXTERNAL_TYPE_HA_SENSOR, None, None, extra)
+        return self.async_show_form(
+            step_id="ha_sensor",
+            data_schema=_ha_sensor_schema(current),
+            errors=errors,
         )
 
     async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
@@ -363,6 +411,8 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
     ) -> ConfigFlowResult:
         entry = self.config_entry
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
+            if entry.data.get(CONF_EXTERNAL_TYPE) == EXTERNAL_TYPE_HA_SENSOR:
+                return await self.async_step_sensor(user_input)
             return await self.async_step_external(user_input)
 
         if user_input is not None:
@@ -414,3 +464,64 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="external", data_schema=schema)
+
+    async def async_step_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Home Assistant sensor: the entities go into the entry data."""
+        entry = self.config_entry
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            source = user_input[CONF_SOURCE_ENTITY]
+            export = user_input.get(CONF_EXPORT_ENTITY) or None
+            errors = _check_power_entities(self.hass, source, export)
+            if not errors:
+                data = {**entry.data, CONF_SOURCE_ENTITY: source}
+                data.pop(CONF_EXPORT_ENTITY, None)
+                if export:
+                    data[CONF_EXPORT_ENTITY] = export
+                self.hass.config_entries.async_update_entry(entry, data=data)
+                return self.async_create_entry(title="", data=dict(entry.options))
+        current = user_input or {
+            CONF_SOURCE_ENTITY: entry.data.get(CONF_SOURCE_ENTITY),
+            CONF_EXPORT_ENTITY: entry.data.get(CONF_EXPORT_ENTITY),
+        }
+        return self.async_show_form(
+            step_id="sensor", data_schema=_ha_sensor_schema(current), errors=errors
+        )
+
+
+def _ha_sensor_schema(current: dict[str, Any]) -> vol.Schema:
+    power = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sensor", device_class="power")
+    )
+    export_key = (
+        vol.Optional(
+            CONF_EXPORT_ENTITY,
+            description={"suggested_value": current[CONF_EXPORT_ENTITY]},
+        )
+        if current.get(CONF_EXPORT_ENTITY)
+        else vol.Optional(CONF_EXPORT_ENTITY)
+    )
+    source_key = (
+        vol.Required(CONF_SOURCE_ENTITY, default=current[CONF_SOURCE_ENTITY])
+        if current.get(CONF_SOURCE_ENTITY)
+        else vol.Required(CONF_SOURCE_ENTITY)
+    )
+    return vol.Schema({source_key: power, export_key: power})
+
+
+def _check_power_entities(hass, source: str, export: str | None) -> dict[str, str]:
+    """An error per field whose entity is not a power reading right now."""
+    errors: dict[str, str] = {}
+    for key, entity_id in ((CONF_SOURCE_ENTITY, source), (CONF_EXPORT_ENTITY, export)):
+        if not entity_id:
+            continue
+        try:
+            state_power(hass.states.get(entity_id))
+        except ValueError:
+            errors[key] = "not_a_power_sensor"
+    if export and export == source:
+        errors[CONF_EXPORT_ENTITY] = "same_entity"
+    return errors
+
