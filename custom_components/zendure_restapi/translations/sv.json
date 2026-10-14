@@ -6,7 +6,8 @@
         "description": "Vad vill du lägga till?",
         "menu_options": {
           "zendure": "Zendure-enhet (batteri eller P1-mätare)",
-          "external_meter": "Extern P1-mätare (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Extern P1-mätare (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Home Assistant-sensor som extern mätare (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "HomeWizard P1-mätare hittad",
         "description": "Använda HomeWizard P1-mätaren på {host} (serienummer {serial}) som nätmätare för batteriet? Lokalt API måste vara påslaget i appen HomeWizard Energy."
+      },
+      "ha_sensor": {
+        "title": "Home Assistant-sensor",
+        "description": "En effektsensor som redan finns i Home Assistant, uttag positivt. Är uttag och export separata sensorer, båda positiva, välj även exportsensorn. En sensor som uppdateras mer sällan än en gång per sekund saknar nya data mellan uppdateringarna; Meter source auto använder då Zendure-mätaren.",
+        "data": {
+          "source_entity": "Effektsensor (uttag positivt)",
+          "export_entity": "Exportsensor (valfri, export positiv)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Inget svar. Kontrollera IP-adressen och att det lokala API:et är påslaget.",
       "no_identity": "Enheten svarade men angav varken serienummer eller enhets-id.",
       "wrong_meter_type": "Adressen svarar, men inte som denna mätartyp. Kontrollera mätartypen.",
-      "homewizard_api_off": "Mätaren svarar inte. Slå på Lokalt API i appen HomeWizard Energy och försök igen."
+      "homewizard_api_off": "Mätaren svarar inte. Slå på Lokalt API i appen HomeWizard Energy och försök igen.",
+      "not_a_power_sensor": "Den här sensorn har just nu inget effektvärde (enhet W eller kW, numeriskt tillstånd).",
+      "same_entity": "Exportsensorn måste vara en annan än effektsensorn."
     },
     "abort": {
       "already_configured": "Den här enheten är redan konfigurerad.",
@@ -63,7 +74,18 @@
           "host": "IP-adress",
           "external_meter_interval_ms": "Millisekunder mellan avläsningar (100-1000; under 1000 endast för YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Home Assistant-sensor",
+        "data": {
+          "source_entity": "Effektsensor (uttag positivt)",
+          "export_entity": "Exportsensor (valfri, export positiv)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Den här sensorn har just nu inget effektvärde (enhet W eller kW, numeriskt tillstånd).",
+      "same_entity": "Exportsensorn måste vara en annan än effektsensorn."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Steg 1",
           "gear_2": "Steg 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Ingen"
         }
       }
     },
