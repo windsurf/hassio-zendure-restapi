@@ -6,7 +6,8 @@
         "description": "¿Qué quieres añadir?",
         "menu_options": {
           "zendure": "Dispositivo Zendure (batería o contador P1)",
-          "external_meter": "Contador P1 externo (HomeWizard, YouLess, EcoTracker, Shelly)"
+          "external_meter": "Contador P1 externo (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "ha_sensor": "Sensor de Home Assistant como contador externo (Zonneplan, DSMR, …)"
         }
       },
       "zendure": {
@@ -33,13 +34,23 @@
       "homewizard_confirm": {
         "title": "Contador HomeWizard P1 encontrado",
         "description": "¿Usar el contador HomeWizard P1 en {host} (número de serie {serial}) como contador de red para la batería? La API local debe estar activada en la app HomeWizard Energy."
+      },
+      "ha_sensor": {
+        "title": "Sensor de Home Assistant",
+        "description": "Un sensor de potencia que ya está en Home Assistant, consumo positivo. Si consumo y vertido son sensores separados, ambos positivos, elige también el sensor de vertido. Un sensor que se actualiza menos de una vez por segundo no tiene datos nuevos entre actualizaciones; Meter source auto usa entonces el contador Zendure.",
+        "data": {
+          "source_entity": "Sensor de potencia (consumo positivo)",
+          "export_entity": "Sensor de vertido (opcional, vertido positivo)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Sin respuesta. Comprueba la dirección IP y que la API local esté activada.",
       "no_identity": "El dispositivo respondió, pero no indicó número de serie ni ID.",
       "wrong_meter_type": "La dirección responde, pero no como este tipo de contador. Comprueba el tipo de contador.",
-      "homewizard_api_off": "El contador no responde. Activa la API local en la app HomeWizard Energy y vuelve a intentarlo."
+      "homewizard_api_off": "El contador no responde. Activa la API local en la app HomeWizard Energy y vuelve a intentarlo.",
+      "not_a_power_sensor": "Este sensor no tiene ahora un valor de potencia (unidad W o kW, estado numérico).",
+      "same_entity": "El sensor de vertido debe ser distinto del sensor de potencia."
     },
     "abort": {
       "already_configured": "Este dispositivo ya está configurado.",
@@ -63,7 +74,18 @@
           "host": "Dirección IP",
           "external_meter_interval_ms": "Milisegundos entre consultas (100-1000; por debajo de 1000 solo para YouLess)"
         }
+      },
+      "sensor": {
+        "title": "Sensor de Home Assistant",
+        "data": {
+          "source_entity": "Sensor de potencia (consumo positivo)",
+          "export_entity": "Sensor de vertido (opcional, vertido positivo)"
+        }
       }
+    },
+    "error": {
+      "not_a_power_sensor": "Este sensor no tiene ahora un valor de potencia (unidad W o kW, estado numérico).",
+      "same_entity": "El sensor de vertido debe ser distinto del sensor de potencia."
     }
   },
   "entity": {
@@ -100,6 +122,11 @@
           "auto": "Auto",
           "gear_1": "Nivel 1",
           "gear_2": "Nivel 2"
+        }
+      },
+      "external_meter": {
+        "state": {
+          "none": "Ninguno"
         }
       }
     },
