@@ -5,7 +5,7 @@
 [![100% lokaal](https://img.shields.io/badge/100%25-lokaal-brightgreen.svg)](#waarom-deze-integratie)
 [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-ondersteunde-meters)
 
-🇬🇧 [English version](README.md)
+🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
 **Je Zendure SolarFlow-thuisaccu in Home Assistant, 100% lokaal, in drie stappen.**
 Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde.
@@ -119,7 +119,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [Debug logging en de voorbeeldtrace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
+**Laatste release – v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
 
 ## Meer
 
