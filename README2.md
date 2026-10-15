@@ -1,6 +1,6 @@
 # Zendure RestAPI – Technical reference
 
-*The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog.*
+*The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md) · 🇩🇪 [Deutsch](README.de.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog.*
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
@@ -636,7 +636,11 @@ shorter than configured, only longer.
 
 ### Safety
 
-If the meter stops reporting, both limits go to zero — a closed loop without feedback is worse than no loop. Below the lower SOC bound the battery is charged back regardless of strategy, except in `manual` and `quick_discharge` where the operator's intent is explicit; switchable off.
+If the meter stops reporting, both limits go to zero — a closed loop without feedback is worse than no loop.
+
+At the device's own SOC bounds the smart modes respect the direction the device has closed: at `upper_limit` charging is not opened, at `lower_limit` discharging is not, and a direction already running is cleared once. The other direction stays open, as it does on the device. Before v1.5.4 the loop kept ordering into a battery that accepted nothing — at 100 % 59 trim writes in a quarter of an hour, at 5 % a discharge limit averaging 1,353 W with nothing flowing — and the status read "within 10 W". `quick` and `manual` keep their order, which is the operator's, and the status adds that the device refuses it. A missing or unreadable `socLimit` counts as no bound.
+
+Below the lower SOC bound the battery is charged back regardless of strategy, except in `manual` and `quick_discharge` where the operator's intent is explicit; switchable off.
 
 `smartMode` is set to RAM before writing limits, so frequent adjustments never reach flash. At a ten second interval that is tens of thousands of limit writes a year. `standby` hands it back on entry, because the device stays awake while it is set.
 
@@ -675,6 +679,8 @@ together, the cell readings catch up on the next payload.
 
 Over three days the sensor produced eight transitions — four to each limit, each with a return to
 `none` in between, no chattering and no intermediate states.
+
+Since v1.5.4 the smart modes act on it themselves; see [Safety](#safety).
 
 **Treat `unavailable` separately from `none`.** The sensor spent ten seconds unavailable once in
 those three days. Anything keying off this entity should distinguish "no limit active" from "no
@@ -976,6 +982,25 @@ to average out the sampling offset between the AC and cell readings.
 
 The current release is listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.5.4 — The SOC bounds in the control loop
+
+The last of the 1.5 series. One change to how the battery is steered, plus one line; everything else
+in the loop is unchanged, and a replay of nine runs without a SOC bound gives identical writes.
+
+- **The smart modes respect the device's SOC bounds.** At `upper_limit` charging is not opened, at
+  `lower_limit` discharging is not; a running direction is cleared once; the other direction stays
+  open. The trim loop does not adjust a direction the device has closed. Replayed over an hour with
+  the device refusing one side: limit writes 309 → 130 (full, `smart_matching`), 177 → 0 (full,
+  `smart_charge_only`), 437 → 76 (empty, `smart_matching`), 366 → 0 (empty,
+  `smart_discharge_only`), and nothing ordered into the closed side any more. The grid is the same
+  in every run, because the device refused that energy anyway.
+- **The status says so**: `charging blocked: battery full (upper limit)` instead of `within 10 W`.
+  In `quick` and `manual`, which keep their order, the reason adds `refused by device: battery full
+  (upper limit)` or `… empty (lower limit)`.
+- **`manual` at 0 W clears the direction record**, so the rest state can take effect there too.
+- A test keeps the version in `const.py` and `manifest.json` the same.
+- **README.de.md**, a German version of the short README.
 
 ### v1.5.3 — Several external meters, and any Home Assistant sensor as one
 
