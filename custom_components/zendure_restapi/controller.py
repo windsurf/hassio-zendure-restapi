@@ -73,7 +73,6 @@ from .const import (
     METER_FALLBACK_AGE,
     METER_MAX_AGE,
     METER_SANE_LIMIT,
-    METER_SOURCE_AUTO,
     METER_SOURCE_EXTERNAL,
     METER_SOURCE_ZENDURE,
     MODE_MANUAL,
@@ -453,6 +452,12 @@ class ZendureController:
             return
 
         charging = direction == "charge"
+        full, empty = _soc_bounds(data)
+        if (charging and full) or (not charging and empty):
+            # The device has closed this direction. Adjusting a limit it
+            # ignores is the write traffic the bound check exists to stop;
+            # the mode loop clears the limit on its next cycle.
+            return
         key = "inputLimit" if charging else "outputLimit"
         try:
             current = int(data.get(key) or 0)
@@ -668,6 +673,9 @@ class ZendureController:
         if power == 0:
             await self._write("inputLimit", 0, data)
             await self._write("outputLimit", 0, data)
+            # Both limits are zero, so no direction is running. Leaving the
+            # record on the old one kept the rest state from ever firing here.
+            self._last_direction = "none"
             self._set_state("manual", "setpoint 0 W")
             return
 
@@ -682,7 +690,7 @@ class ZendureController:
         )
         self._set_state(
             "manual",
-            f"setpoint {power} W",
+            f"setpoint {power} W{_refused(data, charging)}",
             target=limit,
             direction="charge" if charging else "discharge",
         )
@@ -698,7 +706,7 @@ class ZendureController:
         )
         self._set_state(
             "quick",
-            f"{'charging' if charging else 'discharging'} at maximum",
+            f"{'charging' if charging else 'discharging'} at maximum{_refused(data, charging)}",
             target=cap,
             direction="charge" if charging else "discharge",
         )
@@ -745,8 +753,18 @@ class ZendureController:
         if data.get("smartMode") != 1 and not self._resting:
             await self._write("smartMode", 1, data)
 
-        allow_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
-        allow_discharge = mode in (MODE_SMART_MATCHING, MODE_SMART_DISCHARGE)
+        # The device closes one direction at its SOC bounds and keeps the
+        # other open (socLimit 1 at the upper bound, 2 at the lower). A smart
+        # mode treats a closed direction exactly like one the mode forbids:
+        # never opened, and wound down once if it is running. Without this the
+        # loop kept ordering into a battery that accepted nothing — 59 trim
+        # writes in a quarter of an hour at 100 %, a discharge limit averaging
+        # 1353 W at 5 % while nothing flowed — and reported "within 10 W".
+        full, empty = _soc_bounds(data)
+        mode_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
+        mode_discharge = mode in (MODE_SMART_MATCHING, MODE_SMART_DISCHARGE)
+        allow_charge = mode_charge and not full
+        allow_discharge = mode_discharge and not empty
 
         # Both thresholds are a distance from zero, expressed as a positive
         # number of watts. Which side of zero is in the name, not in the sign:
@@ -809,11 +827,12 @@ class ZendureController:
             self._owns_limits = False
             released = self._last_direction
             self._last_direction = "none"
-            self._set_state(
-                "released",
-                f"{released} is not allowed in {mode}, limits cleared",
-                direction="none",
+            mode_allows = mode_charge if released == "charge" else mode_discharge
+            reason = (
+                f"{SOC_BLOCKED[released]}, limits cleared" if mode_allows
+                else f"{released} is not allowed in {mode}, limits cleared"
             )
+            self._set_state("released", reason, direction="none")
             return
 
         # A direction that is already running keeps being balanced, whatever the
@@ -860,9 +879,15 @@ class ZendureController:
             # what it does. Observed as "grid -137 W within thresholds" with a
             # 5 W start threshold, in smart_discharge_only.
             if grid > start_discharge and not allow_discharge:
-                reason = f"grid {grid:.0f} W, discharging not allowed in {mode}"
+                reason = (
+                    f"grid {grid:.0f} W, {SOC_BLOCKED['discharge']}" if mode_discharge
+                    else f"grid {grid:.0f} W, discharging not allowed in {mode}"
+                )
             elif grid < start_charge and not allow_charge:
-                reason = f"grid {grid:.0f} W, charging not allowed in {mode}"
+                reason = (
+                    f"grid {grid:.0f} W, {SOC_BLOCKED['charge']}" if mode_charge
+                    else f"grid {grid:.0f} W, charging not allowed in {mode}"
+                )
             else:
                 reason = f"grid {grid:.0f} W within thresholds"
             self._set_state(
@@ -1693,3 +1718,36 @@ class ZendureController:
             self._idle_flag,
             self._commanded,
         )
+
+
+# ── SOC bounds ───────────────────────────────────────────────────────────
+
+SOC_LIMIT_UPPER = 1
+SOC_LIMIT_LOWER = 2
+
+SOC_BLOCKED = {
+    "charge": "charging blocked: battery full (upper limit)",
+    "discharge": "discharging blocked: battery empty (lower limit)",
+}
+
+
+def _soc_bounds(data: dict[str, Any]) -> tuple[bool, bool]:
+    """(full, empty) from the device's socLimit. Missing or unreadable is
+    neither: a bound is only respected when the device reports one."""
+    try:
+        flag = int(data.get("socLimit"))
+    except (TypeError, ValueError):
+        return False, False
+    return flag == SOC_LIMIT_UPPER, flag == SOC_LIMIT_LOWER
+
+
+def _refused(data: dict[str, Any], charging: bool) -> str:
+    """Suffix for quick and manual: those modes keep their order at a bound,
+    because the order is the operator's, but the status says it lands nowhere."""
+    full, empty = _soc_bounds(data)
+    if charging and full:
+        return ", refused by device: battery full (upper limit)"
+    if not charging and empty:
+        return ", refused by device: battery empty (lower limit)"
+    return ""
+
