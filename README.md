@@ -64,10 +64,13 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 - **100% local.** Talks straight to the battery's own HTTP server on your network. Keeps working when the internet or the Zendure cloud does not.
 - **Zero-export control, once a second.** A fast loop follows your meter every second; a slower one handles direction and safety. Built and tuned on measurements, not guesses.
 - **Seven operation modes** — from hands-off `standby` to `smart_matching`, charge-only, discharge-only, quick charge/discharge and manual. Drive them from your own price automation.
-- **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — read directly over your network, once a second, not through a slower Home Assistant sensor.
+- **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — found on your network or added by IP, read directly once a second, not through a slower Home Assistant sensor. Or any power sensor Home Assistant already has.
 - **Safe by design.** No valid meter reading, no movement: the battery stops. Two batteries never fight over the same meter.
-- **Low standby draw.** Hands the battery back to its low-power state when there is nothing to do.
-- **Everything visible.** Ready-made dashboard, a controller status that says *why*, and an optional per-second CSV trace for the curious.
+- **Low standby draw, measured.** Hands the battery back to its low-power state when there is nothing to do: about 5 W instead of 29–36 W, for every idle hour.
+- **Spares the flash memory.** The smart modes write their limits to RAM, not flash — tens of thousands of writes a year that never wear the device.
+- **Leaves a full battery alone.** At the device's own SOC bounds nothing is ordered into the closed direction: a whole night at 100 % took two limit writes, and the status says why.
+- **Everything visible.** Ready-made dashboard, a controller status that says *why*, charge and discharge efficiency as sensors, and an optional per-second CSV trace for the curious.
+- **Every change measured before release.** Changes to the control loop are replayed against recorded per-second runs first; the measurements and the corrections to Zendure's documentation are public in the technical reference.
 - **Speaks your language.** Setup screens and states in English, Nederlands, Deutsch, Français, Italiano, Español, Português, Polski, Čeština, Svenska and Dansk.
 
 ---
@@ -115,9 +118,10 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) — eleven, corrections welcome
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) and [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug logging and the sample trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
+- [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.5.4:** the smart modes stop ordering into a full or empty battery and say why; `manual` at 0 W can rest. **v1.5.3:** several external meters side by side, with an *External meter* select on the battery to pick one; any power sensor in Home Assistant as external meter. **v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
+**Latest release – v1.5.5:** documentation only — how this integration relates to Zendure's zenSDK, a new side-by-side meter measurement, and keeping the controller status in the recorder. **v1.5.4:** the smart modes stop ordering into a full or empty battery and say why; `manual` at 0 W can rest. **v1.5.3:** several external meters side by side, with an *External meter* select on the battery to pick one; any power sensor in Home Assistant as external meter. **v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
 
 ## More
 

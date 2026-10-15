@@ -376,6 +376,21 @@ it cuts the time between a telegram arriving and being seen from 0–1 s to 0–
 telegram — a moved `tm` — counts as a sample, so the trim loop and the trace still run once a
 second.
 
+**Measured again with both meters read by this integration** (14 October 2026, one hour, one
+sample per second, battery in `standby` so the controller did not move the grid; the grid ranged
+from −860 to +1,757 W):
+
+| | YouLess | Zendure P1 meter |
+|---|---|---|
+| Difference YouLess − Zendure | median 0 W, p5–p95 −20 to +24 W | — |
+| Load steps above 250 W (11) | reference | **0.9 s later** on average (0 s 4×, 1 s 5×, 2 s 1×, 3 s 1×) |
+| Same value as the second before | 5 % of seconds | **28 %** of seconds |
+| Longest run of the same value | 3 s | 9 s; 4 s 123×, 5 s 19× |
+
+Equally accurate, as through the splitter; the difference is timing. The Zendure meter repeats its
+previous telegram in more than a quarter of the seconds, sometimes for four or five in a row, so a
+loop reading it sees a load change about a second later on average and occasionally several.
+
 ### Choosing the meter
 
 The **Meter source** select decides which meter feeds both loops:
@@ -777,6 +792,15 @@ That is not a measurement error, and it cuts both ways: trickle-discharging is e
 
 ---
 
+## zenSDK and this integration
+
+[Zendure/zenSDK](https://github.com/Zendure/zenSDK) is the protocol source: the local HTTP API and
+the property reference. Its property document was last changed on 17 February 2026, the
+repository on 27 March 2026. Its product list names eight devices; the SolarFlow 3000 Mix AC+ —
+the reference device here — and the 4000 Mix AC+, 800 Pro 2 and 4000 Mix Pro are not on it.
+This integration covers those models as well, and corrects the document where live hardware
+disagrees with it: see [Notes on correctness](#notes-on-correctness).
+
 ## Notes on correctness
 
 The zenSDK document is wrong or incomplete in several places. Each correction below was found by comparing it against live hardware.
@@ -841,6 +865,28 @@ quick | discharging at maximum | dir=discharge target=3000W grid=0.0W battery=-3
 
 The status sensor shows the outcome; this shows the reasoning that led there, which is what you
 need when a mode does something unexpected three steps into a sequence.
+
+### Keeping the status in the history
+
+Many setups keep the recorder small by excluding chatty sensors with a glob such as
+`sensor.zendure_*`. That also drops the controller status — the one sensor that says *why* the
+battery did what it did — and with it any way to look back at a night. Keep it in: an entity
+listed under `include` wins over an `exclude` glob.
+
+```yaml
+# configuration.yaml
+recorder:
+  include:
+    entities:
+      - sensor.<device>_controller_status
+  exclude:
+    entity_globs:
+      - sensor.zendure_*
+```
+
+The status changes only when the state or the reason changes, so it adds little to the database.
+The four energy sensors are worth keeping for the same reason: without them the Energy dashboard
+has no history for the battery.
 
 ### The sample trace
 
@@ -980,12 +1026,29 @@ to average out the sampling offset between the AC and cell readings.
 
 ## Changelog
 
-The current release is listed in full. Earlier ones are grouped by minor version, keeping the
+The current release is listed in full, with v1.5.4 — the last one to change the control loop — kept in full below it. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.5.5 — Documentation
+
+No change to the integration: the code is the v1.5.4 code, only the version number moved.
+
+- **[zenSDK and this integration](#zensdk-and-this-integration)**: what Zendure's SDK documents and
+  lists, when it last changed, and which models and corrections this integration adds.
+- **The two P1 meters measured again**, now both read by this integration: the YouLess sees a load
+  step 0.9 s earlier on average, and the Zendure meter repeats its previous value in 28 % of the
+  seconds. See [Why](#why).
+- **[Keeping the status in the history](#keeping-the-status-in-the-history)**: a recorder exclude
+  glob on `sensor.zendure_*` also drops the controller status; how to keep it.
+- **The short READMEs** (English, Dutch, German) list more of what the integration does, each with
+  the measurement behind it: standby draw, flash wear, a full battery left alone, efficiency
+  sensors, any Home Assistant power sensor as meter, and replays before every release.
+- **Validation runs no longer pile up**: a new push cancels a run still in progress for the same
+  branch or tag.
 
 ### v1.5.4 — The SOC bounds in the control loop
 
-The last of the 1.5 series. One change to how the battery is steered, plus one line; everything else
+The last change to the control loop in the 1.5 series. One change to how the battery is steered, plus one line; everything else
 in the loop is unchanged, and a replay of nine runs without a SOC bound gives identical writes.
 
 - **The smart modes respect the device's SOC bounds.** At `upper_limit` charging is not opened, at

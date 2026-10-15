@@ -64,10 +64,13 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 - **100 % lokal.** Spricht direkt mit dem eigenen HTTP-Server der Batterie in deinem Netzwerk. Funktioniert weiter, wenn Internet oder Zendure-Cloud ausfallen.
 - **Nulleinspeisung, einmal pro Sekunde.** Eine schnelle Schleife folgt deinem Zähler jede Sekunde; eine langsamere regelt Richtung und Sicherheit. Gebaut und abgestimmt auf Messungen, nicht auf Annahmen.
 - **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar über deine eigene Preis-Automation.
-- **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – direkt über dein Netzwerk gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor.
-- **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. An den eigenen SOC-Grenzen der Batterie bestellen die Smart-Modi nichts mehr in die gesperrte Richtung und sagen, warum. Zwei Batterien streiten nie um denselben Zähler.
-- **Geringer Standby-Verbrauch.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist.
-- **Alles sichtbar.** Fertiges Dashboard, ein Controller-Status, der sagt *warum*, und ein optionaler CSV-Trace pro Sekunde für Genaue.
+- **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – im Netzwerk gefunden oder per IP hinzugefügt, direkt gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor. Oder jeder Leistungssensor, den Home Assistant schon hat.
+- **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler.
+- **Geringer Standby-Verbrauch, gemessen.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist: etwa 5 W statt 29–36 W, für jede Stunde Stillstand.
+- **Schont den Flash-Speicher.** Die Smart-Modi schreiben ihre Grenzwerte in den Arbeitsspeicher, nicht in den Flash – Zehntausende Schreibvorgänge pro Jahr, die das Gerät nicht abnutzen.
+- **Lässt eine volle Batterie in Ruhe.** An den eigenen SOC-Grenzen des Geräts wird nichts in die gesperrte Richtung bestellt: Eine ganze Nacht bei 100 % kostete zwei Grenzwertänderungen, und der Status sagt, warum.
+- **Alles sichtbar.** Fertiges Dashboard, ein Controller-Status, der sagt *warum*, Lade- und Entladewirkungsgrad als Sensoren und ein optionaler CSV-Trace pro Sekunde für Genaue.
+- **Jede Änderung vor dem Release gemessen.** Änderungen an der Regelschleife werden zuerst an aufgezeichneten Messreihen pro Sekunde nachgespielt; die Messungen und die Korrekturen an Zendures Dokumentation stehen öffentlich in der technischen Referenz.
 - **Spricht deine Sprache.** Einrichtungsdialoge und Zustände auf Deutsch, Englisch, Niederländisch, Französisch, Italienisch, Spanisch, Portugiesisch, Polnisch, Tschechisch, Schwedisch und Dänisch.
 
 ---
@@ -117,9 +120,10 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) – elf Sprachen, Korrekturen willkommen
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) und [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug-Logging und der Beispiel-Trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
+- [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
+**Neueste Version – v1.5.5:** nur Dokumentation – wie sich diese Integration zu Zendures zenSDK verhält, eine neue Messung zweier Zähler nebeneinander und der Controller-Status im Recorder. **v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
 
 ## Mehr
 

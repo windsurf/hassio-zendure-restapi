@@ -9,6 +9,12 @@ on:
 
 permissions: {}
 
+# The release script used to commit file by file, and every commit started a
+# run of its own. A newer push to the same ref makes the older run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-hacs:
     runs-on: "ubuntu-latest"

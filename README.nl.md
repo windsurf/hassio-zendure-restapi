@@ -64,10 +64,13 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 - **100% lokaal.** Praat rechtstreeks met de eigen HTTP-server van de accu op je netwerk. Blijft werken als internet of de Zendure-cloud dat niet doet.
 - **Nul-teruglevering, elke seconde.** Een snelle lus volgt je meter elke seconde; een tragere regelt de richting en de veiligheid. Gebouwd en afgesteld op metingen, niet op aannames.
 - **Zeven werkmodi** — van rustig `standby` tot `smart_matching`, alleen laden, alleen ontladen, snel laden/ontladen en handmatig. Aan te sturen vanuit je eigen prijsautomation.
-- **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — rechtstreeks via je netwerk gelezen, elke seconde, niet via een tragere Home Assistant-sensor.
+- **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — gevonden op je netwerk of toegevoegd op IP-adres, rechtstreeks gelezen, elke seconde, niet via een tragere Home Assistant-sensor. Of elke vermogenssensor die Home Assistant al heeft.
 - **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de accu stopt. Twee accu's vechten nooit om dezelfde meter.
-- **Laag sluimerverbruik.** Geeft de accu terug aan zijn zuinige stand als er niets te doen is.
-- **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, en een optionele CSV-trace per seconde voor wie het precies wil weten.
+- **Laag sluimerverbruik, gemeten.** Geeft de accu terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W, elk uur dat hij stilstaat.
+- **Spaart het flashgeheugen.** De slimme modi schrijven hun limieten naar het werkgeheugen, niet naar flash — tienduizenden schrijfacties per jaar die het apparaat niet slijten.
+- **Laat een volle accu met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
+- **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, laad- en ontlaadrendement als sensoren, en een optionele CSV-trace per seconde voor wie het precies wil weten.
+- **Elke wijziging gemeten vóór de release.** Wijzigingen aan de regellus worden eerst nagespeeld op opgenomen meetreeksen per seconde; de metingen en de correcties op Zendures documentatie staan openbaar in de technische referentie.
 - **Spreekt je taal.** Instelschermen en statussen in het Nederlands, Engels, Duits, Frans, Italiaans, Spaans, Portugees, Pools, Tsjechisch, Zweeds en Deens.
 
 ---
@@ -117,9 +120,10 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) — elf talen, verbeteringen welkom
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) en [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug logging en de voorbeeldtrace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
+- [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
+**Laatste release – v1.5.5:** alleen documentatie — hoe deze integratie zich verhoudt tot de zenSDK van Zendure, een nieuwe meting van twee meters naast elkaar, en de controllerstatus in de recorder houden. **v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
 
 ## Meer
 
