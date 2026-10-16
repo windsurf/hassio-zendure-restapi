@@ -1,6 +1,6 @@
 # Zendure RestAPI – Technical reference
 
-*The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md) · 🇩🇪 [Deutsch](README.de.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog.*
+*The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md) · 🇩🇪 [Deutsch](README.de.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog. Questions and experiences: the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076).*
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
@@ -1045,6 +1045,9 @@ No change to the integration: the code is the v1.5.4 code, only the version numb
   sensors, any Home Assistant power sensor as meter, and replays before every release.
 - **Validation runs no longer pile up**: a new push cancels a run still in progress for the same
   branch or tag.
+
+Since then, documentation only and without a new version: a forum topic, a table of tested setups
+and the key measurements in the short READMEs.
 
 ### v1.5.4 — The SOC bounds in the control loop
 

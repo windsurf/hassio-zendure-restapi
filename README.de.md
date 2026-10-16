@@ -36,6 +36,14 @@ Installiere es, und wenn etwas nicht stimmt – oder wenn einfach alles funktion
 [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
 mit dem Diagnose-Download im Anhang. Ein Bericht genügt, um ein Modell von 🧪 auf ✅ zu bringen. Deutsch ist willkommen.
 
+### ✅ Getestete Setups
+
+| Gerät | Firmware (lokale API) | Zähler | Home Assistant | Gemeldet von |
+|---|---|---|---|---|
+| SolarFlow 3000 Mix AC+ | 3, Pack 4142 | Zendure P1-Zähler, YouLess LS120 | 2026.10 | Entwickler, täglich |
+
+Läuft es bei dir in einem anderen Setup? Trag deins im [Forenthema](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) oder mit einem Modellbericht ein – jede Zeile hier erleichtert dem nächsten Käufer die Wahl.
+
 ---
 
 ## 🔌 Unterstützte Zähler
@@ -66,7 +74,7 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 - **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar über deine eigene Preis-Automation.
 - **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – im Netzwerk gefunden oder per IP hinzugefügt, direkt gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor. Oder jeder Leistungssensor, den Home Assistant schon hat.
 - **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler.
-- **Geringer Standby-Verbrauch, gemessen.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist: etwa 5 W statt 29–36 W, für jede Stunde Stillstand.
+- **Geringer Standby-Verbrauch, gemessen.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist: etwa 5 W statt 29–36 W (Backup mode `closed`), für jede Stunde Stillstand.
 - **Schont den Flash-Speicher.** Die Smart-Modi schreiben ihre Grenzwerte in den Arbeitsspeicher, nicht in den Flash – Zehntausende Schreibvorgänge pro Jahr, die das Gerät nicht abnutzen.
 - **Lässt eine volle Batterie in Ruhe.** An den eigenen SOC-Grenzen des Geräts wird nichts in die gesperrte Richtung bestellt: Eine ganze Nacht bei 100 % kostete zwei Grenzwertänderungen, und der Status sagt, warum.
 - **Alles sichtbar.** Fertiges Dashboard, ein Controller-Status, der sagt *warum*, Lade- und Entladewirkungsgrad als Sensoren und ein optionaler CSV-Trace pro Sekunde für Genaue.
@@ -109,6 +117,20 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 
 ---
 
+## 📏 Gemessen am Referenzgerät
+
+SolarFlow 3000 Mix AC+, ein internes Batteriepack. Methode und Rohdaten in der technischen Referenz (Englisch).
+
+| | Gemessen |
+|---|---|
+| [Ladewirkungsgrad](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) bei 3 kW, AC → Zellen | **95,2 %** (drei Fenster, 95,1–95,2 %) |
+| [Entladeverluste](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) | fest ~33 W plus 97,4 % Wandlung – 95 %+ bei hoher Leistung, 81–84 % bei 100–200 W |
+| [Nutzbare Kapazität](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#usable-capacity) | **8,8 kWh** an den Zellen; 9,3 kWh am AC-Anschluss für 0 → 100 % |
+| [Ruheverbrauch](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#known-limitations) | 29–36 W im Wachzustand; etwa 5 W, sobald `standby` das Gerät schlafen lässt (Backup mode `closed`) |
+| [Verzögerung Zendure P1-Zähler](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-delay) | 0,4–1,1 s hinter einem YouLess am selben Port; wiederholt in 28 % der Sekunden seinen vorherigen Wert |
+
+---
+
 ## 📖 Technische Referenz
 
 Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md)** (Englisch):
@@ -128,6 +150,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 ## Mehr
 
 - 🐞 [Issues](https://github.com/windsurf/hassio-zendure-restapi/issues) – Fehler, Fragen und [Modellberichte](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml). Deutsch ist willkommen.
+- 💬 [Forenthema](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) – Fragen, Setups und Erfahrungen.
 - ⭐ Nützlich? Ein Stern für dieses Repository hilft anderen, es zu finden.
 
 ---

@@ -36,6 +36,14 @@ Installeer het, en als er iets niet klopt — of als alles gewoon werkt — open
 [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
 met de diagnostics-download als bijlage. Eén melding is genoeg om een model van 🧪 naar ✅ te brengen.
 
+### ✅ Geteste opstellingen
+
+| Apparaat | Firmware (lokale API) | Meter | Home Assistant | Gemeld door |
+|---|---|---|---|---|
+| SolarFlow 3000 Mix AC+ | 3, pakket 4142 | Zendure P1-meter, YouLess LS120 | 2026.10 | maker, dagelijks |
+
+Draait het bij jou op een andere opstelling? Meld de jouwe in het [forumtopic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) of met een modelmelding — elke regel hier maakt de keuze voor de volgende koper makkelijker.
+
 ---
 
 ## 🔌 Ondersteunde meters
@@ -66,7 +74,7 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 - **Zeven werkmodi** — van rustig `standby` tot `smart_matching`, alleen laden, alleen ontladen, snel laden/ontladen en handmatig. Aan te sturen vanuit je eigen prijsautomation.
 - **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — gevonden op je netwerk of toegevoegd op IP-adres, rechtstreeks gelezen, elke seconde, niet via een tragere Home Assistant-sensor. Of elke vermogenssensor die Home Assistant al heeft.
 - **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de accu stopt. Twee accu's vechten nooit om dezelfde meter.
-- **Laag sluimerverbruik, gemeten.** Geeft de accu terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W, elk uur dat hij stilstaat.
+- **Laag sluimerverbruik, gemeten.** Geeft de accu terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W (Backup mode `closed`), elk uur dat hij stilstaat.
 - **Spaart het flashgeheugen.** De slimme modi schrijven hun limieten naar het werkgeheugen, niet naar flash — tienduizenden schrijfacties per jaar die het apparaat niet slijten.
 - **Laat een volle accu met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
 - **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, laad- en ontlaadrendement als sensoren, en een optionele CSV-trace per seconde voor wie het precies wil weten.
@@ -109,6 +117,20 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 
 ---
 
+## 📏 Gemeten op het referentieapparaat
+
+SolarFlow 3000 Mix AC+, één intern accupakket. Methode en ruwe cijfers in de technische referentie (Engels).
+
+| | Gemeten |
+|---|---|
+| [Laadrendement](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) bij 3 kW, AC → cellen | **95,2%** (drie vensters, 95,1–95,2%) |
+| [Ontlaadverlies](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) | vast ~33 W plus 97,4% omzetting — 95%+ bij hoog vermogen, 81–84% bij 100–200 W |
+| [Bruikbare capaciteit](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#usable-capacity) | **8,8 kWh** aan de cellen; 9,3 kWh aan de AC-aansluiting voor 0 → 100% |
+| [Sluimerverbruik](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#known-limitations) | 29–36 W zolang hij wakker is; ongeveer 5 W zodra `standby` hem laat slapen (Backup mode `closed`) |
+| [Vertraging Zendure P1-meter](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-delay) | 0,4–1,1 s achter een YouLess op dezelfde poort; herhaalt in 28% van de seconden zijn vorige waarde |
+
+---
+
 ## 📖 Technische referentie
 
 Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md)** (Engels):
@@ -128,6 +150,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 ## Meer
 
 - 🐞 [Issues](https://github.com/windsurf/hassio-zendure-restapi/issues) — fouten, vragen en [modelmeldingen](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml). Nederlands mag.
+- 💬 [Forumtopic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) — vragen, opstellingen en ervaringen.
 - ⭐ Nuttig? Een ster op deze repository helpt anderen hem te vinden.
 
 ---

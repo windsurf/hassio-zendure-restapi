@@ -36,6 +36,14 @@ Install it, and if anything looks off — or if it all just works — open a
 [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
 with the diagnostics download attached. One report is enough to move a model from 🧪 to ✅.
 
+### ✅ Tested setups
+
+| Device | Firmware (local API) | Meter | Home Assistant | Reported by |
+|---|---|---|---|---|
+| SolarFlow 3000 Mix AC+ | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
+
+Running it on another setup? Add yours in the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) or with a model report — every row here makes the next buyer's choice easier.
+
 ---
 
 ## 🔌 Supported meters
@@ -66,7 +74,7 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 - **Seven operation modes** — from hands-off `standby` to `smart_matching`, charge-only, discharge-only, quick charge/discharge and manual. Drive them from your own price automation.
 - **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — found on your network or added by IP, read directly once a second, not through a slower Home Assistant sensor. Or any power sensor Home Assistant already has.
 - **Safe by design.** No valid meter reading, no movement: the battery stops. Two batteries never fight over the same meter.
-- **Low standby draw, measured.** Hands the battery back to its low-power state when there is nothing to do: about 5 W instead of 29–36 W, for every idle hour.
+- **Low standby draw, measured.** Hands the battery back to its low-power state when there is nothing to do: about 5 W instead of 29–36 W (Backup mode `closed`), for every idle hour.
 - **Spares the flash memory.** The smart modes write their limits to RAM, not flash — tens of thousands of writes a year that never wear the device.
 - **Leaves a full battery alone.** At the device's own SOC bounds nothing is ordered into the closed direction: a whole night at 100 % took two limit writes, and the status says why.
 - **Everything visible.** Ready-made dashboard, a controller status that says *why*, charge and discharge efficiency as sensors, and an optional per-second CSV trace for the curious.
@@ -107,6 +115,20 @@ Home Assistant usually finds the battery and the P1 meter by itself under **Sett
 
 ---
 
+## 📏 Measured on the reference device
+
+SolarFlow 3000 Mix AC+, one internal pack. Method and raw figures in the technical reference.
+
+| | Measured |
+|---|---|
+| [Charge efficiency](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) at 3 kW, AC → cells | **95.2 %** (three windows, 95.1–95.2 %) |
+| [Discharge losses](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) | a fixed ~33 W plus 97.4 % conversion — 95 %+ at high power, 81–84 % at 100–200 W |
+| [Usable capacity](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#usable-capacity) | **8.8 kWh** at the cells; 9.3 kWh at the AC port for 0 → 100 % |
+| [Idle draw](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#known-limitations) | 29–36 W while awake; about 5 W once `standby` lets the device sleep (Backup mode `closed`) |
+| [Zendure P1 meter delay](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-delay) | 0.4–1.1 s behind a YouLess on the same port; repeats its previous value in 28 % of the seconds |
+
+---
+
 ## 📖 Technical reference
 
 Everything this page leaves out is in **[README2.md – Technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md)**:
@@ -126,6 +148,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 ## More
 
 - 🐞 [Issues](https://github.com/windsurf/hassio-zendure-restapi/issues) — bugs, questions and [model reports](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml).
+- 💬 [Forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) — questions, setups and experiences.
 - ⭐ Useful? A star on this repository helps others find it.
 
 ---
