@@ -91,10 +91,16 @@ The polling interval is configurable from 1 to 60 seconds under **Configure**. T
 
 ### Languages
 
-The setup and options screens, error messages and the states of selects and status sensors are
-translated into English, Dutch, German, French, Italian, Spanish, Portuguese, Polish, Czech,
-Swedish and Danish; Home Assistant picks the language of your user profile. Entity names stay
-English for now, so entity IDs are the same in every language and the dashboards work unchanged.
+The setup and options screens, error messages, entity names and the states of selects and status
+sensors are translated into English, Dutch, German, French, Italian, Spanish, Portuguese, Polish,
+Czech, Swedish and Danish. Screens follow the language of your user profile; entity names follow
+the language of the system (*Settings → System → General*).
+
+**Entity IDs stay English in every language.** For most languages Home Assistant would build a new
+entity ID from the translated name — `sensor.…_laadtoestand` on a Dutch system, `…_ladezustand` on a
+German one — and the dashboard, the documentation and every shared automation would stop matching.
+This integration builds the ID from the English name instead, so `sensor.…_state_of_charge` is the
+same everywhere. Existing entity IDs never change: Home Assistant keeps them in its registry.
 The operation modes keep their technical names (`smart_matching`, …) in every language, because
 automations and documentation refer to them by those names. Translations other than English and
 Dutch were made without a native speaker: corrections are very welcome as an issue or pull
@@ -245,8 +251,11 @@ fields, units and sign conventions would remove a class of integration errors en
 
 ## Dashboard
 
-`dashboard/zendure.yaml` is one view in thirteen sections, built from standard Home Assistant
-cards only:
+`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in two views, built from
+standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the
+switch, its status, the price, both price limits and the mode per band (see
+[Price control](#price-control)); without one it explains how to add it.
+The view **Zendure RestAPI** has thirteen sections:
 
 | Section | Content |
 |---|---|
@@ -258,11 +267,23 @@ cards only:
 | Power flow, Energy, Configuration, Battery 1, System status, Diagnostics, Zendure P1 Meter | readings and device settings |
 | External P1 Meter | power, status, telegram age, the External meter select and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
 
-The power gauges run to 3000 W, the AC limit of the 3000 Mix AC+; for another model change
-`max:` to its limit, as the comment at the top of the file explains.
+**Created for you.** Tick *Create the Zendure RestAPI dashboard* when adding the battery — or
+later under the battery's **Configure** — and the dashboard **Zendure RestAPI** appears in the
+sidebar: an ordinary dashboard, editable like any other. Before saving it, the integration fits
+the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges
+up to the battery's own AC limit, and no cards for entities your model does not report. Without
+a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An
+existing dashboard at `/zendure-restapi` is never overwritten; delete it and tick the option
+again to rebuild it. A notification says what happened.
 
-Paste the view under `views:` in a dashboard in YAML mode, or open **Edit dashboard →
-three-dot menu → Raw configuration editor** and add it there.
+Home Assistant has no public call for an integration to add a dashboard. The integration uses
+the same route the frontend uses when you create one; should that route ever be missing, the
+notification gives the manual route instead and nothing else changes.
+
+**By hand.** The power gauges in the file run to 3000 W, the AC limit of the 3000 Mix AC+; for
+another model change `max:` to its limit, as the comment at the top of the file explains. Create
+a dashboard, open **Edit dashboard → three-dot menu → Raw configuration editor** and replace its
+content with the file below its comment block.
 
 Cards carry no `name:` override on purpose, so every label comes from the integration. Renaming
 an entity in Home Assistant changes the dashboard along with it and the two cannot drift apart.
@@ -270,6 +291,55 @@ an entity in Home Assistant changes the dashboard along with it and the two cann
 Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000 Mix AC+*.
 Home Assistant deviates on a name clash — appending `_2` — or after the device is renamed, so
 verify under **Developer tools → States** filtered on `zendure` if cards come up empty.
+
+---
+
+## Price control
+
+Dynamic trading, built in. At or below the **cheap price** the battery charges, at or above the
+**expensive price** it discharges, and in between it follows the meter or rests — each band in a
+mode of your choosing. Any sensor that gives the current price per kWh will do: Nord Pool,
+EnergyZero, Zonneplan, Tibber, Frank Energie, or a template of your own.
+
+**Setting it up.** Price control is a device of its own, linked to one battery — this
+integration's own steering, not a Zendure product, so it is simply called **Price Control**. Add
+it under **Add integration → Zendure RestAPI → Price control**, choose the battery and the price
+sensor; the sensor can be changed later under its **Configure**. Then switch it on. Everything
+else is an entity of the device, editable live and shown in the *Price Control* tab of the
+dashboard. Entity IDs start with `price_control`; a second Price Control, for a second battery,
+carries that battery in its name and IDs.
+
+| Entity | What it does | Default |
+|---|---|---|
+| Price Control (`switch.price_control`) | on or off | off |
+| Cheap price | at or below: the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
+| Expensive price | at or above: the expensive-price mode | 0.35 |
+| Cheap price mode | `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | `quick_charge` |
+| Expensive price mode | `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | `smart_discharge_only` |
+| In-between mode | `smart_matching` (grid at zero) or `standby`; also without a usable price | `smart_matching` |
+| Electricity price | the price as price control reads it | — |
+| Status | `off`, `no_price`, `cheap`, `between` or `expensive`; the target mode as attribute | — |
+
+**How it decides.** On every price change, every quarter of an hour and at start-up. It writes
+the Operation mode only when its target changes, or when it is switched on: a mode set by hand
+holds until the price crosses a limit. Without a usable price — no sensor chosen, or the sensor
+unavailable — and with a cheap price at or above the expensive one, the in-between mode applies,
+which buys and sells nothing on purpose. The battery's own SOC limits still apply: the smart
+modes do not order into a full or empty battery, and the quick modes report the refusal.
+
+**One writer.** Leave price control off when an automation or planner of your own already sets
+the Operation mode; two writers would undo each other's choices.
+
+**Set the gap wide enough.** A full cycle loses about a tenth of the energy at full power and up
+to a fifth at a few hundred watts (see [Conversion efficiency](#conversion-efficiency)), so the
+expensive price has to exceed the cheap one by more than that to earn anything. Two fixed prices
+are the simple start; a planner that looks at the whole day's prices does better, and drives the
+same Operation mode.
+
+**Next.** This is the simple version, on two fixed prices. A fuller one is planned for v1.5.7:
+the cheapest and most expensive periods of the day from the Nord Pool day prices (the HACS
+integration by default), separate import and export prices, conversion losses on both sides,
+and the spread as an amount per kWh after those losses.
 
 ---
 
@@ -674,6 +744,7 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Price Control entry** | 8 | Price Control (switch), Status, Electricity price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
@@ -1028,6 +1099,33 @@ to average out the sampling offset between the AC and cell readings.
 
 The current release is listed in full, with v1.5.4 — the last one to change the control loop — kept in full below it. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.5.6 — Entity names in eleven languages, a dashboard and price control
+
+No change to the control loop.
+
+- **Entity names are translated** — all 133 of them, in the same eleven languages as the setup
+  screens: `Laadtoestand`, `Ladezustand`, `État de charge`. Battery packs read as `Accu 1
+  temperatuur`, `Batterie 1 Temperatur`, with the number in its place for each language. The
+  operation modes keep their technical names.
+- **Entity IDs stay English**, whatever the language: built from the English name, so dashboards,
+  documentation and automations match everywhere. Existing IDs are untouched. See
+  [Languages](#languages).
+- English names are exactly those of v1.5.5. A test checks that every entity has a name in every
+  language, with the same placeholders, and that the English text has not moved.
+- **The dashboard, created for you**: tick *Create the Zendure RestAPI dashboard* when adding the
+  battery, or later under **Configure**. The dashboard **Zendure RestAPI** gets the entity IDs,
+  gauge ranges and sections of your own devices; an existing one is never overwritten. See
+  [Dashboard](#dashboard).
+- **Price control**, dynamic trading built in, as a device of its own: **Add integration →
+  Zendure RestAPI → Price control**, choose the battery and a price sensor, switch it on. A cheap
+  and an expensive price and the mode for each band are entities of the device **Price
+  Control**. Off by default. The simple version, on two fixed prices; a fuller one follows in
+  v1.5.7. See [Price control](#price-control).
+- The dashboard file is now `dashboard/zendure_restapi.yaml`, the whole dashboard in two views,
+  *Zendure RestAPI* and *Price Control*; `dashboard/zendure.yaml` is gone.
+- The options screen of a battery is titled *Options* now that it holds more than the polling
+  interval.
 
 ### v1.5.5 — Documentation
 

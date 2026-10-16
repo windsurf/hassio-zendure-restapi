@@ -7,7 +7,8 @@
         "menu_options": {
           "zendure": "Zendure device (battery or P1 meter)",
           "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)"
+          "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)",
+          "price_control": "Price control (dynamic trading)"
         }
       },
       "zendure": {
@@ -15,12 +16,16 @@
         "description": "Enter the IP address of the Zendure device. The local API must be enabled: in the Zendure app add HEMS, then exit the app.",
         "data": {
           "host": "IP address",
-          "port": "HTTP port"
+          "port": "HTTP port",
+          "create_dashboard": "Create the Zendure RestAPI dashboard (battery only)"
         }
       },
       "confirm": {
         "title": "Zendure device found",
-        "description": "Add {model} at {host} (serial {sn})?"
+        "description": "Add {model} at {host} (serial {sn})?",
+        "data": {
+          "create_dashboard": "Create the Zendure RestAPI dashboard"
+        }
       },
       "external_meter": {
         "title": "External P1 meter",
@@ -42,6 +47,14 @@
           "source_entity": "Power sensor (import positive)",
           "export_entity": "Export sensor (optional, export positive)"
         }
+      },
+      "price_control": {
+        "title": "Price control",
+        "description": "Sets the Operation mode of a battery from the electricity price: charge when it is cheap, discharge when it is expensive, hold the grid at zero in between. It is off until you switch it on.",
+        "data": {
+          "battery_entry": "Battery",
+          "price_entity": "Price sensor (price per kWh)"
+        }
       }
     },
     "error": {
@@ -57,15 +70,17 @@
       "cannot_connect": "No response. Check the IP address and that the local API is enabled.",
       "no_identity": "The device answered but reported neither a serial number nor a device id.",
       "wrong_meter_type": "The address answers, but not as this meter type. Check the meter type.",
-      "not_a_p1_meter": "This HomeWizard device is not a P1 meter."
+      "not_a_p1_meter": "This HomeWizard device is not a P1 meter.",
+      "no_battery": "Add a Zendure battery first."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Polling interval",
+        "title": "Options",
         "data": {
-          "scan_interval": "Seconds between polls (1-60)"
+          "scan_interval": "Seconds between polls (1-60)",
+          "create_dashboard": "Create the Zendure RestAPI dashboard (an existing one is left as it is)"
         }
       },
       "external": {
@@ -81,6 +96,12 @@
           "source_entity": "Power sensor (import positive)",
           "export_entity": "Export sensor (optional, export positive)"
         }
+      },
+      "price": {
+        "title": "Price control",
+        "data": {
+          "price_entity": "Price sensor (price per kWh)"
+        }
       }
     },
     "error": {
@@ -95,39 +116,60 @@
           "zendure": "Zendure meter",
           "external": "External meter",
           "auto": "Auto (external, else Zendure)"
-        }
+        },
+        "name": "Meter source"
       },
       "converter_mode": {
         "state": {
           "charge": "Charge",
           "discharge": "Discharge"
-        }
+        },
+        "name": "Converter mode"
       },
       "backup_mode": {
         "state": {
           "standard": "Standard",
           "economic": "Economic",
           "closed": "Closed"
-        }
+        },
+        "name": "Backup mode"
       },
       "pv_export": {
         "state": {
           "off": "Off",
           "allowed": "Allowed",
           "forbidden": "Forbidden"
-        }
+        },
+        "name": "PV export"
       },
       "fan_speed_mode": {
         "state": {
           "auto": "Auto",
           "gear_1": "Gear 1",
           "gear_2": "Gear 2"
-        }
+        },
+        "name": "Fan speed mode"
       },
       "external_meter": {
         "state": {
           "none": "None"
-        }
+        },
+        "name": "External meter"
+      },
+      "cheap_price_mode": {
+        "name": "Cheap price mode"
+      },
+      "expensive_price_mode": {
+        "name": "Expensive price mode"
+      },
+      "grid_standard": {
+        "name": "Grid standard"
+      },
+      "in_between_mode": {
+        "name": "In-between mode"
+      },
+      "operation_mode": {
+        "name": "Operation mode"
       }
     },
     "sensor": {
@@ -136,54 +178,62 @@
           "auto": "Auto",
           "gear_1": "Gear 1",
           "gear_2": "Gear 2"
-        }
+        },
+        "name": "Fan speed step"
       },
       "battery_state": {
         "state": {
           "standby": "Standby",
           "charging": "Charging",
           "discharging": "Discharging"
-        }
+        },
+        "name": "Battery state"
       },
       "pack_state": {
         "state": {
           "standby": "Standby",
           "charging": "Charging",
           "discharging": "Discharging"
-        }
+        },
+        "name": "Battery {index} State"
       },
       "ac_state": {
         "state": {
           "off": "Off",
           "input": "Input",
           "output": "Output"
-        }
+        },
+        "name": "AC state"
       },
       "dc_state": {
         "state": {
           "off": "Off",
           "input": "Input",
           "output": "Output"
-        }
+        },
+        "name": "DC state"
       },
       "pv_state": {
         "state": {
           "off": "Off",
           "on": "On"
-        }
+        },
+        "name": "PV state"
       },
       "soc_limit_status": {
         "state": {
           "none": "None",
           "upper_limit": "Upper limit (full)",
           "lower_limit": "Lower limit (empty)"
-        }
+        },
+        "name": "SOC limit status"
       },
       "soc_calibration_status": {
         "state": {
           "uncalibrated": "Uncalibrated",
           "calibrated": "Calibrated"
-        }
+        },
+        "name": "SOC calibration status"
       },
       "controller_status": {
         "state": {
@@ -201,14 +251,365 @@
           "blocked": "Blocked",
           "protecting": "Protecting",
           "error": "Error"
-        }
+        },
+        "name": "Controller status"
       },
       "external_status": {
         "state": {
           "live": "Live",
           "stale": "No new data",
           "unreachable": "Unreachable"
-        }
+        },
+        "name": "Status"
+      },
+      "price_control_status": {
+        "state": {
+          "off": "Off",
+          "no_price": "No price",
+          "cheap": "Cheap",
+          "between": "In between",
+          "expensive": "Expensive"
+        },
+        "name": "Status"
+      },
+      "a_aprt_power": {
+        "name": "Phase A apparent power"
+      },
+      "ac_coupling_state": {
+        "name": "AC coupling status"
+      },
+      "b_aprt_power": {
+        "name": "Phase B apparent power"
+      },
+      "bat_volt": {
+        "name": "DC bus voltage"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "bindstate": {
+        "name": "Bind state"
+      },
+      "c_aprt_power": {
+        "name": "Phase C apparent power"
+      },
+      "charge_efficiency": {
+        "name": "Charge efficiency"
+      },
+      "discharge_efficiency": {
+        "name": "Discharge efficiency"
+      },
+      "electric_level": {
+        "name": "State of charge"
+      },
+      "electricity_price": {
+        "name": "Electricity price"
+      },
+      "energy_charged": {
+        "name": "Energy charged"
+      },
+      "energy_discharged": {
+        "name": "Energy discharged"
+      },
+      "energy_exported": {
+        "name": "Energy exported"
+      },
+      "energy_imported": {
+        "name": "Energy imported"
+      },
+      "energy_pv": {
+        "name": "PV energy"
+      },
+      "external_energy_exported": {
+        "name": "Energy exported"
+      },
+      "external_energy_imported": {
+        "name": "Energy imported"
+      },
+      "external_power": {
+        "name": "Power"
+      },
+      "external_telegram_age": {
+        "name": "Telegram age"
+      },
+      "factory_mode_state": {
+        "name": "Factory mode state"
+      },
+      "fan_speed": {
+        "name": "Fan level"
+      },
+      "fault_level": {
+        "name": "Fault level"
+      },
+      "fm_volt": {
+        "name": "Activation voltage"
+      },
+      "grid_hd_status": {
+        "name": "Grid HD status"
+      },
+      "grid_input_power": {
+        "name": "Grid input power"
+      },
+      "grid_off_power": {
+        "name": "Backup output power"
+      },
+      "grid_off_power2": {
+        "name": "Backup output power 2"
+      },
+      "hv_bat_volt": {
+        "name": "HV battery voltage (raw)"
+      },
+      "hyper_tmp": {
+        "name": "Enclosure temperature"
+      },
+      "iot_state": {
+        "name": "IoT connection state"
+      },
+      "lcn_state": {
+        "name": "LCN state"
+      },
+      "message_id": {
+        "name": "Message id"
+      },
+      "meter_type": {
+        "name": "Meter type"
+      },
+      "off_grid_state": {
+        "name": "Off-grid state"
+      },
+      "old_mode": {
+        "name": "Legacy mode"
+      },
+      "ota_state": {
+        "name": "OTA state"
+      },
+      "output_home_power": {
+        "name": "Home output power"
+      },
+      "output_pack_power": {
+        "name": "Battery charge power"
+      },
+      "pack_batcur": {
+        "name": "Battery {index} Current"
+      },
+      "pack_input_power": {
+        "name": "Battery discharge power"
+      },
+      "pack_max_temp": {
+        "name": "Battery {index} Temperature"
+      },
+      "pack_max_vol": {
+        "name": "Battery {index} Max cell voltage"
+      },
+      "pack_min_vol": {
+        "name": "Battery {index} Min cell voltage"
+      },
+      "pack_model": {
+        "name": "Battery {index} Model"
+      },
+      "pack_num": {
+        "name": "Battery module count"
+      },
+      "pack_pack_type": {
+        "name": "Battery {index} Pack type"
+      },
+      "pack_power": {
+        "name": "Battery {index} Power"
+      },
+      "pack_sn": {
+        "name": "Battery {index} Serial number"
+      },
+      "pack_soc_level": {
+        "name": "Battery {index} State of charge"
+      },
+      "pack_soft_version": {
+        "name": "Battery {index} Firmware version"
+      },
+      "pack_total_vol": {
+        "name": "Battery {index} Voltage"
+      },
+      "phase_switch": {
+        "name": "Phase switch"
+      },
+      "powerhub_status": {
+        "name": "Powerhub status"
+      },
+      "protocol_type": {
+        "name": "Protocol type"
+      },
+      "remain_out_time": {
+        "name": "Remaining discharge time"
+      },
+      "rssi": {
+        "name": "Signal strength"
+      },
+      "slave_addr": {
+        "name": "Slave address"
+      },
+      "solar_input_power": {
+        "name": "PV input power"
+      },
+      "solar_power1": {
+        "name": "PV string 1"
+      },
+      "solar_power2": {
+        "name": "PV string 2"
+      },
+      "solar_power3": {
+        "name": "PV string 3"
+      },
+      "solar_power4": {
+        "name": "PV string 4"
+      },
+      "solar_power5": {
+        "name": "PV string 5"
+      },
+      "solar_power6": {
+        "name": "PV string 6"
+      },
+      "time_zone": {
+        "name": "Timezone"
+      },
+      "timestamp": {
+        "name": "Report timestamp"
+      },
+      "total_power": {
+        "name": "Grid power total"
+      },
+      "ts": {
+        "name": "Device timestamp"
+      },
+      "ts_zone": {
+        "name": "Timezone offset"
+      },
+      "volt_wakeup": {
+        "name": "Voltage wake-up"
+      },
+      "write_rsp": {
+        "name": "Write response"
+      }
+    },
+    "binary_sensor": {
+      "data_ready": {
+        "name": "Data ready"
+      },
+      "dry_node_state": {
+        "name": "Dry contact"
+      },
+      "fan_switch": {
+        "name": "Fan"
+      },
+      "grid_state": {
+        "name": "Grid connected"
+      },
+      "heat_state": {
+        "name": "Heating"
+      },
+      "hv_bat_ctrl_switch": {
+        "name": "HV battery control"
+      },
+      "is_error": {
+        "name": "Error"
+      },
+      "lamp_switch": {
+        "name": "Lamp"
+      },
+      "pack_heat_state": {
+        "name": "Battery {index} Heating"
+      },
+      "pass": {
+        "name": "Pass-through"
+      },
+      "pvac_switch": {
+        "name": "PV-AC coupling"
+      },
+      "reverse_state": {
+        "name": "Reverse flow"
+      },
+      "soc_comp_switch": {
+        "name": "SOC compensation"
+      }
+    },
+    "number": {
+      "bat_cal_time": {
+        "name": "Calibration interval"
+      },
+      "charge_buffer": {
+        "name": "Charge buffer"
+      },
+      "charge_max_limit": {
+        "name": "Charge power limit"
+      },
+      "cheap_price": {
+        "name": "Cheap price"
+      },
+      "direction_change_delay": {
+        "name": "Direction change delay"
+      },
+      "discharge_buffer": {
+        "name": "Discharge buffer"
+      },
+      "expensive_price": {
+        "name": "Expensive price"
+      },
+      "input_limit": {
+        "name": "Charge limit (AC)"
+      },
+      "inverse_max_power": {
+        "name": "Inverter power limit"
+      },
+      "manual_power": {
+        "name": "Manual power"
+      },
+      "max_charge_power": {
+        "name": "Max charge power"
+      },
+      "max_discharge_power": {
+        "name": "Max discharge power"
+      },
+      "min_charge_power": {
+        "name": "Min charge power"
+      },
+      "min_discharge_power": {
+        "name": "Min discharge power"
+      },
+      "min_soc": {
+        "name": "Lower SOC limit"
+      },
+      "mode_threshold": {
+        "name": "Mode threshold"
+      },
+      "output_limit": {
+        "name": "Discharge limit"
+      },
+      "soc_set": {
+        "name": "Upper SOC limit"
+      },
+      "start_charge_at": {
+        "name": "Start charging at export"
+      },
+      "start_discharge_at": {
+        "name": "Start discharging at import"
+      },
+      "trim_factor": {
+        "name": "Trim strength"
+      },
+      "trim_threshold": {
+        "name": "Trim threshold"
+      }
+    },
+    "switch": {
+      "fanmode": {
+        "name": "Fan forced on"
+      },
+      "smart_mode": {
+        "name": "Skip flash write"
+      },
+      "soc_protection": {
+        "name": "SOC protection"
+      },
+      "trace_recording": {
+        "name": "Trace recording"
       }
     }
   }

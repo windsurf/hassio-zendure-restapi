@@ -37,6 +37,9 @@ from .properties import (
     unmap_enum,
 )
 
+from homeassistant.const import Platform
+from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_PRICE
+from .price_entities import price_entities
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -102,6 +105,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create select entities for every reported enumerated key."""
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
+        async_add_entities(price_entities(Platform.SELECT, hass, entry))
+        return
     coordinator: ZendureCoordinator = hass.data[DOMAIN][entry.entry_id]
     device_id = coordinator.device_id or entry.unique_id or entry.entry_id
     model = entry.data.get(CONF_MODEL) or "SolarFlow"

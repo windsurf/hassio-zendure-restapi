@@ -136,8 +136,11 @@ class ZendureBinarySensor(ZendureEntity, BinarySensorEntity):
 
     def override_identity(self, index: int) -> None:
         """Rename and re-key this entity as belonging to a specific pack."""
-        self._attr_unique_id = f"{self._device_id}_{PACK_PREFIX}{index}_{self.entity_description.key}"
-        self._attr_name = f"Battery {index} {self.entity_description.name}"
+        description = self.entity_description
+        self._attr_unique_id = f"{self._device_id}_{PACK_PREFIX}{index}_{description.key}"
+        self._set_name(
+            description, "pack_", {"index": str(index)}, f"Battery {index} {description.name}"
+        )
 
     @property
     def is_on(self) -> bool | None:

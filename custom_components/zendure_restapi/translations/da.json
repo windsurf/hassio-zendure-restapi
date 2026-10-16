@@ -7,7 +7,8 @@
         "menu_options": {
           "zendure": "Zendure-enhed (batteri eller P1-måler)",
           "external_meter": "Ekstern P1-måler (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant-sensor som ekstern måler (Zonneplan, DSMR, …)"
+          "ha_sensor": "Home Assistant-sensor som ekstern måler (Zonneplan, DSMR, …)",
+          "price_control": "Prisstyring (dynamisk handel)"
         }
       },
       "zendure": {
@@ -15,12 +16,16 @@
         "description": "Indtast IP-adressen på Zendure-enheden. Den lokale API skal være slået til: tilføj HEMS i Zendure-appen og luk derefter appen.",
         "data": {
           "host": "IP-adresse",
-          "port": "HTTP-port"
+          "port": "HTTP-port",
+          "create_dashboard": "Opret dashboardet Zendure RestAPI (kun batteri)"
         }
       },
       "confirm": {
         "title": "Zendure-enhed fundet",
-        "description": "Tilføj {model} på {host} (serienummer {sn})?"
+        "description": "Tilføj {model} på {host} (serienummer {sn})?",
+        "data": {
+          "create_dashboard": "Opret dashboardet Zendure RestAPI"
+        }
       },
       "external_meter": {
         "title": "Ekstern P1-måler",
@@ -42,6 +47,14 @@
           "source_entity": "Effektsensor (forbrug positivt)",
           "export_entity": "Eksportsensor (valgfri, eksport positiv)"
         }
+      },
+      "price_control": {
+        "title": "Prisstyring",
+        "description": "Indstiller et batteris driftstilstand efter elprisen: oplader når den er lav, aflader når den er høj og holder nettet på nul imellem. Den er slukket, indtil du tænder den.",
+        "data": {
+          "battery_entry": "Batteri",
+          "price_entity": "Prissensor (pris pr. kWh)"
+        }
       }
     },
     "error": {
@@ -57,15 +70,17 @@
       "cannot_connect": "Intet svar. Kontrollér IP-adressen, og at den lokale API er slået til.",
       "no_identity": "Enheden svarede, men angav hverken serienummer eller enheds-id.",
       "wrong_meter_type": "Adressen svarer, men ikke som denne målertype. Kontrollér målertypen.",
-      "not_a_p1_meter": "Denne HomeWizard-enhed er ikke en P1-måler."
+      "not_a_p1_meter": "Denne HomeWizard-enhed er ikke en P1-måler.",
+      "no_battery": "Tilføj først et Zendure-batteri."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Aflæsningsinterval",
+        "title": "Indstillinger",
         "data": {
-          "scan_interval": "Sekunder mellem aflæsninger (1-60)"
+          "scan_interval": "Sekunder mellem aflæsninger (1-60)",
+          "create_dashboard": "Opret dashboardet Zendure RestAPI (et eksisterende forbliver uændret)"
         }
       },
       "external": {
@@ -81,6 +96,12 @@
           "source_entity": "Effektsensor (forbrug positivt)",
           "export_entity": "Eksportsensor (valgfri, eksport positiv)"
         }
+      },
+      "price": {
+        "title": "Prisstyring",
+        "data": {
+          "price_entity": "Prissensor (pris pr. kWh)"
+        }
       }
     },
     "error": {
@@ -95,39 +116,60 @@
           "zendure": "Zendure-måler",
           "external": "Ekstern måler",
           "auto": "Auto (ekstern, ellers Zendure)"
-        }
+        },
+        "name": "Målerkilde"
       },
       "converter_mode": {
         "state": {
           "charge": "Opladning",
           "discharge": "Afladning"
-        }
+        },
+        "name": "Omformertilstand"
       },
       "backup_mode": {
         "state": {
           "standard": "Standard",
           "economic": "Økonomisk",
           "closed": "Lukket"
-        }
+        },
+        "name": "Nødstrømstilstand"
       },
       "pv_export": {
         "state": {
           "off": "Fra",
           "allowed": "Tilladt",
           "forbidden": "Forbudt"
-        }
+        },
+        "name": "PV-eksport"
       },
       "fan_speed_mode": {
         "state": {
           "auto": "Auto",
           "gear_1": "Trin 1",
           "gear_2": "Trin 2"
-        }
+        },
+        "name": "Blæsertilstand"
       },
       "external_meter": {
         "state": {
           "none": "Ingen"
-        }
+        },
+        "name": "Ekstern måler"
+      },
+      "cheap_price_mode": {
+        "name": "Tilstand ved lav pris"
+      },
+      "expensive_price_mode": {
+        "name": "Tilstand ved høj pris"
+      },
+      "grid_standard": {
+        "name": "Netstandard"
+      },
+      "in_between_mode": {
+        "name": "Tilstand imellem"
+      },
+      "operation_mode": {
+        "name": "Driftstilstand"
       }
     },
     "sensor": {
@@ -136,54 +178,62 @@
           "auto": "Auto",
           "gear_1": "Trin 1",
           "gear_2": "Trin 2"
-        }
+        },
+        "name": "Blæsertrin"
       },
       "battery_state": {
         "state": {
           "standby": "Standby",
           "charging": "Oplader",
           "discharging": "Aflader"
-        }
+        },
+        "name": "Batteristatus"
       },
       "pack_state": {
         "state": {
           "standby": "Standby",
           "charging": "Oplader",
           "discharging": "Aflader"
-        }
+        },
+        "name": "Batteri {index} status"
       },
       "ac_state": {
         "state": {
           "off": "Fra",
           "input": "Indgang",
           "output": "Udgang"
-        }
+        },
+        "name": "AC-status"
       },
       "dc_state": {
         "state": {
           "off": "Fra",
           "input": "Indgang",
           "output": "Udgang"
-        }
+        },
+        "name": "DC-status"
       },
       "pv_state": {
         "state": {
           "off": "Fra",
           "on": "Til"
-        }
+        },
+        "name": "PV-status"
       },
       "soc_limit_status": {
         "state": {
           "none": "Ingen",
           "upper_limit": "Øvre grænse (fuld)",
           "lower_limit": "Nedre grænse (tom)"
-        }
+        },
+        "name": "SOC-grænsestatus"
       },
       "soc_calibration_status": {
         "state": {
           "uncalibrated": "Ikke kalibreret",
           "calibrated": "Kalibreret"
-        }
+        },
+        "name": "SOC-kalibreringsstatus"
       },
       "controller_status": {
         "state": {
@@ -201,14 +251,365 @@
           "blocked": "Blokeret",
           "protecting": "Beskytter",
           "error": "Fejl"
-        }
+        },
+        "name": "Regulatorstatus"
       },
       "external_status": {
         "state": {
           "live": "Aktuel",
           "stale": "Ingen nye data",
           "unreachable": "Utilgængelig"
-        }
+        },
+        "name": "Status"
+      },
+      "price_control_status": {
+        "state": {
+          "off": "Fra",
+          "no_price": "Ingen pris",
+          "cheap": "Billigt",
+          "between": "Imellem",
+          "expensive": "Dyrt"
+        },
+        "name": "Status"
+      },
+      "a_aprt_power": {
+        "name": "Tilsyneladende effekt fase A"
+      },
+      "ac_coupling_state": {
+        "name": "AC-koblingsstatus"
+      },
+      "b_aprt_power": {
+        "name": "Tilsyneladende effekt fase B"
+      },
+      "bat_volt": {
+        "name": "DC-busspænding"
+      },
+      "battery_power": {
+        "name": "Batterieffekt"
+      },
+      "bindstate": {
+        "name": "Tilknytningsstatus"
+      },
+      "c_aprt_power": {
+        "name": "Tilsyneladende effekt fase C"
+      },
+      "charge_efficiency": {
+        "name": "Opladningsvirkningsgrad"
+      },
+      "discharge_efficiency": {
+        "name": "Afladningsvirkningsgrad"
+      },
+      "electric_level": {
+        "name": "Ladetilstand"
+      },
+      "electricity_price": {
+        "name": "Elpris"
+      },
+      "energy_charged": {
+        "name": "Opladet energi"
+      },
+      "energy_discharged": {
+        "name": "Afladet energi"
+      },
+      "energy_exported": {
+        "name": "Eksporteret energi"
+      },
+      "energy_imported": {
+        "name": "Importeret energi"
+      },
+      "energy_pv": {
+        "name": "PV-energi"
+      },
+      "external_energy_exported": {
+        "name": "Eksporteret energi"
+      },
+      "external_energy_imported": {
+        "name": "Importeret energi"
+      },
+      "external_power": {
+        "name": "Effekt"
+      },
+      "external_telegram_age": {
+        "name": "Telegrammets alder"
+      },
+      "factory_mode_state": {
+        "name": "Fabrikstilstand"
+      },
+      "fan_speed": {
+        "name": "Blæserniveau"
+      },
+      "fault_level": {
+        "name": "Fejlniveau"
+      },
+      "fm_volt": {
+        "name": "Aktiveringsspænding"
+      },
+      "grid_hd_status": {
+        "name": "Net-HD-status"
+      },
+      "grid_input_power": {
+        "name": "Effekt fra nettet"
+      },
+      "grid_off_power": {
+        "name": "Effekt nødstrømsudgang"
+      },
+      "grid_off_power2": {
+        "name": "Effekt nødstrømsudgang 2"
+      },
+      "hv_bat_volt": {
+        "name": "HV-batterispænding (rå)"
+      },
+      "hyper_tmp": {
+        "name": "Kabinettemperatur"
+      },
+      "iot_state": {
+        "name": "IoT-forbindelsesstatus"
+      },
+      "lcn_state": {
+        "name": "LCN-status"
+      },
+      "message_id": {
+        "name": "Meddelelses-id"
+      },
+      "meter_type": {
+        "name": "Målertype"
+      },
+      "off_grid_state": {
+        "name": "Ø-driftstatus"
+      },
+      "old_mode": {
+        "name": "Ældre tilstand"
+      },
+      "ota_state": {
+        "name": "OTA-status"
+      },
+      "output_home_power": {
+        "name": "Effekt til huset"
+      },
+      "output_pack_power": {
+        "name": "Batteriets opladeeffekt"
+      },
+      "pack_batcur": {
+        "name": "Batteri {index} strøm"
+      },
+      "pack_input_power": {
+        "name": "Batteriets afladeeffekt"
+      },
+      "pack_max_temp": {
+        "name": "Batteri {index} temperatur"
+      },
+      "pack_max_vol": {
+        "name": "Batteri {index} maks. cellespænding"
+      },
+      "pack_min_vol": {
+        "name": "Batteri {index} min. cellespænding"
+      },
+      "pack_model": {
+        "name": "Batteri {index} model"
+      },
+      "pack_num": {
+        "name": "Antal batterimoduler"
+      },
+      "pack_pack_type": {
+        "name": "Batteri {index} pakketype"
+      },
+      "pack_power": {
+        "name": "Batteri {index} effekt"
+      },
+      "pack_sn": {
+        "name": "Batteri {index} serienummer"
+      },
+      "pack_soc_level": {
+        "name": "Batteri {index} ladetilstand"
+      },
+      "pack_soft_version": {
+        "name": "Batteri {index} firmwareversion"
+      },
+      "pack_total_vol": {
+        "name": "Batteri {index} spænding"
+      },
+      "phase_switch": {
+        "name": "Faseskift"
+      },
+      "powerhub_status": {
+        "name": "Powerhub-status"
+      },
+      "protocol_type": {
+        "name": "Protokoltype"
+      },
+      "remain_out_time": {
+        "name": "Resterende afladetid"
+      },
+      "rssi": {
+        "name": "Signalstyrke"
+      },
+      "slave_addr": {
+        "name": "Slaveadresse"
+      },
+      "solar_input_power": {
+        "name": "PV-indgangseffekt"
+      },
+      "solar_power1": {
+        "name": "PV-streng 1"
+      },
+      "solar_power2": {
+        "name": "PV-streng 2"
+      },
+      "solar_power3": {
+        "name": "PV-streng 3"
+      },
+      "solar_power4": {
+        "name": "PV-streng 4"
+      },
+      "solar_power5": {
+        "name": "PV-streng 5"
+      },
+      "solar_power6": {
+        "name": "PV-streng 6"
+      },
+      "time_zone": {
+        "name": "Tidszone"
+      },
+      "timestamp": {
+        "name": "Rapportens tidsstempel"
+      },
+      "total_power": {
+        "name": "Samlet neteffekt"
+      },
+      "ts": {
+        "name": "Enhedens tidsstempel"
+      },
+      "ts_zone": {
+        "name": "Tidszoneforskydning"
+      },
+      "volt_wakeup": {
+        "name": "Spændingsvækning"
+      },
+      "write_rsp": {
+        "name": "Skrivesvar"
+      }
+    },
+    "binary_sensor": {
+      "data_ready": {
+        "name": "Data klar"
+      },
+      "dry_node_state": {
+        "name": "Potentialfri kontakt"
+      },
+      "fan_switch": {
+        "name": "Blæser"
+      },
+      "grid_state": {
+        "name": "Net tilsluttet"
+      },
+      "heat_state": {
+        "name": "Opvarmning"
+      },
+      "hv_bat_ctrl_switch": {
+        "name": "HV-batteristyring"
+      },
+      "is_error": {
+        "name": "Fejl"
+      },
+      "lamp_switch": {
+        "name": "Lampe"
+      },
+      "pack_heat_state": {
+        "name": "Batteri {index} opvarmning"
+      },
+      "pass": {
+        "name": "Gennemkobling"
+      },
+      "pvac_switch": {
+        "name": "PV-AC-kobling"
+      },
+      "reverse_state": {
+        "name": "Omvendt flow"
+      },
+      "soc_comp_switch": {
+        "name": "SOC-kompensering"
+      }
+    },
+    "number": {
+      "bat_cal_time": {
+        "name": "Kalibreringsinterval"
+      },
+      "charge_buffer": {
+        "name": "Opladningsbuffer"
+      },
+      "charge_max_limit": {
+        "name": "Maksimal opladeeffekt"
+      },
+      "cheap_price": {
+        "name": "Lav pris"
+      },
+      "direction_change_delay": {
+        "name": "Forsinkelse ved retningsskift"
+      },
+      "discharge_buffer": {
+        "name": "Afladningsbuffer"
+      },
+      "expensive_price": {
+        "name": "Høj pris"
+      },
+      "input_limit": {
+        "name": "Opladningsgrænse (AC)"
+      },
+      "inverse_max_power": {
+        "name": "Maksimal invertereffekt"
+      },
+      "manual_power": {
+        "name": "Manuel effekt"
+      },
+      "max_charge_power": {
+        "name": "Maks. opladeeffekt"
+      },
+      "max_discharge_power": {
+        "name": "Maks. afladeeffekt"
+      },
+      "min_charge_power": {
+        "name": "Min. opladeeffekt"
+      },
+      "min_discharge_power": {
+        "name": "Min. afladeeffekt"
+      },
+      "min_soc": {
+        "name": "Nedre SOC-grænse"
+      },
+      "mode_threshold": {
+        "name": "Tilstandstærskel"
+      },
+      "output_limit": {
+        "name": "Afladningsgrænse"
+      },
+      "soc_set": {
+        "name": "Øvre SOC-grænse"
+      },
+      "start_charge_at": {
+        "name": "Begynd opladning ved eksport"
+      },
+      "start_discharge_at": {
+        "name": "Begynd afladning ved import"
+      },
+      "trim_factor": {
+        "name": "Korrektionsstyrke"
+      },
+      "trim_threshold": {
+        "name": "Korrektionstærskel"
+      }
+    },
+    "switch": {
+      "fanmode": {
+        "name": "Blæser altid tændt"
+      },
+      "smart_mode": {
+        "name": "Spring flashskrivning over"
+      },
+      "soc_protection": {
+        "name": "SOC-beskyttelse"
+      },
+      "trace_recording": {
+        "name": "Sporoptagelse"
       }
     }
   }

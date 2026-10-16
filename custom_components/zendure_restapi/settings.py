@@ -19,6 +19,7 @@ from .const import (
     OPERATION_MODES,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
+    PRICE_MODE_OPTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,7 +49,15 @@ class ZendureSettings:
             return DEFAULTS[key]
         if key == OPT_METER_SOURCE and value not in METER_SOURCES:
             return DEFAULTS[key]
+        if key in PRICE_MODE_OPTIONS and value not in PRICE_MODE_OPTIONS[key]:
+            return DEFAULTS[key]
         return value
+
+    def get_float(self, key: str) -> float:
+        try:
+            return float(self.get(key))
+        except (TypeError, ValueError):
+            return float(DEFAULTS[key])
 
     def get_int(self, key: str) -> int:
         try:

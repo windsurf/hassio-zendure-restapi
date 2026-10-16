@@ -14,7 +14,7 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 
 ![Zendure-dashboard](images/dashboard.png)
 
-*`smart_matching` houdt het net op nul: het huis vraagt 175 W, de accu levert het, de meter staat op 0 W. Dit dashboard zit bij de integratie.*
+*`smart_matching` houdt het net op nul: het huis vraagt 175 W, de accu levert het, de meter staat op 0 W. De integratie maakt dit dashboard op verzoek voor je aan.*
 
 **Snel aan de slag hieronder** · alle details in de [Technische referentie](#-technische-referentie) (Engels)
 
@@ -79,7 +79,7 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 - **Laat een volle accu met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
 - **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, laad- en ontlaadrendement als sensoren, en een optionele CSV-trace per seconde voor wie het precies wil weten.
 - **Elke wijziging gemeten vóór de release.** Wijzigingen aan de regellus worden eerst nagespeeld op opgenomen meetreeksen per seconde; de metingen en de correcties op Zendures documentatie staan openbaar in de technische referentie.
-- **Spreekt je taal.** Instelschermen en statussen in het Nederlands, Engels, Duits, Frans, Italiaans, Spaans, Portugees, Pools, Tsjechisch, Zweeds en Deens.
+- **Spreekt je taal.** Instelschermen, entiteitsnamen en statussen in het Nederlands, Engels, Duits, Frans, Italiaans, Spaans, Portugees, Pools, Tsjechisch, Zweeds en Deens.
 
 ---
 
@@ -96,7 +96,7 @@ In de Zendure-app: voeg **HEMS** toe en sluit de app daarna af. Controleer het v
 Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://github.com/windsurf/hassio-zendure-restapi`, categorie **Integratie**. Installeer **Zendure RestAPI** en herstart Home Assistant.
 
 **3. Voeg je apparaten toe**
-Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
+Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Vink **Zendure RestAPI-dashboard aanmaken** aan, dan staat het dashboard in je zijbalk. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
 **Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
@@ -114,6 +114,14 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 | `smart_discharge_only` | Dekt alleen vraag, laadt nooit |
 | `quick_charge` / `quick_discharge` | Vol vermogen, los van de meter |
 | `manual` | Volgt een vast instelpunt |
+
+---
+
+## 💶 Prijssturing
+
+Dynamisch handelen, ingebouwd: op of onder een **goedkope prijs** laadt de accu, op of boven een **dure prijs** ontlaadt hij, en daartussen houdt hij het net op nul. Voeg het toe als eigen apparaat: **Integratie toevoegen → Zendure RestAPI → Prijssturing**, kies de accu en je prijssensor — Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen. Het apparaat **Price Control** verschijnt naast je accu; zet het daar aan. Beide prijzen en de modus per prijsband zijn live aan te passen, op dat apparaat of op het tabblad *Price Control* van het dashboard.
+
+Standaard uit: stuurt een eigen automation of planner de werkmodus al, laat hem dan uit. Details in de [technische referentie](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Engels).
 
 ---
 
@@ -145,7 +153,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.5.5:** alleen documentatie — hoe deze integratie zich verhoudt tot de zenSDK van Zendure, een nieuwe meting van twee meters naast elkaar, en de controllerstatus in de recorder houden. **v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
+**Laatste release – v1.5.6:** entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt; **prijssturing** voor dynamisch handelen, ingebouwd. **v1.5.5:** alleen documentatie — hoe deze integratie zich verhoudt tot de zenSDK van Zendure, een nieuwe meting van twee meters naast elkaar, en de controllerstatus in de recorder houden. **v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
 
 ## Meer
 

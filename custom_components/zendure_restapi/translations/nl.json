@@ -7,7 +7,8 @@
         "menu_options": {
           "zendure": "Zendure-apparaat (accu of P1-meter)",
           "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)"
+          "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)",
+          "price_control": "Prijssturing (dynamisch handelen)"
         }
       },
       "zendure": {
@@ -15,12 +16,16 @@
         "description": "Vul het IP-adres van het Zendure-apparaat in. De lokale API moet aan staan: voeg in de Zendure-app HEMS toe en sluit de app af.",
         "data": {
           "host": "IP-adres",
-          "port": "HTTP-poort"
+          "port": "HTTP-poort",
+          "create_dashboard": "Zendure RestAPI-dashboard aanmaken (alleen accu)"
         }
       },
       "confirm": {
         "title": "Zendure-apparaat gevonden",
-        "description": "{model} op {host} (serienummer {sn}) toevoegen?"
+        "description": "{model} op {host} (serienummer {sn}) toevoegen?",
+        "data": {
+          "create_dashboard": "Zendure RestAPI-dashboard aanmaken"
+        }
       },
       "external_meter": {
         "title": "Externe P1-meter",
@@ -42,6 +47,14 @@
           "source_entity": "Vermogenssensor (afname positief)",
           "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
         }
+      },
+      "price_control": {
+        "title": "Prijssturing",
+        "description": "Zet de werkmodus van een accu op basis van de stroomprijs: laden als hij goedkoop is, ontladen als hij duur is, en het net op nul daartussen. Hij staat uit tot je hem aanzet.",
+        "data": {
+          "battery_entry": "Accu",
+          "price_entity": "Prijssensor (prijs per kWh)"
+        }
       }
     },
     "error": {
@@ -57,15 +70,17 @@
       "cannot_connect": "Geen antwoord. Controleer het IP-adres en of de lokale API aan staat.",
       "no_identity": "Het apparaat antwoordde, maar meldde geen serienummer en geen apparaat-id.",
       "wrong_meter_type": "Het adres antwoordt, maar niet als dit metertype. Controleer het metertype.",
-      "not_a_p1_meter": "Dit HomeWizard-apparaat is geen P1-meter."
+      "not_a_p1_meter": "Dit HomeWizard-apparaat is geen P1-meter.",
+      "no_battery": "Voeg eerst een Zendure-accu toe."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Bevragingsinterval",
+        "title": "Opties",
         "data": {
-          "scan_interval": "Seconden tussen bevragingen (1-60)"
+          "scan_interval": "Seconden tussen bevragingen (1-60)",
+          "create_dashboard": "Zendure RestAPI-dashboard aanmaken (een bestaand dashboard blijft ongemoeid)"
         }
       },
       "external": {
@@ -81,6 +96,12 @@
           "source_entity": "Vermogenssensor (afname positief)",
           "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
         }
+      },
+      "price": {
+        "title": "Prijssturing",
+        "data": {
+          "price_entity": "Prijssensor (prijs per kWh)"
+        }
       }
     },
     "error": {
@@ -95,39 +116,60 @@
           "zendure": "Zendure-meter",
           "external": "Externe meter",
           "auto": "Auto (extern, anders Zendure)"
-        }
+        },
+        "name": "Meterbron"
       },
       "converter_mode": {
         "state": {
           "charge": "Laden",
           "discharge": "Ontladen"
-        }
+        },
+        "name": "Omvormermodus"
       },
       "backup_mode": {
         "state": {
           "standard": "Standaard",
           "economic": "Zuinig",
           "closed": "Gesloten"
-        }
+        },
+        "name": "Noodstroommodus"
       },
       "pv_export": {
         "state": {
           "off": "Uit",
           "allowed": "Toegestaan",
           "forbidden": "Verboden"
-        }
+        },
+        "name": "PV-teruglevering"
       },
       "fan_speed_mode": {
         "state": {
           "auto": "Auto",
           "gear_1": "Stand 1",
           "gear_2": "Stand 2"
-        }
+        },
+        "name": "Ventilatormodus"
       },
       "external_meter": {
         "state": {
           "none": "Geen"
-        }
+        },
+        "name": "Externe meter"
+      },
+      "cheap_price_mode": {
+        "name": "Modus bij goedkope prijs"
+      },
+      "expensive_price_mode": {
+        "name": "Modus bij dure prijs"
+      },
+      "grid_standard": {
+        "name": "Netnorm"
+      },
+      "in_between_mode": {
+        "name": "Modus daartussen"
+      },
+      "operation_mode": {
+        "name": "Werkmodus"
       }
     },
     "sensor": {
@@ -136,54 +178,62 @@
           "auto": "Auto",
           "gear_1": "Stand 1",
           "gear_2": "Stand 2"
-        }
+        },
+        "name": "Ventilatorstand"
       },
       "battery_state": {
         "state": {
           "standby": "Stand-by",
           "charging": "Laden",
           "discharging": "Ontladen"
-        }
+        },
+        "name": "Accustatus"
       },
       "pack_state": {
         "state": {
           "standby": "Stand-by",
           "charging": "Laden",
           "discharging": "Ontladen"
-        }
+        },
+        "name": "Accu {index} status"
       },
       "ac_state": {
         "state": {
           "off": "Uit",
           "input": "Invoer",
           "output": "Uitvoer"
-        }
+        },
+        "name": "AC-status"
       },
       "dc_state": {
         "state": {
           "off": "Uit",
           "input": "Invoer",
           "output": "Uitvoer"
-        }
+        },
+        "name": "DC-status"
       },
       "pv_state": {
         "state": {
           "off": "Uit",
           "on": "Aan"
-        }
+        },
+        "name": "PV-status"
       },
       "soc_limit_status": {
         "state": {
           "none": "Geen",
           "upper_limit": "Bovengrens (vol)",
           "lower_limit": "Ondergrens (leeg)"
-        }
+        },
+        "name": "SOC-grensstatus"
       },
       "soc_calibration_status": {
         "state": {
           "uncalibrated": "Niet gekalibreerd",
           "calibrated": "Gekalibreerd"
-        }
+        },
+        "name": "SOC-kalibratiestatus"
       },
       "controller_status": {
         "state": {
@@ -201,14 +251,365 @@
           "blocked": "Geblokkeerd",
           "protecting": "Beschermen",
           "error": "Fout"
-        }
+        },
+        "name": "Regelaarstatus"
       },
       "external_status": {
         "state": {
           "live": "Actueel",
           "stale": "Geen nieuwe gegevens",
           "unreachable": "Onbereikbaar"
-        }
+        },
+        "name": "Status"
+      },
+      "price_control_status": {
+        "state": {
+          "off": "Uit",
+          "no_price": "Geen prijs",
+          "cheap": "Goedkoop",
+          "between": "Daartussen",
+          "expensive": "Duur"
+        },
+        "name": "Status"
+      },
+      "a_aprt_power": {
+        "name": "Schijnbaar vermogen fase A"
+      },
+      "ac_coupling_state": {
+        "name": "AC-koppelingsstatus"
+      },
+      "b_aprt_power": {
+        "name": "Schijnbaar vermogen fase B"
+      },
+      "bat_volt": {
+        "name": "DC-busspanning"
+      },
+      "battery_power": {
+        "name": "Accuvermogen"
+      },
+      "bindstate": {
+        "name": "Koppelstatus"
+      },
+      "c_aprt_power": {
+        "name": "Schijnbaar vermogen fase C"
+      },
+      "charge_efficiency": {
+        "name": "Laadrendement"
+      },
+      "discharge_efficiency": {
+        "name": "Ontlaadrendement"
+      },
+      "electric_level": {
+        "name": "Laadtoestand"
+      },
+      "electricity_price": {
+        "name": "Stroomprijs"
+      },
+      "energy_charged": {
+        "name": "Energie geladen"
+      },
+      "energy_discharged": {
+        "name": "Energie ontladen"
+      },
+      "energy_exported": {
+        "name": "Energie teruggeleverd"
+      },
+      "energy_imported": {
+        "name": "Energie afgenomen"
+      },
+      "energy_pv": {
+        "name": "PV-energie"
+      },
+      "external_energy_exported": {
+        "name": "Energie teruggeleverd"
+      },
+      "external_energy_imported": {
+        "name": "Energie afgenomen"
+      },
+      "external_power": {
+        "name": "Vermogen"
+      },
+      "external_telegram_age": {
+        "name": "Leeftijd telegram"
+      },
+      "factory_mode_state": {
+        "name": "Fabrieksmodus"
+      },
+      "fan_speed": {
+        "name": "Ventilatorniveau"
+      },
+      "fault_level": {
+        "name": "Storingsniveau"
+      },
+      "fm_volt": {
+        "name": "Activeringsspanning"
+      },
+      "grid_hd_status": {
+        "name": "Net-HD-status"
+      },
+      "grid_input_power": {
+        "name": "Vermogen uit net"
+      },
+      "grid_off_power": {
+        "name": "Vermogen noodstroomuitgang"
+      },
+      "grid_off_power2": {
+        "name": "Vermogen noodstroomuitgang 2"
+      },
+      "hv_bat_volt": {
+        "name": "HV-accuspanning (ruw)"
+      },
+      "hyper_tmp": {
+        "name": "Temperatuur behuizing"
+      },
+      "iot_state": {
+        "name": "IoT-verbindingsstatus"
+      },
+      "lcn_state": {
+        "name": "LCN-status"
+      },
+      "message_id": {
+        "name": "Bericht-id"
+      },
+      "meter_type": {
+        "name": "Metertype"
+      },
+      "off_grid_state": {
+        "name": "Eilandstatus"
+      },
+      "old_mode": {
+        "name": "Oude modus"
+      },
+      "ota_state": {
+        "name": "OTA-status"
+      },
+      "output_home_power": {
+        "name": "Vermogen naar huis"
+      },
+      "output_pack_power": {
+        "name": "Laadvermogen accu"
+      },
+      "pack_batcur": {
+        "name": "Accu {index} stroom"
+      },
+      "pack_input_power": {
+        "name": "Ontlaadvermogen accu"
+      },
+      "pack_max_temp": {
+        "name": "Accu {index} temperatuur"
+      },
+      "pack_max_vol": {
+        "name": "Accu {index} max. celspanning"
+      },
+      "pack_min_vol": {
+        "name": "Accu {index} min. celspanning"
+      },
+      "pack_model": {
+        "name": "Accu {index} model"
+      },
+      "pack_num": {
+        "name": "Aantal accumodules"
+      },
+      "pack_pack_type": {
+        "name": "Accu {index} pakkettype"
+      },
+      "pack_power": {
+        "name": "Accu {index} vermogen"
+      },
+      "pack_sn": {
+        "name": "Accu {index} serienummer"
+      },
+      "pack_soc_level": {
+        "name": "Accu {index} laadtoestand"
+      },
+      "pack_soft_version": {
+        "name": "Accu {index} firmwareversie"
+      },
+      "pack_total_vol": {
+        "name": "Accu {index} spanning"
+      },
+      "phase_switch": {
+        "name": "Fasewissel"
+      },
+      "powerhub_status": {
+        "name": "Powerhub-status"
+      },
+      "protocol_type": {
+        "name": "Protocoltype"
+      },
+      "remain_out_time": {
+        "name": "Resterende ontlaadtijd"
+      },
+      "rssi": {
+        "name": "Signaalsterkte"
+      },
+      "slave_addr": {
+        "name": "Slave-adres"
+      },
+      "solar_input_power": {
+        "name": "PV-ingangsvermogen"
+      },
+      "solar_power1": {
+        "name": "PV-string 1"
+      },
+      "solar_power2": {
+        "name": "PV-string 2"
+      },
+      "solar_power3": {
+        "name": "PV-string 3"
+      },
+      "solar_power4": {
+        "name": "PV-string 4"
+      },
+      "solar_power5": {
+        "name": "PV-string 5"
+      },
+      "solar_power6": {
+        "name": "PV-string 6"
+      },
+      "time_zone": {
+        "name": "Tijdzone"
+      },
+      "timestamp": {
+        "name": "Tijdstempel rapport"
+      },
+      "total_power": {
+        "name": "Netvermogen totaal"
+      },
+      "ts": {
+        "name": "Tijdstempel apparaat"
+      },
+      "ts_zone": {
+        "name": "Tijdzoneverschil"
+      },
+      "volt_wakeup": {
+        "name": "Spanningswekken"
+      },
+      "write_rsp": {
+        "name": "Schrijfantwoord"
+      }
+    },
+    "binary_sensor": {
+      "data_ready": {
+        "name": "Gegevens gereed"
+      },
+      "dry_node_state": {
+        "name": "Potentiaalvrij contact"
+      },
+      "fan_switch": {
+        "name": "Ventilator"
+      },
+      "grid_state": {
+        "name": "Net verbonden"
+      },
+      "heat_state": {
+        "name": "Verwarming"
+      },
+      "hv_bat_ctrl_switch": {
+        "name": "HV-accubesturing"
+      },
+      "is_error": {
+        "name": "Fout"
+      },
+      "lamp_switch": {
+        "name": "Lamp"
+      },
+      "pack_heat_state": {
+        "name": "Accu {index} verwarming"
+      },
+      "pass": {
+        "name": "Doorvoer"
+      },
+      "pvac_switch": {
+        "name": "PV-AC-koppeling"
+      },
+      "reverse_state": {
+        "name": "Terugstroom"
+      },
+      "soc_comp_switch": {
+        "name": "SOC-compensatie"
+      }
+    },
+    "number": {
+      "bat_cal_time": {
+        "name": "Kalibratie-interval"
+      },
+      "charge_buffer": {
+        "name": "Laadbuffer"
+      },
+      "charge_max_limit": {
+        "name": "Maximaal laadvermogen"
+      },
+      "cheap_price": {
+        "name": "Goedkope prijs"
+      },
+      "direction_change_delay": {
+        "name": "Wachttijd bij richtingwissel"
+      },
+      "discharge_buffer": {
+        "name": "Ontlaadbuffer"
+      },
+      "expensive_price": {
+        "name": "Dure prijs"
+      },
+      "input_limit": {
+        "name": "Laadlimiet (AC)"
+      },
+      "inverse_max_power": {
+        "name": "Maximaal omvormervermogen"
+      },
+      "manual_power": {
+        "name": "Handmatig vermogen"
+      },
+      "max_charge_power": {
+        "name": "Max. laadvermogen"
+      },
+      "max_discharge_power": {
+        "name": "Max. ontlaadvermogen"
+      },
+      "min_charge_power": {
+        "name": "Min. laadvermogen"
+      },
+      "min_discharge_power": {
+        "name": "Min. ontlaadvermogen"
+      },
+      "min_soc": {
+        "name": "Ondergrens SOC"
+      },
+      "mode_threshold": {
+        "name": "Drempel modus"
+      },
+      "output_limit": {
+        "name": "Ontlaadlimiet"
+      },
+      "soc_set": {
+        "name": "Bovengrens SOC"
+      },
+      "start_charge_at": {
+        "name": "Laden starten bij teruglevering"
+      },
+      "start_discharge_at": {
+        "name": "Ontladen starten bij afname"
+      },
+      "trim_factor": {
+        "name": "Bijstuursterkte"
+      },
+      "trim_threshold": {
+        "name": "Drempel bijsturen"
+      }
+    },
+    "switch": {
+      "fanmode": {
+        "name": "Ventilator altijd aan"
+      },
+      "smart_mode": {
+        "name": "Flash-schrijven overslaan"
+      },
+      "soc_protection": {
+        "name": "SOC-bescherming"
+      },
+      "trace_recording": {
+        "name": "Trace opnemen"
       }
     }
   }

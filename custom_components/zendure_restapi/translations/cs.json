@@ -7,7 +7,8 @@
         "menu_options": {
           "zendure": "Zařízení Zendure (baterie nebo elektroměr P1)",
           "external_meter": "Externí elektroměr P1 (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Senzor Home Assistant jako externí elektroměr (Zonneplan, DSMR, …)"
+          "ha_sensor": "Senzor Home Assistant jako externí elektroměr (Zonneplan, DSMR, …)",
+          "price_control": "Řízení podle ceny (dynamické obchodování)"
         }
       },
       "zendure": {
@@ -15,12 +16,16 @@
         "description": "Zadejte IP adresu zařízení Zendure. Místní API musí být zapnuté: v aplikaci Zendure přidejte HEMS a aplikaci ukončete.",
         "data": {
           "host": "IP adresa",
-          "port": "HTTP port"
+          "port": "HTTP port",
+          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI (jen baterie)"
         }
       },
       "confirm": {
         "title": "Nalezeno zařízení Zendure",
-        "description": "Přidat {model} na adrese {host} (sériové číslo {sn})?"
+        "description": "Přidat {model} na adrese {host} (sériové číslo {sn})?",
+        "data": {
+          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI"
+        }
       },
       "external_meter": {
         "title": "Externí elektroměr P1",
@@ -42,6 +47,14 @@
           "source_entity": "Senzor výkonu (odběr kladný)",
           "export_entity": "Senzor dodávky (volitelný, dodávka kladná)"
         }
+      },
+      "price_control": {
+        "title": "Řízení podle ceny",
+        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: nabíjí, když je levná, vybíjí, když je drahá, a mezi tím drží síť na nule. Je vypnuto, dokud ho nezapnete.",
+        "data": {
+          "battery_entry": "Baterie",
+          "price_entity": "Cenový senzor (cena za kWh)"
+        }
       }
     },
     "error": {
@@ -57,15 +70,17 @@
       "cannot_connect": "Žádná odpověď. Zkontrolujte IP adresu a zda je místní API zapnuté.",
       "no_identity": "Zařízení odpovědělo, ale neuvedlo sériové číslo ani ID zařízení.",
       "wrong_meter_type": "Adresa odpovídá, ale ne jako tento typ elektroměru. Zkontrolujte typ elektroměru.",
-      "not_a_p1_meter": "Toto zařízení HomeWizard není elektroměr P1."
+      "not_a_p1_meter": "Toto zařízení HomeWizard není elektroměr P1.",
+      "no_battery": "Nejprve přidejte baterii Zendure."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Interval dotazování",
+        "title": "Možnosti",
         "data": {
-          "scan_interval": "Sekundy mezi dotazy (1-60)"
+          "scan_interval": "Sekundy mezi dotazy (1-60)",
+          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI (existující zůstane beze změny)"
         }
       },
       "external": {
@@ -81,6 +96,12 @@
           "source_entity": "Senzor výkonu (odběr kladný)",
           "export_entity": "Senzor dodávky (volitelný, dodávka kladná)"
         }
+      },
+      "price": {
+        "title": "Řízení podle ceny",
+        "data": {
+          "price_entity": "Cenový senzor (cena za kWh)"
+        }
       }
     },
     "error": {
@@ -95,39 +116,60 @@
           "zendure": "Elektroměr Zendure",
           "external": "Externí elektroměr",
           "auto": "Auto (externí, jinak Zendure)"
-        }
+        },
+        "name": "Zdroj elektroměru"
       },
       "converter_mode": {
         "state": {
           "charge": "Nabíjení",
           "discharge": "Vybíjení"
-        }
+        },
+        "name": "Režim měniče"
       },
       "backup_mode": {
         "state": {
           "standard": "Standardní",
           "economic": "Úsporný",
           "closed": "Zavřeno"
-        }
+        },
+        "name": "Záložní režim"
       },
       "pv_export": {
         "state": {
           "off": "Vypnuto",
           "allowed": "Povoleno",
           "forbidden": "Zakázáno"
-        }
+        },
+        "name": "Přetok FV"
       },
       "fan_speed_mode": {
         "state": {
           "auto": "Auto",
           "gear_1": "Stupeň 1",
           "gear_2": "Stupeň 2"
-        }
+        },
+        "name": "Režim ventilátoru"
       },
       "external_meter": {
         "state": {
           "none": "Žádný"
-        }
+        },
+        "name": "Externí elektroměr"
+      },
+      "cheap_price_mode": {
+        "name": "Režim při nízké ceně"
+      },
+      "expensive_price_mode": {
+        "name": "Režim při vysoké ceně"
+      },
+      "grid_standard": {
+        "name": "Síťová norma"
+      },
+      "in_between_mode": {
+        "name": "Režim mezi cenami"
+      },
+      "operation_mode": {
+        "name": "Provozní režim"
       }
     },
     "sensor": {
@@ -136,54 +178,62 @@
           "auto": "Auto",
           "gear_1": "Stupeň 1",
           "gear_2": "Stupeň 2"
-        }
+        },
+        "name": "Stupeň ventilátoru"
       },
       "battery_state": {
         "state": {
           "standby": "Pohotovost",
           "charging": "Nabíjí se",
           "discharging": "Vybíjí se"
-        }
+        },
+        "name": "Stav baterie"
       },
       "pack_state": {
         "state": {
           "standby": "Pohotovost",
           "charging": "Nabíjí se",
           "discharging": "Vybíjí se"
-        }
+        },
+        "name": "Baterie {index} stav"
       },
       "ac_state": {
         "state": {
           "off": "Vypnuto",
           "input": "Vstup",
           "output": "Výstup"
-        }
+        },
+        "name": "Stav AC"
       },
       "dc_state": {
         "state": {
           "off": "Vypnuto",
           "input": "Vstup",
           "output": "Výstup"
-        }
+        },
+        "name": "Stav DC"
       },
       "pv_state": {
         "state": {
           "off": "Vypnuto",
           "on": "Zapnuto"
-        }
+        },
+        "name": "Stav FV"
       },
       "soc_limit_status": {
         "state": {
           "none": "Žádný",
           "upper_limit": "Horní mez (plná)",
           "lower_limit": "Dolní mez (prázdná)"
-        }
+        },
+        "name": "Stav meze SOC"
       },
       "soc_calibration_status": {
         "state": {
           "uncalibrated": "Nekalibrováno",
           "calibrated": "Kalibrováno"
-        }
+        },
+        "name": "Stav kalibrace SOC"
       },
       "controller_status": {
         "state": {
@@ -201,14 +251,365 @@
           "blocked": "Blokováno",
           "protecting": "Ochrana",
           "error": "Chyba"
-        }
+        },
+        "name": "Stav regulátoru"
       },
       "external_status": {
         "state": {
           "live": "Aktuální",
           "stale": "Žádná nová data",
           "unreachable": "Nedostupný"
-        }
+        },
+        "name": "Stav"
+      },
+      "price_control_status": {
+        "state": {
+          "off": "Vypnuto",
+          "no_price": "Žádná cena",
+          "cheap": "Levné",
+          "between": "Mezi",
+          "expensive": "Drahé"
+        },
+        "name": "Stav"
+      },
+      "a_aprt_power": {
+        "name": "Zdánlivý výkon fáze A"
+      },
+      "ac_coupling_state": {
+        "name": "Stav AC vazby"
+      },
+      "b_aprt_power": {
+        "name": "Zdánlivý výkon fáze B"
+      },
+      "bat_volt": {
+        "name": "Napětí stejnosměrné sběrnice"
+      },
+      "battery_power": {
+        "name": "Výkon baterie"
+      },
+      "bindstate": {
+        "name": "Stav spárování"
+      },
+      "c_aprt_power": {
+        "name": "Zdánlivý výkon fáze C"
+      },
+      "charge_efficiency": {
+        "name": "Účinnost nabíjení"
+      },
+      "discharge_efficiency": {
+        "name": "Účinnost vybíjení"
+      },
+      "electric_level": {
+        "name": "Stav nabití"
+      },
+      "electricity_price": {
+        "name": "Cena elektřiny"
+      },
+      "energy_charged": {
+        "name": "Nabitá energie"
+      },
+      "energy_discharged": {
+        "name": "Vybitá energie"
+      },
+      "energy_exported": {
+        "name": "Dodaná energie"
+      },
+      "energy_imported": {
+        "name": "Odebraná energie"
+      },
+      "energy_pv": {
+        "name": "Energie FV"
+      },
+      "external_energy_exported": {
+        "name": "Dodaná energie"
+      },
+      "external_energy_imported": {
+        "name": "Odebraná energie"
+      },
+      "external_power": {
+        "name": "Výkon"
+      },
+      "external_telegram_age": {
+        "name": "Stáří telegramu"
+      },
+      "factory_mode_state": {
+        "name": "Tovární režim"
+      },
+      "fan_speed": {
+        "name": "Úroveň ventilátoru"
+      },
+      "fault_level": {
+        "name": "Úroveň poruchy"
+      },
+      "fm_volt": {
+        "name": "Aktivační napětí"
+      },
+      "grid_hd_status": {
+        "name": "Stav HD sítě"
+      },
+      "grid_input_power": {
+        "name": "Výkon ze sítě"
+      },
+      "grid_off_power": {
+        "name": "Výkon záložního výstupu"
+      },
+      "grid_off_power2": {
+        "name": "Výkon záložního výstupu 2"
+      },
+      "hv_bat_volt": {
+        "name": "Napětí baterie HV (surové)"
+      },
+      "hyper_tmp": {
+        "name": "Teplota skříně"
+      },
+      "iot_state": {
+        "name": "Stav připojení IoT"
+      },
+      "lcn_state": {
+        "name": "Stav LCN"
+      },
+      "message_id": {
+        "name": "ID zprávy"
+      },
+      "meter_type": {
+        "name": "Typ elektroměru"
+      },
+      "off_grid_state": {
+        "name": "Stav ostrovního provozu"
+      },
+      "old_mode": {
+        "name": "Starší režim"
+      },
+      "ota_state": {
+        "name": "Stav OTA"
+      },
+      "output_home_power": {
+        "name": "Výkon do domu"
+      },
+      "output_pack_power": {
+        "name": "Nabíjecí výkon baterie"
+      },
+      "pack_batcur": {
+        "name": "Baterie {index} proud"
+      },
+      "pack_input_power": {
+        "name": "Vybíjecí výkon baterie"
+      },
+      "pack_max_temp": {
+        "name": "Baterie {index} teplota"
+      },
+      "pack_max_vol": {
+        "name": "Baterie {index} max. napětí článku"
+      },
+      "pack_min_vol": {
+        "name": "Baterie {index} min. napětí článku"
+      },
+      "pack_model": {
+        "name": "Baterie {index} model"
+      },
+      "pack_num": {
+        "name": "Počet bateriových modulů"
+      },
+      "pack_pack_type": {
+        "name": "Baterie {index} typ sady"
+      },
+      "pack_power": {
+        "name": "Baterie {index} výkon"
+      },
+      "pack_sn": {
+        "name": "Baterie {index} sériové číslo"
+      },
+      "pack_soc_level": {
+        "name": "Baterie {index} stav nabití"
+      },
+      "pack_soft_version": {
+        "name": "Baterie {index} verze firmwaru"
+      },
+      "pack_total_vol": {
+        "name": "Baterie {index} napětí"
+      },
+      "phase_switch": {
+        "name": "Přepínání fází"
+      },
+      "powerhub_status": {
+        "name": "Stav Powerhub"
+      },
+      "protocol_type": {
+        "name": "Typ protokolu"
+      },
+      "remain_out_time": {
+        "name": "Zbývající doba vybíjení"
+      },
+      "rssi": {
+        "name": "Síla signálu"
+      },
+      "slave_addr": {
+        "name": "Adresa slave"
+      },
+      "solar_input_power": {
+        "name": "Vstupní výkon FV"
+      },
+      "solar_power1": {
+        "name": "String FV 1"
+      },
+      "solar_power2": {
+        "name": "String FV 2"
+      },
+      "solar_power3": {
+        "name": "String FV 3"
+      },
+      "solar_power4": {
+        "name": "String FV 4"
+      },
+      "solar_power5": {
+        "name": "String FV 5"
+      },
+      "solar_power6": {
+        "name": "String FV 6"
+      },
+      "time_zone": {
+        "name": "Časové pásmo"
+      },
+      "timestamp": {
+        "name": "Časové razítko hlášení"
+      },
+      "total_power": {
+        "name": "Celkový výkon sítě"
+      },
+      "ts": {
+        "name": "Časové razítko zařízení"
+      },
+      "ts_zone": {
+        "name": "Posun časového pásma"
+      },
+      "volt_wakeup": {
+        "name": "Probuzení napětím"
+      },
+      "write_rsp": {
+        "name": "Odpověď na zápis"
+      }
+    },
+    "binary_sensor": {
+      "data_ready": {
+        "name": "Data připravena"
+      },
+      "dry_node_state": {
+        "name": "Bezpotenciálový kontakt"
+      },
+      "fan_switch": {
+        "name": "Ventilátor"
+      },
+      "grid_state": {
+        "name": "Síť připojena"
+      },
+      "heat_state": {
+        "name": "Vyhřívání"
+      },
+      "hv_bat_ctrl_switch": {
+        "name": "Řízení baterie HV"
+      },
+      "is_error": {
+        "name": "Chyba"
+      },
+      "lamp_switch": {
+        "name": "Kontrolka"
+      },
+      "pack_heat_state": {
+        "name": "Baterie {index} vyhřívání"
+      },
+      "pass": {
+        "name": "Průchod"
+      },
+      "pvac_switch": {
+        "name": "Vazba FV-AC"
+      },
+      "reverse_state": {
+        "name": "Zpětný tok"
+      },
+      "soc_comp_switch": {
+        "name": "Kompenzace SOC"
+      }
+    },
+    "number": {
+      "bat_cal_time": {
+        "name": "Interval kalibrace"
+      },
+      "charge_buffer": {
+        "name": "Rezerva nabíjení"
+      },
+      "charge_max_limit": {
+        "name": "Maximální nabíjecí výkon"
+      },
+      "cheap_price": {
+        "name": "Nízká cena"
+      },
+      "direction_change_delay": {
+        "name": "Prodleva změny směru"
+      },
+      "discharge_buffer": {
+        "name": "Rezerva vybíjení"
+      },
+      "expensive_price": {
+        "name": "Vysoká cena"
+      },
+      "input_limit": {
+        "name": "Limit nabíjení (AC)"
+      },
+      "inverse_max_power": {
+        "name": "Maximální výkon střídače"
+      },
+      "manual_power": {
+        "name": "Ruční výkon"
+      },
+      "max_charge_power": {
+        "name": "Max. nabíjecí výkon"
+      },
+      "max_discharge_power": {
+        "name": "Max. vybíjecí výkon"
+      },
+      "min_charge_power": {
+        "name": "Min. nabíjecí výkon"
+      },
+      "min_discharge_power": {
+        "name": "Min. vybíjecí výkon"
+      },
+      "min_soc": {
+        "name": "Dolní mez SOC"
+      },
+      "mode_threshold": {
+        "name": "Práh režimu"
+      },
+      "output_limit": {
+        "name": "Limit vybíjení"
+      },
+      "soc_set": {
+        "name": "Horní mez SOC"
+      },
+      "start_charge_at": {
+        "name": "Nabíjet od dodávky"
+      },
+      "start_discharge_at": {
+        "name": "Vybíjet od odběru"
+      },
+      "trim_factor": {
+        "name": "Síla korekce"
+      },
+      "trim_threshold": {
+        "name": "Práh korekce"
+      }
+    },
+    "switch": {
+      "fanmode": {
+        "name": "Ventilátor trvale zapnut"
+      },
+      "smart_mode": {
+        "name": "Přeskočit zápis do flash"
+      },
+      "soc_protection": {
+        "name": "Ochrana SOC"
+      },
+      "trace_recording": {
+        "name": "Záznam trasování"
       }
     }
   }

@@ -14,7 +14,7 @@ Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS i
 
 ![Zendure-Dashboard](images/dashboard.png)
 
-*`smart_matching` hält das Netz auf null: Das Haus braucht 175 W, die Batterie liefert sie, der Zähler zeigt 0 W. Dieses Dashboard liegt der Integration bei.*
+*`smart_matching` hält das Netz auf null: Das Haus braucht 175 W, die Batterie liefert sie, der Zähler zeigt 0 W. Die Integration legt dieses Dashboard auf Wunsch für dich an.*
 
 **Schnellstart unten** · alle Details in der [technischen Referenz](#-technische-referenz) (Englisch)
 
@@ -79,7 +79,7 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 - **Lässt eine volle Batterie in Ruhe.** An den eigenen SOC-Grenzen des Geräts wird nichts in die gesperrte Richtung bestellt: Eine ganze Nacht bei 100 % kostete zwei Grenzwertänderungen, und der Status sagt, warum.
 - **Alles sichtbar.** Fertiges Dashboard, ein Controller-Status, der sagt *warum*, Lade- und Entladewirkungsgrad als Sensoren und ein optionaler CSV-Trace pro Sekunde für Genaue.
 - **Jede Änderung vor dem Release gemessen.** Änderungen an der Regelschleife werden zuerst an aufgezeichneten Messreihen pro Sekunde nachgespielt; die Messungen und die Korrekturen an Zendures Dokumentation stehen öffentlich in der technischen Referenz.
-- **Spricht deine Sprache.** Einrichtungsdialoge und Zustände auf Deutsch, Englisch, Niederländisch, Französisch, Italienisch, Spanisch, Portugiesisch, Polnisch, Tschechisch, Schwedisch und Dänisch.
+- **Spricht deine Sprache.** Einrichtungsdialoge, Entitätsnamen und Zustände auf Deutsch, Englisch, Niederländisch, Französisch, Italienisch, Spanisch, Portugiesisch, Polnisch, Tschechisch, Schwedisch und Dänisch.
 
 ---
 
@@ -96,7 +96,7 @@ In der Zendure-App **HEMS** hinzufügen und die App danach schließen. Im Browse
 Oder: HACS → Drei-Punkte-Menü → Benutzerdefinierte Repositories → `https://github.com/windsurf/hassio-zendure-restapi`, Kategorie **Integration**. **Zendure RestAPI** installieren und Home Assistant neu starten.
 
 **3. Geräte hinzufügen**
-Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Gerät** wählen und die IP-Adresse eingeben. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
+Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Gerät** wählen und die IP-Adresse eingeben. **Zendure-RestAPI-Dashboard anlegen** anhaken, dann erscheint das Dashboard in der Seitenleiste. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
 
 **Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer P1-Zähler**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
 
@@ -114,6 +114,14 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 | `smart_discharge_only` | Deckt nur den Bedarf, lädt nie |
 | `quick_charge` / `quick_discharge` | Volle Leistung, unabhängig vom Zähler |
 | `manual` | Folgt einem festen Sollwert |
+
+---
+
+## 💶 Preissteuerung
+
+Dynamischer Handel, eingebaut: bei oder unter einem **günstigen Preis** lädt die Batterie, bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null. Füge sie als eigenes Gerät hinzu: **Integration hinzufügen → Zendure RestAPI → Preissteuerung**, wähle die Batterie und deinen Preissensor — Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie oder deinen eigenen. Das Gerät **Price Control** erscheint neben deiner Batterie; schalte es dort ein. Beide Preise und der Modus je Preisband lassen sich live ändern, auf diesem Gerät oder im Tab *Price Control* des Dashboards.
+
+Standardmäßig aus: steuert schon eine eigene Automation oder ein Planer den Betriebsmodus, lass sie aus. Details in der [technischen Referenz](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Englisch).
 
 ---
 
@@ -145,7 +153,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.5.5:** nur Dokumentation – wie sich diese Integration zu Zendures zenSDK verhält, eine neue Messung zweier Zähler nebeneinander und der Controller-Status im Recorder. **v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
+**Neueste Version – v1.5.6:** Entitätsnamen in elf Sprachen, mit Entity-IDs, die englisch bleiben; das Dashboard **Zendure RestAPI** auf Wunsch angelegt; **Preissteuerung** für dynamischen Handel, eingebaut. **v1.5.5:** nur Dokumentation – wie sich diese Integration zu Zendures zenSDK verhält, eine neue Messung zweier Zähler nebeneinander und der Controller-Status im Recorder. **v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
 
 ## Mehr
 

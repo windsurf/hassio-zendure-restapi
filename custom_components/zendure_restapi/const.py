@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.5.5"
+INTEGRATION_VERSION = "1.5.6"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -215,6 +215,42 @@ OPT_METER_SOURCE = "meter_source"
 # Unset with one external meter configured means that one.
 OPT_EXTERNAL_METER = "external_meter"
 EXTERNAL_NONE = "none"
+# A one-off request to create the Zendure RestAPI dashboard (v1.5.6). Set by
+# the config flow or the options, cleared once the request has been handled.
+OPT_CREATE_DASHBOARD = "create_dashboard"
+
+# ── Price control (v1.5.6) ───────────────────────────────────────────────
+# The Operation mode of one battery set from the electricity price: an entry
+# and a device of its own, added like an external meter. Off until switched
+# on, so an automation or planner that already steers the Operation mode stays
+# the only one that does.
+DEVICE_TYPE_PRICE = "price_control"
+CONF_BATTERY_ENTRY = "battery_entry"
+# Our own steering, not a Zendure product: no Zendure in the name.
+PRICE_DEVICE_NAME = "Price Control"
+PRICE_MODEL = "Dynamic trading"
+OPT_PRICE_ENTITY = "price_entity"
+OPT_PRICE_CONTROL = "price_control"
+OPT_PRICE_CHEAP = "price_cheap"
+OPT_PRICE_EXPENSIVE = "price_expensive"
+OPT_PRICE_CHEAP_MODE = "price_cheap_mode"
+OPT_PRICE_EXPENSIVE_MODE = "price_expensive_mode"
+OPT_PRICE_BETWEEN_MODE = "price_between_mode"
+PRICE_MODE_OPTIONS = {
+    OPT_PRICE_CHEAP_MODE: (MODE_QUICK_CHARGE, MODE_SMART_CHARGE),
+    OPT_PRICE_EXPENSIVE_MODE: (MODE_SMART_DISCHARGE, MODE_QUICK_DISCHARGE),
+    OPT_PRICE_BETWEEN_MODE: (MODE_SMART_MATCHING, MODE_STANDBY),
+}
+PRICE_STATUS_OFF = "off"
+PRICE_STATUS_NO_PRICE = "no_price"
+PRICE_STATUS_CHEAP = "cheap"
+PRICE_STATUS_BETWEEN = "between"
+PRICE_STATUS_EXPENSIVE = "expensive"
+PRICE_STATUSES = (
+    PRICE_STATUS_OFF, PRICE_STATUS_NO_PRICE, PRICE_STATUS_CHEAP,
+    PRICE_STATUS_BETWEEN, PRICE_STATUS_EXPENSIVE,
+)
+SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -251,6 +287,13 @@ DEFAULTS = {
     OPT_TRIM_FACTOR: 80,                # % of the remaining error per sample
     OPT_METER_SOURCE: METER_SOURCE_AUTO,
     OPT_EXTERNAL_METER: "",
+    OPT_PRICE_ENTITY: "",
+    OPT_PRICE_CONTROL: False,
+    OPT_PRICE_CHEAP: 0.15,              # per kWh, at or below: charge
+    OPT_PRICE_EXPENSIVE: 0.35,          # per kWh, at or above: discharge
+    OPT_PRICE_CHEAP_MODE: MODE_QUICK_CHARGE,
+    OPT_PRICE_EXPENSIVE_MODE: MODE_SMART_DISCHARGE,
+    OPT_PRICE_BETWEEN_MODE: MODE_SMART_MATCHING,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────

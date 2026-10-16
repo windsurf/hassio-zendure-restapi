@@ -7,7 +7,8 @@
         "menu_options": {
           "zendure": "Appareil Zendure (batterie ou compteur P1)",
           "external_meter": "Compteur P1 externe (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)"
+          "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)",
+          "price_control": "Pilotage par le prix (trading dynamique)"
         }
       },
       "zendure": {
@@ -15,12 +16,16 @@
         "description": "Saisissez l'adresse IP de l'appareil Zendure. L'API locale doit être activée : dans l'application Zendure, ajoutez HEMS puis quittez l'application.",
         "data": {
           "host": "Adresse IP",
-          "port": "Port HTTP"
+          "port": "Port HTTP",
+          "create_dashboard": "Créer le tableau de bord Zendure RestAPI (batterie uniquement)"
         }
       },
       "confirm": {
         "title": "Appareil Zendure trouvé",
-        "description": "Ajouter {model} à l'adresse {host} (numéro de série {sn}) ?"
+        "description": "Ajouter {model} à l'adresse {host} (numéro de série {sn}) ?",
+        "data": {
+          "create_dashboard": "Créer le tableau de bord Zendure RestAPI"
+        }
       },
       "external_meter": {
         "title": "Compteur P1 externe",
@@ -42,6 +47,14 @@
           "source_entity": "Capteur de puissance (soutirage positif)",
           "export_entity": "Capteur d'injection (facultatif, injection positive)"
         }
+      },
+      "price_control": {
+        "title": "Pilotage par le prix",
+        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : charger quand il est bas, décharger quand il est élevé, réseau à zéro entre les deux. Désactivé tant que vous ne l'activez pas.",
+        "data": {
+          "battery_entry": "Batterie",
+          "price_entity": "Capteur de prix (prix par kWh)"
+        }
       }
     },
     "error": {
@@ -57,15 +70,17 @@
       "cannot_connect": "Aucune réponse. Vérifiez l'adresse IP et que l'API locale est activée.",
       "no_identity": "L'appareil a répondu mais n'a indiqué ni numéro de série ni identifiant.",
       "wrong_meter_type": "L'adresse répond, mais pas comme ce type de compteur. Vérifiez le type de compteur.",
-      "not_a_p1_meter": "Cet appareil HomeWizard n'est pas un compteur P1."
+      "not_a_p1_meter": "Cet appareil HomeWizard n'est pas un compteur P1.",
+      "no_battery": "Ajoutez d'abord une batterie Zendure."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Intervalle d'interrogation",
+        "title": "Options",
         "data": {
-          "scan_interval": "Secondes entre les interrogations (1-60)"
+          "scan_interval": "Secondes entre les interrogations (1-60)",
+          "create_dashboard": "Créer le tableau de bord Zendure RestAPI (un tableau existant reste intact)"
         }
       },
       "external": {
@@ -81,6 +96,12 @@
           "source_entity": "Capteur de puissance (soutirage positif)",
           "export_entity": "Capteur d'injection (facultatif, injection positive)"
         }
+      },
+      "price": {
+        "title": "Pilotage par le prix",
+        "data": {
+          "price_entity": "Capteur de prix (prix par kWh)"
+        }
       }
     },
     "error": {
@@ -95,39 +116,60 @@
           "zendure": "Compteur Zendure",
           "external": "Compteur externe",
           "auto": "Auto (externe, sinon Zendure)"
-        }
+        },
+        "name": "Source du compteur"
       },
       "converter_mode": {
         "state": {
           "charge": "Charge",
           "discharge": "Décharge"
-        }
+        },
+        "name": "Mode du convertisseur"
       },
       "backup_mode": {
         "state": {
           "standard": "Standard",
           "economic": "Économique",
           "closed": "Fermé"
-        }
+        },
+        "name": "Mode secours"
       },
       "pv_export": {
         "state": {
           "off": "Arrêt",
           "allowed": "Autorisé",
           "forbidden": "Interdit"
-        }
+        },
+        "name": "Export PV"
       },
       "fan_speed_mode": {
         "state": {
           "auto": "Auto",
           "gear_1": "Niveau 1",
           "gear_2": "Niveau 2"
-        }
+        },
+        "name": "Mode du ventilateur"
       },
       "external_meter": {
         "state": {
           "none": "Aucun"
-        }
+        },
+        "name": "Compteur externe"
+      },
+      "cheap_price_mode": {
+        "name": "Mode à prix bas"
+      },
+      "expensive_price_mode": {
+        "name": "Mode à prix élevé"
+      },
+      "grid_standard": {
+        "name": "Norme réseau"
+      },
+      "in_between_mode": {
+        "name": "Mode intermédiaire"
+      },
+      "operation_mode": {
+        "name": "Mode de fonctionnement"
       }
     },
     "sensor": {
@@ -136,54 +178,62 @@
           "auto": "Auto",
           "gear_1": "Niveau 1",
           "gear_2": "Niveau 2"
-        }
+        },
+        "name": "Palier du ventilateur"
       },
       "battery_state": {
         "state": {
           "standby": "Veille",
           "charging": "En charge",
           "discharging": "En décharge"
-        }
+        },
+        "name": "État de la batterie"
       },
       "pack_state": {
         "state": {
           "standby": "Veille",
           "charging": "En charge",
           "discharging": "En décharge"
-        }
+        },
+        "name": "Batterie {index} état"
       },
       "ac_state": {
         "state": {
           "off": "Arrêt",
           "input": "Entrée",
           "output": "Sortie"
-        }
+        },
+        "name": "État AC"
       },
       "dc_state": {
         "state": {
           "off": "Arrêt",
           "input": "Entrée",
           "output": "Sortie"
-        }
+        },
+        "name": "État DC"
       },
       "pv_state": {
         "state": {
           "off": "Arrêt",
           "on": "Marche"
-        }
+        },
+        "name": "État PV"
       },
       "soc_limit_status": {
         "state": {
           "none": "Aucune",
           "upper_limit": "Limite haute (pleine)",
           "lower_limit": "Limite basse (vide)"
-        }
+        },
+        "name": "État de la limite SOC"
       },
       "soc_calibration_status": {
         "state": {
           "uncalibrated": "Non calibré",
           "calibrated": "Calibré"
-        }
+        },
+        "name": "État de calibration SOC"
       },
       "controller_status": {
         "state": {
@@ -201,14 +251,365 @@
           "blocked": "Bloqué",
           "protecting": "Protection",
           "error": "Erreur"
-        }
+        },
+        "name": "État du régulateur"
       },
       "external_status": {
         "state": {
           "live": "En direct",
           "stale": "Pas de nouvelles données",
           "unreachable": "Injoignable"
-        }
+        },
+        "name": "État"
+      },
+      "price_control_status": {
+        "state": {
+          "off": "Arrêt",
+          "no_price": "Pas de prix",
+          "cheap": "Bon marché",
+          "between": "Intermédiaire",
+          "expensive": "Cher"
+        },
+        "name": "État"
+      },
+      "a_aprt_power": {
+        "name": "Puissance apparente phase A"
+      },
+      "ac_coupling_state": {
+        "name": "État du couplage AC"
+      },
+      "b_aprt_power": {
+        "name": "Puissance apparente phase B"
+      },
+      "bat_volt": {
+        "name": "Tension du bus DC"
+      },
+      "battery_power": {
+        "name": "Puissance de la batterie"
+      },
+      "bindstate": {
+        "name": "État d'association"
+      },
+      "c_aprt_power": {
+        "name": "Puissance apparente phase C"
+      },
+      "charge_efficiency": {
+        "name": "Rendement de charge"
+      },
+      "discharge_efficiency": {
+        "name": "Rendement de décharge"
+      },
+      "electric_level": {
+        "name": "État de charge"
+      },
+      "electricity_price": {
+        "name": "Prix de l'électricité"
+      },
+      "energy_charged": {
+        "name": "Énergie chargée"
+      },
+      "energy_discharged": {
+        "name": "Énergie déchargée"
+      },
+      "energy_exported": {
+        "name": "Énergie exportée"
+      },
+      "energy_imported": {
+        "name": "Énergie importée"
+      },
+      "energy_pv": {
+        "name": "Énergie PV"
+      },
+      "external_energy_exported": {
+        "name": "Énergie exportée"
+      },
+      "external_energy_imported": {
+        "name": "Énergie importée"
+      },
+      "external_power": {
+        "name": "Puissance"
+      },
+      "external_telegram_age": {
+        "name": "Âge du télégramme"
+      },
+      "factory_mode_state": {
+        "name": "Mode usine"
+      },
+      "fan_speed": {
+        "name": "Niveau du ventilateur"
+      },
+      "fault_level": {
+        "name": "Niveau de défaut"
+      },
+      "fm_volt": {
+        "name": "Tension d'activation"
+      },
+      "grid_hd_status": {
+        "name": "État HD du réseau"
+      },
+      "grid_input_power": {
+        "name": "Puissance du réseau"
+      },
+      "grid_off_power": {
+        "name": "Puissance de la sortie de secours"
+      },
+      "grid_off_power2": {
+        "name": "Puissance de la sortie de secours 2"
+      },
+      "hv_bat_volt": {
+        "name": "Tension batterie HV (brute)"
+      },
+      "hyper_tmp": {
+        "name": "Température du boîtier"
+      },
+      "iot_state": {
+        "name": "État de la connexion IoT"
+      },
+      "lcn_state": {
+        "name": "État LCN"
+      },
+      "message_id": {
+        "name": "Identifiant du message"
+      },
+      "meter_type": {
+        "name": "Type de compteur"
+      },
+      "off_grid_state": {
+        "name": "État hors réseau"
+      },
+      "old_mode": {
+        "name": "Ancien mode"
+      },
+      "ota_state": {
+        "name": "État OTA"
+      },
+      "output_home_power": {
+        "name": "Puissance vers la maison"
+      },
+      "output_pack_power": {
+        "name": "Puissance de charge de la batterie"
+      },
+      "pack_batcur": {
+        "name": "Batterie {index} courant"
+      },
+      "pack_input_power": {
+        "name": "Puissance de décharge de la batterie"
+      },
+      "pack_max_temp": {
+        "name": "Batterie {index} température"
+      },
+      "pack_max_vol": {
+        "name": "Batterie {index} tension cellule max."
+      },
+      "pack_min_vol": {
+        "name": "Batterie {index} tension cellule min."
+      },
+      "pack_model": {
+        "name": "Batterie {index} modèle"
+      },
+      "pack_num": {
+        "name": "Nombre de modules de batterie"
+      },
+      "pack_pack_type": {
+        "name": "Batterie {index} type de pack"
+      },
+      "pack_power": {
+        "name": "Batterie {index} puissance"
+      },
+      "pack_sn": {
+        "name": "Batterie {index} numéro de série"
+      },
+      "pack_soc_level": {
+        "name": "Batterie {index} état de charge"
+      },
+      "pack_soft_version": {
+        "name": "Batterie {index} version du firmware"
+      },
+      "pack_total_vol": {
+        "name": "Batterie {index} tension"
+      },
+      "phase_switch": {
+        "name": "Commutation de phase"
+      },
+      "powerhub_status": {
+        "name": "État du Powerhub"
+      },
+      "protocol_type": {
+        "name": "Type de protocole"
+      },
+      "remain_out_time": {
+        "name": "Temps de décharge restant"
+      },
+      "rssi": {
+        "name": "Force du signal"
+      },
+      "slave_addr": {
+        "name": "Adresse esclave"
+      },
+      "solar_input_power": {
+        "name": "Puissance d'entrée PV"
+      },
+      "solar_power1": {
+        "name": "Chaîne PV 1"
+      },
+      "solar_power2": {
+        "name": "Chaîne PV 2"
+      },
+      "solar_power3": {
+        "name": "Chaîne PV 3"
+      },
+      "solar_power4": {
+        "name": "Chaîne PV 4"
+      },
+      "solar_power5": {
+        "name": "Chaîne PV 5"
+      },
+      "solar_power6": {
+        "name": "Chaîne PV 6"
+      },
+      "time_zone": {
+        "name": "Fuseau horaire"
+      },
+      "timestamp": {
+        "name": "Horodatage du rapport"
+      },
+      "total_power": {
+        "name": "Puissance réseau totale"
+      },
+      "ts": {
+        "name": "Horodatage de l'appareil"
+      },
+      "ts_zone": {
+        "name": "Décalage horaire"
+      },
+      "volt_wakeup": {
+        "name": "Réveil par tension"
+      },
+      "write_rsp": {
+        "name": "Réponse d'écriture"
+      }
+    },
+    "binary_sensor": {
+      "data_ready": {
+        "name": "Données prêtes"
+      },
+      "dry_node_state": {
+        "name": "Contact sec"
+      },
+      "fan_switch": {
+        "name": "Ventilateur"
+      },
+      "grid_state": {
+        "name": "Réseau connecté"
+      },
+      "heat_state": {
+        "name": "Chauffage"
+      },
+      "hv_bat_ctrl_switch": {
+        "name": "Commande batterie HV"
+      },
+      "is_error": {
+        "name": "Erreur"
+      },
+      "lamp_switch": {
+        "name": "Lampe"
+      },
+      "pack_heat_state": {
+        "name": "Batterie {index} chauffage"
+      },
+      "pass": {
+        "name": "Passage direct"
+      },
+      "pvac_switch": {
+        "name": "Couplage PV-AC"
+      },
+      "reverse_state": {
+        "name": "Flux inverse"
+      },
+      "soc_comp_switch": {
+        "name": "Compensation SOC"
+      }
+    },
+    "number": {
+      "bat_cal_time": {
+        "name": "Intervalle de calibration"
+      },
+      "charge_buffer": {
+        "name": "Marge de charge"
+      },
+      "charge_max_limit": {
+        "name": "Puissance de charge maximale"
+      },
+      "cheap_price": {
+        "name": "Prix bas"
+      },
+      "direction_change_delay": {
+        "name": "Délai de changement de sens"
+      },
+      "discharge_buffer": {
+        "name": "Marge de décharge"
+      },
+      "expensive_price": {
+        "name": "Prix élevé"
+      },
+      "input_limit": {
+        "name": "Limite de charge (AC)"
+      },
+      "inverse_max_power": {
+        "name": "Puissance maximale de l'onduleur"
+      },
+      "manual_power": {
+        "name": "Puissance manuelle"
+      },
+      "max_charge_power": {
+        "name": "Puissance de charge max."
+      },
+      "max_discharge_power": {
+        "name": "Puissance de décharge max."
+      },
+      "min_charge_power": {
+        "name": "Puissance de charge min."
+      },
+      "min_discharge_power": {
+        "name": "Puissance de décharge min."
+      },
+      "min_soc": {
+        "name": "Limite SOC basse"
+      },
+      "mode_threshold": {
+        "name": "Seuil du mode"
+      },
+      "output_limit": {
+        "name": "Limite de décharge"
+      },
+      "soc_set": {
+        "name": "Limite SOC haute"
+      },
+      "start_charge_at": {
+        "name": "Charger à partir d'un export de"
+      },
+      "start_discharge_at": {
+        "name": "Décharger à partir d'un import de"
+      },
+      "trim_factor": {
+        "name": "Intensité de correction"
+      },
+      "trim_threshold": {
+        "name": "Seuil de correction"
+      }
+    },
+    "switch": {
+      "fanmode": {
+        "name": "Ventilateur forcé"
+      },
+      "smart_mode": {
+        "name": "Ne pas écrire en flash"
+      },
+      "soc_protection": {
+        "name": "Protection SOC"
+      },
+      "trace_recording": {
+        "name": "Enregistrement de trace"
       }
     }
   }

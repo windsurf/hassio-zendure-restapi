@@ -14,7 +14,7 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 
 ![Zendure dashboard](images/dashboard.png)
 
-*`smart_matching` holding the grid at zero: the house draws 175 W, the battery supplies it, the meter reads 0 W. This dashboard ships with the integration.*
+*`smart_matching` holding the grid at zero: the house draws 175 W, the battery supplies it, the meter reads 0 W. The integration creates this dashboard for you on request.*
 
 **Quick start below** · full details in the [Technical reference](#-technical-reference)
 
@@ -79,7 +79,7 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 - **Leaves a full battery alone.** At the device's own SOC bounds nothing is ordered into the closed direction: a whole night at 100 % took two limit writes, and the status says why.
 - **Everything visible.** Ready-made dashboard, a controller status that says *why*, charge and discharge efficiency as sensors, and an optional per-second CSV trace for the curious.
 - **Every change measured before release.** Changes to the control loop are replayed against recorded per-second runs first; the measurements and the corrections to Zendure's documentation are public in the technical reference.
-- **Speaks your language.** Setup screens and states in English, Nederlands, Deutsch, Français, Italiano, Español, Português, Polski, Čeština, Svenska and Dansk.
+- **Speaks your language.** Setup screens, entity names and states in English, Nederlands, Deutsch, Français, Italiano, Español, Português, Polski, Čeština, Svenska and Dansk.
 
 ---
 
@@ -96,7 +96,7 @@ In the Zendure app: add **HEMS**, then exit the app. Check it from any browser:
 Or: HACS → three-dot menu → Custom repositories → `https://github.com/windsurf/hassio-zendure-restapi`, category **Integration**. Install **Zendure RestAPI** and restart Home Assistant.
 
 **3. Add your devices**
-Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI** and enter the IP address. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
+Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI** and enter the IP address. Tick **Create the Zendure RestAPI dashboard** and the dashboard appears in your sidebar. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
 **Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External P1 meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
@@ -112,6 +112,14 @@ Home Assistant usually finds the battery and the P1 meter by itself under **Sett
 | `smart_discharge_only` | Only covers demand, never charges |
 | `quick_charge` / `quick_discharge` | Full power, ignoring the meter |
 | `manual` | Follows a fixed setpoint |
+
+---
+
+## 💶 Price control
+
+Dynamic trading, built in: at or below a **cheap price** the battery charges, at or above an **expensive price** it discharges, and in between it holds the grid at zero. Add it as a device of its own: **Add integration → Zendure RestAPI → Price control**, choose the battery and your price sensor — Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie or your own. The device **Price Control** appears next to your battery; switch it on there. Both prices and the mode for each band can be changed live, on that device or in the *Price Control* tab of the dashboard.
+
+Off by default: if an automation or planner of your own already steers the Operation mode, leave it off. Details in the [technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control).
 
 ---
 
@@ -143,7 +151,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.5.5:** documentation only — how this integration relates to Zendure's zenSDK, a new side-by-side meter measurement, and keeping the controller status in the recorder. **v1.5.4:** the smart modes stop ordering into a full or empty battery and say why; `manual` at 0 W can rest. **v1.5.3:** several external meters side by side, with an *External meter* select on the battery to pick one; any power sensor in Home Assistant as external meter. **v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
+**Latest release – v1.5.6:** entity names in eleven languages, with entity IDs that stay English; the dashboard **Zendure RestAPI** created for you on request; **price control** for dynamic trading, built in. **v1.5.5:** documentation only — how this integration relates to Zendure's zenSDK, a new side-by-side meter measurement, and keeping the controller status in the recorder. **v1.5.4:** the smart modes stop ordering into a full or empty battery and say why; `manual` at 0 W can rest. **v1.5.3:** several external meters side by side, with an *External meter* select on the battery to pick one; any power sensor in Home Assistant as external meter. **v1.5.2:** the external P1 meter as a device of its own with power, status and energy sensors; HomeWizard P1 meters discovered automatically; setup screens in eleven languages; external meter on the dashboard. Upgrading from v1.5.0/v1.5.1 moves your meter settings over by themselves.
 
 ## More
 

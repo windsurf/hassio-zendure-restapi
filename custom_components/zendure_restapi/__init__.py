@@ -40,7 +40,10 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.start import async_at_started
+from homeassistant.util import slugify
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
@@ -63,12 +66,18 @@ from .const import (
     EXTERNAL_TYPE_HA_SENSOR,
     HA_SENSOR_INTERVAL,
     INTEGRATION_VERSION,
+    CONF_MODEL,
+    CONF_BATTERY_ENTRY,
+    DEVICE_TYPE_PRICE,
+    OPT_CREATE_DASHBOARD,
     OPT_EXTERNAL_METER,
     SIGNAL_EXTERNALS_CHANGED,
     CONF_EXPORT_ENTITY,
     CONF_SOURCE_ENTITY,
 )
 from .controller import ZendureController
+from .dashboard import async_create_dashboard, notify
+from .pricecontrol import PriceControl
 from .coordinator import ZendureCoordinator
 from .p1meter import ADAPTERS, ExternalMeter
 from .settings import ZendureSettings
@@ -85,6 +94,7 @@ PLATFORMS: list[Platform] = [
 
 # An external meter entry has no switches, selects or numbers of its own.
 EXTERNAL_PLATFORMS: list[Platform] = [Platform.SENSOR]
+PRICE_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT]
 
 RUNTIME_SUFFIX = "_runtime"
 
@@ -95,6 +105,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
         return await _async_setup_external(hass, entry)
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
+        return await _async_setup_price(hass, entry)
 
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
@@ -133,6 +145,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+
+    # The dashboard needs the entities registered and the frontend up, hence
+    # after the platforms and once Home Assistant has started.
+    if coordinator.device_type != DEVICE_TYPE_METER and entry.options.get(OPT_CREATE_DASHBOARD):
+
+        async def _create(_hass: HomeAssistant) -> None:
+            await _async_dashboard(hass, entry)
+
+        entry.async_on_unload(async_at_started(hass, _create))
+    return True
+
+
+async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Price control for one battery: its own device, writing the battery's mode."""
+    battery_id = entry.data[CONF_BATTERY_ENTRY]
+    runtime = hass.data.get(DOMAIN, {}).get(f"{battery_id}{RUNTIME_SUFFIX}")
+    if runtime is None:
+        # Set up after its battery; Home Assistant retries until it is there.
+        raise ConfigEntryNotReady("the battery for price control is not set up yet")
+    price = PriceControl(
+        hass, entry, ZendureSettings(hass, entry), runtime["settings"], battery_id
+    )
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = price
+    await hass.config_entries.async_forward_entry_setups(entry, PRICE_PLATFORMS)
+
+    # The price comes from another integration: start once everything is up,
+    # so a price that is not there yet is not mistaken for none.
+    @callback
+    def _start(_hass: HomeAssistant) -> None:
+        price.async_start()
+
+    entry.async_on_unload(async_at_started(hass, _start))
+    entry.async_on_unload(price.async_stop)
+
+    async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        price.async_update()
+
+    entry.async_on_unload(entry.add_update_listener(_changed))
     return True
 
 
@@ -287,6 +337,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coordinator: ZendureCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if not isinstance(coordinator, ZendureCoordinator):
         return
+    if coordinator.device_type != DEVICE_TYPE_METER and entry.options.get(OPT_CREATE_DASHBOARD):
+        hass.async_create_task(_async_dashboard(hass, entry))
     interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator.set_scan_interval(interval)
     _LOGGER.debug("Polling interval set to %ss", interval)
@@ -295,10 +347,13 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    external = entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
-    unloaded = await hass.config_entries.async_unload_platforms(
-        entry, EXTERNAL_PLATFORMS if external else PLATFORMS
+    kind = entry.data.get(CONF_DEVICE_TYPE)
+    platforms = (
+        EXTERNAL_PLATFORMS if kind == DEVICE_TYPE_EXTERNAL
+        else PRICE_PLATFORMS if kind == DEVICE_TYPE_PRICE
+        else PLATFORMS
     )
+    unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unloaded:
         store = hass.data.get(DOMAIN, {})
         store.pop(entry.entry_id, None)
@@ -311,3 +366,71 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             runtime["controller"].detach_meter()
         _link_meters(hass)
     return unloaded
+
+
+# ── Dashboard ────────────────────────────────────────────────────────────
+
+DASHBOARD_BUSY = f"{DOMAIN}_dashboard_busy"
+
+
+def _prefix(registry: er.EntityRegistry, unique_id: str, suffix: str) -> str | None:
+    """Entity id prefix of a device, read off one of its entities."""
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    if entity_id is None:
+        return None
+    object_id = entity_id.split(".", 1)[1]
+    return object_id[: -len(suffix)] if object_id.endswith(suffix) else None
+
+
+async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle a request for the dashboard once, then clear the request."""
+    store = hass.data.get(DOMAIN, {})
+    coordinator = store.get(entry.entry_id)
+    if (
+        hass.data.get(DASHBOARD_BUSY)
+        or not entry.options.get(OPT_CREATE_DASHBOARD)
+        or not isinstance(coordinator, ZendureCoordinator)
+    ):
+        return
+    hass.data[DASHBOARD_BUSY] = True
+    try:
+        registry = er.async_get(hass)
+        device_id = coordinator.device_id or entry.unique_id or entry.entry_id
+        model = entry.data.get(CONF_MODEL) or "SolarFlow"
+        battery = (
+            _prefix(registry, f"{device_id}_controller_status", "controller_status")
+            or f"{slugify(f'Zendure {model}')}_"
+        )
+        meter = None
+        meters = [
+            (key, c) for key, c in store.items()
+            if isinstance(c, ZendureCoordinator) and c.device_type == DEVICE_TYPE_METER
+        ]
+        if len(meters) == 1:
+            key, meter_coordinator = meters[0]
+            meter_entry = hass.config_entries.async_get_entry(key)
+            meter_id = meter_coordinator.device_id or (meter_entry.unique_id if meter_entry else None) or key
+            meter = _prefix(registry, f"{meter_id}_total_power", "grid_power_total")
+        price = None
+        for other in hass.config_entries.async_entries(DOMAIN):
+            if other.data.get(CONF_BATTERY_ENTRY) == entry.entry_id:
+                price = _prefix(registry, f"{other.entry_id}_price_control_status", "status")
+        try:
+            ceiling = int((coordinator.data or {}).get("inverseMaxPower") or 3000)
+        except (TypeError, ValueError):
+            ceiling = 3000
+        result = await async_create_dashboard(
+            hass,
+            known={e.entity_id for e in registry.entities.values() if e.platform == DOMAIN},
+            battery=battery,
+            meter=meter,
+            external=bool(external_meters(hass)),
+            ceiling=min(max(ceiling, 800), 5000),
+            price=price,
+        )
+        notify(hass, result, battery)
+    finally:
+        hass.data.pop(DASHBOARD_BUSY, None)
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, OPT_CREATE_DASHBOARD: False}
+        )

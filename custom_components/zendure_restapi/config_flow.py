@@ -38,6 +38,11 @@ from .const import (
     DEVICE_TYPE_BATTERY,
     DEVICE_TYPE_EXTERNAL,
     DEVICE_TYPE_METER,
+    OPT_CREATE_DASHBOARD,
+    CONF_BATTERY_ENTRY,
+    DEVICE_TYPE_PRICE,
+    PRICE_DEVICE_NAME,
+    OPT_PRICE_ENTITY,
     EXTERNAL_DEVICE_NAME,
     EXTERNAL_TYPE_HOMEWIZARD_V1,
     HOMEWIZARD_P1_PRODUCT,
@@ -103,6 +108,16 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._result: ProbeResult | None = None
         self._discovered: dict[str, Any] = {}
 
+    def _entry_options(self, dashboard: bool) -> dict[str, Any]:
+        """Options of a new Zendure entry. The dashboard request only means
+        something for a battery; a meter has no dashboard of its own."""
+        result = self._result
+        assert result is not None
+        options: dict[str, Any] = {CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL}
+        if dashboard and not result.is_meter:
+            options[OPT_CREATE_DASHBOARD] = True
+        return options
+
     def _entry_data(self) -> dict[str, Any]:
         result = self._result
         assert result is not None
@@ -118,10 +133,65 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Choose what to add: a Zendure device or an external P1 meter."""
+        """Choose what to add: a Zendure device, an external meter or price control."""
         return self.async_show_menu(
-            step_id="user", menu_options=["zendure", "external_meter", "ha_sensor"]
+            step_id="user",
+            menu_options=["zendure", "external_meter", "ha_sensor", "price_control"],
         )
+
+    # ── Price control ────────────────────────────────────────────────────
+
+    def _batteries(self) -> list[config_entries.ConfigEntry]:
+        return [
+            e for e in self._async_current_entries(include_ignore=False)
+            if e.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_BATTERY) == DEVICE_TYPE_BATTERY
+        ]
+
+    async def async_step_price_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Price control for one battery: which battery, which price sensor."""
+        batteries = self._batteries()
+        if not batteries:
+            return self.async_abort(reason="no_battery")
+        if user_input is not None:
+            battery_id = user_input[CONF_BATTERY_ENTRY]
+            await self.async_set_unique_id(f"price_{battery_id}")
+            self._abort_if_unique_id_configured()
+            others = [
+                e for e in self._async_current_entries(include_ignore=False)
+                if e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE
+            ]
+            battery = next(e for e in batteries if e.entry_id == battery_id)
+            # Several batteries, several price controls: the later ones carry
+            # their battery in the name, which keeps their entity ids apart.
+            name = PRICE_DEVICE_NAME if not others else f"{PRICE_DEVICE_NAME} ({battery.title})"
+            return self.async_create_entry(
+                title=name,
+                data={
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_PRICE,
+                    CONF_BATTERY_ENTRY: battery_id,
+                    CONF_DEVICE_NAME: name,
+                },
+                options={OPT_PRICE_ENTITY: user_input[OPT_PRICE_ENTITY]},
+            )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_BATTERY_ENTRY, default=batteries[0].entry_id): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=e.entry_id, label=e.title)
+                            for e in batteries
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(OPT_PRICE_ENTITY): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+            }
+        )
+        return self.async_show_form(step_id="price_control", data_schema=schema)
 
     async def async_step_zendure(
         self, user_input: dict[str, Any] | None = None
@@ -149,7 +219,9 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_create_entry(
                         title=f"Zendure {result.model}",
                         data=self._entry_data(),
-                        options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL},
+                        options=self._entry_options(
+                            user_input.get(OPT_CREATE_DASHBOARD, True)
+                        ),
                     )
 
         schema = vol.Schema(
@@ -158,6 +230,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_PORT, default=self._port): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=65535)
                 ),
+                vol.Optional(OPT_CREATE_DASHBOARD, default=True): bool,
             }
         )
         return self.async_show_form(step_id="zendure", data_schema=schema, errors=errors)
@@ -374,11 +447,17 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=f"Zendure {result.model}",
                 data=self._entry_data(),
-                options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL},
+                options=self._entry_options(user_input.get(OPT_CREATE_DASHBOARD, True)),
             )
 
+        schema = (
+            vol.Schema({vol.Optional(OPT_CREATE_DASHBOARD, default=True): bool})
+            if result is not None and not result.is_meter
+            else None
+        )
         return self.async_show_form(
             step_id="confirm",
+            data_schema=schema,
             description_placeholders={
                 "model": result.model if result else "Zendure device",
                 "host": self._host or "",
@@ -410,25 +489,46 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         entry = self.config_entry
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
+            return await self.async_step_price(user_input)
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
             if entry.data.get(CONF_EXTERNAL_TYPE) == EXTERNAL_TYPE_HA_SENSOR:
                 return await self.async_step_sensor(user_input)
             return await self.async_step_external(user_input)
 
+        battery = entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_METER
         if user_input is not None:
             merged = {**entry.options, **user_input}
             return self.async_create_entry(title="", data=merged)
 
         current = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        fields: dict[Any, Any] = {
+            vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+            )
+        }
+        # A battery can ask for the dashboard later; it is created once and an
+        # existing one is left alone.
+        if battery:
+            fields[vol.Optional(OPT_CREATE_DASHBOARD, default=False)] = bool
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
+
+    async def async_step_price(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Price control: the price sensor. Everything else is an entity."""
+        entry = self.config_entry
+        if user_input is not None:
+            return self.async_create_entry(title="", data={**entry.options, **user_input})
         schema = vol.Schema(
             {
-                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
-                    vol.Coerce(int),
-                    vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                )
+                vol.Required(
+                    OPT_PRICE_ENTITY, default=entry.options.get(OPT_PRICE_ENTITY) or vol.UNDEFINED
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="price", data_schema=schema)
 
     async def async_step_external(
         self, user_input: dict[str, Any] | None = None

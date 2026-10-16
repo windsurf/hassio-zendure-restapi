@@ -48,7 +48,7 @@ from .p1meter import ExternalMeter
 from .registry import pack_model
 from .energy import EnergyAccumulator, split_signed
 from .coordinator import ZendureCoordinator
-from .entity import ZendureEntity
+from .entity import TranslatedName, ZendureEntity
 from .properties import (
     AC_STATUS_MAP,
     DC_STATUS_MAP,
@@ -62,6 +62,9 @@ from .properties import (
     map_enum,
 )
 
+from homeassistant.const import Platform
+from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_PRICE
+from .price_entities import price_entities
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -377,6 +380,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create sensors for every reported key."""
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
+        async_add_entities(price_entities(Platform.SENSOR, hass, entry))
+        return
     stored = hass.data[DOMAIN][entry.entry_id]
     if isinstance(stored, ExternalMeter):
         async_add_entities(_external_sensors(stored, entry))
@@ -499,7 +505,9 @@ class ZendurePackSensor(ZendureSensor):
     ) -> None:
         super().__init__(coordinator, description, device_id, model, data_key)
         self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_{description.key}"
-        self._attr_name = f"Battery {index} {description.name}"
+        self._set_name(
+            description, "pack_", {"index": str(index)}, f"Battery {index} {description.name}"
+        )
 
 
 PACK_MODEL_DESCRIPTION = ZendureSensorDescription(
@@ -529,7 +537,7 @@ class ZendurePackModelSensor(ZendureSensor):
         self._prefix = f"{PACK_PREFIX}{index}."
         super().__init__(coordinator, description, device_id, model, f"{self._prefix}sn")
         self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_model"
-        self._attr_name = f"Battery {index} Model"
+        self._set_name(description, "pack_", {"index": str(index)}, f"Battery {index} Model")
 
     def _derived(self) -> tuple[str, float | None]:
         data = self.coordinator.data or {}
@@ -937,7 +945,7 @@ def _external_sensors(meter: ExternalMeter, entry: ConfigEntry) -> list[SensorEn
     ]
 
 
-class ExternalMeterSensor(SensorEntity):
+class ExternalMeterSensor(TranslatedName, SensorEntity):
     """One reading of an external P1 meter.
 
     Updated on every new telegram, and every five seconds besides, so the
@@ -955,6 +963,7 @@ class ExternalMeterSensor(SensorEntity):
         self.entity_description = description
         self._meter = meter
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._set_name(description, "external_")
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"external_{entry.entry_id}")},
             # Entries from v1.5.2 have no stored name; they were the only one.
