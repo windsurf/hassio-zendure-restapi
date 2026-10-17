@@ -41,7 +41,6 @@ from .const import (
     OPT_MIN_MARGIN,
     OPT_NET_METERING,
     OPT_PRICE_BETWEEN_MODE,
-    OPT_PRICE_NET_METERING_MODE,
     OPT_PRICE_CHEAP,
     OPT_PRICE_CHEAP_MODE,
     OPT_PRICE_CONTROL,
@@ -194,11 +193,6 @@ PRICE_SELECTS: tuple[tuple[SelectEntityDescription, str], ...] = (
         key="in_between_mode", name="In-between mode",
         options=list(PRICE_MODE_OPTIONS[OPT_PRICE_BETWEEN_MODE]), icon="mdi:scale-balance",
     ), OPT_PRICE_BETWEEN_MODE),
-    # Takes the place of the in-between mode while Net metering is on.
-    (SelectEntityDescription(
-        key="net_metering_mode", name="Net metering mode",
-        options=list(PRICE_MODE_OPTIONS[OPT_PRICE_NET_METERING_MODE]), icon="mdi:swap-horizontal",
-    ), OPT_PRICE_NET_METERING_MODE),
 )
 
 

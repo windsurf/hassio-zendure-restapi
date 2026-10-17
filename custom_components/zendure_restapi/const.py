@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.0"
+INTEGRATION_VERSION = "1.6.1"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -236,15 +236,10 @@ OPT_PRICE_EXPENSIVE = "price_expensive"
 OPT_PRICE_CHEAP_MODE = "price_cheap_mode"
 OPT_PRICE_EXPENSIVE_MODE = "price_expensive_mode"
 OPT_PRICE_BETWEEN_MODE = "price_between_mode"
-# In between while net metering applies: an exported kWh is worth the import
-# price, so moving energy through the battery only costs conversion losses
-# and wear. Standby by default.
-OPT_PRICE_NET_METERING_MODE = "price_net_metering_mode"
 PRICE_MODE_OPTIONS = {
     OPT_PRICE_CHEAP_MODE: (MODE_QUICK_CHARGE, MODE_SMART_CHARGE),
     OPT_PRICE_EXPENSIVE_MODE: (MODE_SMART_DISCHARGE, MODE_QUICK_DISCHARGE),
     OPT_PRICE_BETWEEN_MODE: (MODE_SMART_MATCHING, MODE_STANDBY),
-    OPT_PRICE_NET_METERING_MODE: (MODE_STANDBY, MODE_SMART_MATCHING),
 }
 PRICE_STATUS_OFF = "off"
 PRICE_STATUS_NO_PRICE = "no_price"
@@ -281,6 +276,26 @@ OPT_HOUSE_LOAD = "expected_house_load"
 OPT_CHARGE_EFFICIENCY = "charge_efficiency"
 OPT_DISCHARGE_EFFICIENCY = "discharge_efficiency"
 PLAN_ACTIONS = ("charge", "discharge", "idle")
+
+# The three modes per band, filled in once whenever Decision or Net metering
+# is switched (v1.6.1); they can be changed freely until the next switch.
+# Fixed prices cover the house and hold the grid at zero in between; the day
+# plan trades at full power. With the day plan and net metering the battery
+# rests in between: the plan already moves the energy where the spread is,
+# and holding the grid at zero would spend what it set aside. Replayed on 30
+# days (16 Sep - 15 Oct 2026), EUR per day, net metering / 2027 rules:
+#   fixed, in between smart_matching   0.22 / 0.45
+#   fixed, in between standby          0.04 / 0.05
+#   plan,  in between smart_matching   1.67 / 1.02
+#   plan,  in between standby          1.73 / 0.67
+def price_presets(decision: str, net_metering: bool) -> dict[str, str]:
+    """The cheap, expensive and in-between mode for a decision."""
+    plan = decision == DECISION_PLAN
+    return {
+        OPT_PRICE_CHEAP_MODE: MODE_QUICK_CHARGE,
+        OPT_PRICE_EXPENSIVE_MODE: MODE_QUICK_DISCHARGE if plan else MODE_SMART_DISCHARGE,
+        OPT_PRICE_BETWEEN_MODE: MODE_STANDBY if plan and net_metering else MODE_SMART_MATCHING,
+    }
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -324,7 +339,6 @@ DEFAULTS = {
     OPT_PRICE_CHEAP_MODE: MODE_QUICK_CHARGE,
     OPT_PRICE_EXPENSIVE_MODE: MODE_SMART_DISCHARGE,
     OPT_PRICE_BETWEEN_MODE: MODE_SMART_MATCHING,
-    OPT_PRICE_NET_METERING_MODE: MODE_STANDBY,
     # Day plan. The tariff defaults are a Dutch dynamic contract in 2026:
     # import = spot x 1.21 + supplier surcharge and energy tax incl. VAT,
     # export = spot x 1.10 + 0.02 once net metering has ended.

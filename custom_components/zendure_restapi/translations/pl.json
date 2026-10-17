@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Tryb pośredni"
       },
-      "net_metering_mode": {
-        "name": "Tryb przy net-meteringu"
-      },
       "operation_mode": {
         "name": "Tryb pracy"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Nieskalibrowany",
-          "calibrated": "Skalibrowany"
+          "normal": "Normalny",
+          "calibrating": "Kalibracja w toku"
         },
         "name": "Stan kalibracji SOC"
       },

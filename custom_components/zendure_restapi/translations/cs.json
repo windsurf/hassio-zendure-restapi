@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Režim mezi cenami"
       },
-      "net_metering_mode": {
-        "name": "Režim při net meteringu"
-      },
       "operation_mode": {
         "name": "Provozní režim"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Nekalibrováno",
-          "calibrated": "Kalibrováno"
+          "normal": "Normální",
+          "calibrating": "Probíhá kalibrace"
         },
         "name": "Stav kalibrace SOC"
       },

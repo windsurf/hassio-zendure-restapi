@@ -123,8 +123,8 @@ class Plan:
     margin: float               # in currency, over the whole plan
     stored_kwh: float
     usable_kwh: float
-    charge_w: int = 0           # the power the cheap mode charges at
-    discharge_w: int = 0        # the power ceiling of the expensive mode
+    charge_w: int = 0           # the power the cheap mode charges at from the grid
+    discharge_w: int = 0        # full power with quick_discharge, the house load otherwise
 
     @property
     def action(self) -> str:
@@ -357,6 +357,6 @@ def make_plan(
         margin=margin,
         stored_kwh=start * step,
         usable_kwh=e_max,
-        charge_w=round(battery.charge_kw * 1000),
-        discharge_w=round(battery.discharge_kw * 1000),
+        charge_w=round(battery.charge_kw * 1000) if battery.grid_charge else 0,
+        discharge_w=round(out_kw * 1000),
     )

@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Modus daartussen"
       },
-      "net_metering_mode": {
-        "name": "Modus bij saldering"
-      },
       "operation_mode": {
         "name": "Werkmodus"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Niet gekalibreerd",
-          "calibrated": "Gekalibreerd"
+          "normal": "Normaal",
+          "calibrating": "Bezig met kalibreren"
         },
         "name": "SOC-kalibratiestatus"
       },

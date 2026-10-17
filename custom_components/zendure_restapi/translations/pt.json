@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Modo intermédio"
       },
-      "net_metering_mode": {
-        "name": "Modo com compensação líquida"
-      },
       "operation_mode": {
         "name": "Modo de funcionamento"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Não calibrado",
-          "calibrated": "Calibrado"
+          "normal": "Normal",
+          "calibrating": "A calibrar"
         },
         "name": "Estado de calibração SOC"
       },

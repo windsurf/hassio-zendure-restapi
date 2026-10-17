@@ -7,9 +7,9 @@
 
 > **Disclaimer:** This software is not affiliated with or endorsed by Zendure in any way. It is provided "as-is" without warranty or support, for the educational use of developers and enthusiasts. Use at your own risk.
 
-Local monitoring and control of Zendure SolarFlow batteries over the zenSDK HTTP API, with the Zendure P1 meter, a HomeWizard P1 meter, a YouLess, an EcoTracker or a Shelly Pro 3EM as grid reading. No cloud account, no MQTT broker, no Bluetooth pairing — the device runs a plain JSON REST server on your LAN and this integration talks to it directly.
+Local monitoring and control of Zendure SolarFlow batteries over the zenSDK HTTP API, with the Zendure P1 meter, a HomeWizard P1 meter, a YouLess, an EcoTracker, a Shelly Pro 3EM, or any power sensor already in Home Assistant as grid reading. No cloud account, no MQTT broker, no Bluetooth pairing — the device runs a plain JSON REST server on your LAN and this integration talks to it directly.
 
-Beyond reading the device, the integration runs an **operation-mode controller**: seven strategies that turn a price decision made elsewhere into charge and discharge limits, tracking a linked meter towards zero grid exchange.
+Beyond reading the device, the integration runs an **operation-mode controller**: seven strategies that turn a price decision — by hand, from your own automation or from the built-in Price Control — into charge and discharge limits, tracking a linked meter towards zero grid exchange.
 
 > **Actively tested with:** Zendure SolarFlow 3000 Mix AC+ (`solarFlow3000MixAC+`) and the Zendure P1 meter (three-phase, meterType 3)
 
@@ -33,9 +33,9 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 | SolarFlow 800, 800 Plus, 800 Pro, 800 Pro 2, 2400 Pro | yes | **experimental** | same protocol, but the control loop has only run on a device without PV of its own — see [Device support](#device-support) |
 | SolarFlow 4000 Mix Pro | yes | **experimental** | as above, and not yet in Zendure's own integration either |
 | Zendure P1 meter | – | **reference** | the grid meter this integration was built on |
-| YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster; integration path new in v1.5.0 |
-| HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second; new in v1.5.1 |
-| EcoTracker, Shelly Pro 3EM (external grid meter) | – | **experimental** | documented local APIs; new in v1.5.1 |
+| YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster |
+| HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second |
+| EcoTracker, Shelly Pro 3EM (external grid meter) | – | **experimental** | documented local APIs |
 | Smart Meter 3CT | – | **experimental** | same `/properties/report` and `total_power` as the P1 meter; read it as external meter type *Zendure* |
 | Hyper 2000, Hub 1200/2000, AIO 2400, Ace 1500 | – | **not possible** | no local HTTP API; MQTT or Bluetooth only |
 
@@ -58,7 +58,12 @@ Running it on another setup? Add yours in the [forum topic](https://community.ho
 
 Under EN 18031 the local HTTP API is **disabled by default**. Enable it first:
 
-> Zendure app → add **HEMS** → exit the app to apply.
+> Zendure app → add **HEMS** → under **Energy plan** choose **Custom mode** → exit the app to apply.
+
+HEMS switches the local API on. Custom mode switches Zendure's own control off. Leave any other
+energy plan on (Auto, ZENKI, self-consumption, TOU) and the device keeps adjusting `outputLimit`
+itself, about every 20 seconds, alongside this integration: two controllers on one battery. The
+trace shows it as *foreign writes*.
 
 Verify from a terminal before configuring anything.
 
@@ -263,7 +268,8 @@ fields, units and sign conventions would remove a class of integration errors en
 standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the
 switch, its status and decision, the day plan with its charge and discharge periods and the
 expected margin, a chart of the plan (with [apexcharts-card](https://github.com/RomRider/apexcharts-card)
-installed), the fixed prices and the mode per band, and the tariff, losses and margin — every
+installed), the fixed prices and the three modes per band (used by both the fixed prices and the
+day plan), and the tariff, losses and margin — every
 setting a tile with a slider, a select or a toggle (see
 [Price control](#price-control)); without one it explains how to add it.
 The view **Zendure RestAPI** has thirteen sections:
@@ -315,18 +321,81 @@ Steering on dynamic tariffs, built in, in two ways:
   **expensive price** it discharges, and in between it follows the meter or rests. Any sensor
   that gives the current price per kWh will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank
   Energie, or a template of your own.
-- **Day plan** (v1.6.0). Over the prices of today and tomorrow from the **Nord Pool** integration
+- **Day plan.** Over the prices of today and tomorrow from the **Nord Pool** integration
   ([HACS](https://github.com/custom-components/nordpool)), it works out for every quarter of an
   hour whether to charge, discharge or neither — with an import price and an export price each
   from a formula of their own, the conversion losses on both sides, wear, and a minimum margin
-  per kWh that every cycle has to clear. It trades: it charges with `quick_charge` and
-  discharges with `quick_discharge`, at the battery's full power.
+  per kWh that every cycle has to clear.
 
-Fixed prices take the mode chosen for each band; both take the in-between mode the rest of the
-time, or the net metering mode while *Net metering* is on. Either way the battery is driven
-exactly as by hand.
+### Modes per band
 
-**Setting it up.** Price control is a device of its own, linked to one battery — this
+Both ways of deciding drive the battery through three modes, chosen per
+band: the *cheap price mode* when it is time to charge, the *expensive price mode* when it is time
+to discharge, and the *in-between mode* the rest of the time. Either way the battery is driven
+exactly as by hand. The day plan also plans with them, so it plans only what the modes can do:
+
+| Mode | What it does | What the day plan counts on |
+|---|---|---|
+| Cheap: `quick_charge` | charges from the grid at full power | charging from the grid |
+| Cheap: `smart_charge_only` | charges from solar surplus only | no charging from the grid; it shares out what the battery holds |
+| Expensive: `quick_discharge` | discharges at full power, the surplus to the grid | selling at full power |
+| Expensive: `smart_discharge_only` | covers the house, exports nothing | covering the expected house load only |
+| In between: `smart_matching` | holds the grid at zero | — |
+| In between: `standby` | rests | — |
+
+#### Presets: the modes follow your choice
+
+Switching *Decision*, or switching *Net metering* on
+or off, fills the three modes in once with the presets for that choice. After that they are
+yours to change; the next switch fills them in again.
+
+| Choice | Cheap price mode | Expensive price mode | In-between mode |
+|---|---|---|---|
+| Fixed prices, net metering off | `quick_charge` | `smart_discharge_only` | `smart_matching` |
+| Fixed prices, net metering on | `quick_charge` | `smart_discharge_only` | `smart_matching` |
+| Day plan, net metering on | `quick_charge` | `quick_discharge` | `standby` |
+| Day plan, net metering off | `quick_charge` | `quick_discharge` | `smart_matching` |
+
+Why these. Fixed prices know only the price now, so they cover the house rather than sell, and
+hold the grid at zero in between: that is how the battery fills with solar surplus at all. The day
+plan knows the day ahead, and selling at full power in the dearest quarters is where its value is.
+With net metering the day plan does best with the battery resting in between: the plan already
+moves the energy to where the spread is, and holding the grid at zero would spend energy it set
+aside for a dearer quarter. Once net metering ends, solar surplus sent to the grid fetches far
+less than it saves later, and holding the grid at zero in between pays again. The figures are in
+[Replays](#replays).
+
+#### Why not fill the battery with free solar in between?
+
+Because under net metering solar is not free: a kWh sent to the grid is credited at the export
+price, which under net metering is the import price of that quarter
+([more](#net-metering-and-the-export-price)). Store it instead and you give that up, and get back
+about 0.91 kWh later (95 % charging × 96 % discharging), minus the wear cost. Storing pays only when
+the later price is some 10 % higher plus two cents.
+
+The day plan already does that, and more cheaply: with `quick_charge` as cheap price mode (the
+preset) it charges from the grid at full power in the cheapest quarters, which on a sunny day are
+the sunny hours. The battery is only so large, so solar caught in the morning takes the place of
+grid energy the plan would have bought a few hours later at the same or a lower price. Nothing is
+won; the conversion loss remains. Replayed (the modes replay of [Replays](#replays)), with in
+between only catching solar (`smart_charge_only`, not offered as an in-between mode):
+
+| In between the blocks | Net metering | 2027 rules |
+|---|---|---|
+| `standby` | **1.73** | 0.67 |
+| catch solar only | 1.71 | 0.79 |
+| `smart_matching` (catch solar and cover the house) | 1.67 | **1.02** |
+
+With net metering, catching solar earns nothing, and covering the house in between costs more: it
+spends at night and in the morning what the plan set aside for the evening peak. Without net
+metering it turns round. Solar sent to the grid then fetches, with the default export formula, spot
+× 1.10 + € 0.02, far less than a kWh saves in the evening, and holding the grid at zero in between
+earns the most. The difference under net metering is small, about € 20 a year; choose
+`smart_matching` anyway if you prefer the battery to follow the sun.
+
+### Setting it up
+
+Price control is a device of its own, linked to one battery — this
 integration's own steering, not a Zendure product, so it is simply called **Price Control**. Add
 it under **Add integration → Zendure RestAPI → Price control**, choose the battery, the price
 sensor and what that sensor holds; both can be changed later under its **Configure**. Then switch
@@ -340,11 +409,10 @@ battery, carries that battery in its name and IDs.
 | Decision | `fixed_prices` or `day_plan` | `fixed_prices` |
 | Cheap price | fixed prices: at or below, the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
 | Expensive price | fixed prices: at or above, the expensive-price mode | 0.35 |
-| Cheap price mode | fixed prices: `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | `quick_charge` |
-| Expensive price mode | fixed prices: `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | `smart_discharge_only` |
-| In-between mode | both: `smart_matching` (grid at zero) or `standby`; also without a usable price | `smart_matching` |
-| Net metering (export = import price) | day plan: a kWh sent to the grid is worth the import price; both: the net metering mode replaces the in-between mode | off |
-| Net metering mode | both, while net metering is on: `standby` or `smart_matching`. With export worth the import price, moving energy through the battery only costs conversion losses and wear | `standby` |
+| Cheap price mode | both: `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | preset |
+| Expensive price mode | both: `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | preset |
+| In-between mode | both: `smart_matching` (grid at zero) or `standby`; also without a usable price | preset |
+| Net metering (export = import price) | day plan: how exports are valued, see [Net metering](#net-metering-and-the-export-price); both: switching it fills in the presets | off |
 | Import factor, Import surcharge | day plan: import price = spot × factor + surcharge | 1.21, 0.13505 |
 | Export factor, Export surcharge | day plan: export price = spot × factor + surcharge, when net metering is off | 1.10, 0.02 |
 | Wear cost | day plan: per kWh through the battery | 0.02 |
@@ -366,8 +434,10 @@ kWh including VAT.
 formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the
 whole import price. See [Setting up Nord Pool for the day plan](#setting-up-nord-pool-for-the-day-plan).
 
-**How the day plan decides.** Every period can charge at full power, discharge at full power, or
-do neither. The full power is the lower of the battery's *Charge power limit* and the controller's
+### How the day plan decides
+
+Every period can charge, discharge or do neither, as far as the modes
+allow: with the presets, charge and discharge at full power. The full power is the lower of the battery's *Charge power limit* and the controller's
 *Max charge power*, and likewise *Inverter power limit* and *Max discharge power* — what
 `quick_charge` and `quick_discharge` themselves run at. By
 dynamic programming over the energy in the cells, working back from the last known price, the
@@ -381,9 +451,11 @@ amount per kWh, not a percentage: a percentage of a price near zero or below mea
 plan is made again every quarter of an hour, on every price change and when a setting changes,
 each time from the actual state of charge, and runs outside the event loop.
 
-**Replayed on a real installation.** 30 days, 16 September to 15 October 2026: a SolarFlow 3000
-Mix AC+ on a Dutch dynamic contract, quarter prices, the measured house load and solar, net
-metering. Every strategy on the same simulated battery:
+### Replays
+
+**Strategies.** 30 days, 16 September to 15 October 2026: a SolarFlow 3000 Mix AC+ on a Dutch
+dynamic contract, quarter prices, the measured house load and solar, net metering. Every strategy on
+the same simulated battery:
 
 | Strategy | Per day | Under the 2027 rules |
 |---|---|---|
@@ -399,12 +471,30 @@ Trading at full power is where the value is: while net metering lasts the day pl
 as a full home-energy planner did on the same days, and under the 2027 rules it still earned more
 than covering the house alone.
 
+**Modes per band.** The same 30 days, replayed again for the
+[presets](#presets-the-modes-follow-your-choice), in euro per day:
+
+| Modes | Net metering | 2027 rules |
+|---|---|---|
+| Fixed prices, in between `smart_matching` | 0.22 | 0.45 |
+| Fixed prices, in between `standby` | 0.04 | 0.05 |
+| Day plan `quick_charge` / `quick_discharge`, in between `smart_matching` | 1.67 | **1.02** |
+| Day plan `quick_charge` / `quick_discharge`, in between `standby` | **1.73** | 0.67 |
+| Day plan `quick_charge` / `smart_discharge_only` (house only), `smart_matching` | 0.51 | 0.79 |
+| Day plan `smart_charge_only` / `quick_discharge`, `smart_matching` | 0.21 | 0.59 |
+
+This replay is simpler than the one above: it leaves out the standby draw and the fixed discharge
+loss, so its figures run up to € 0.2 higher. Compare its rows with each other, not with the table
+above.
+
+### When it writes
+
 **When it cannot plan.** Without a price list (`no_price`) or without battery data (`no_plan`),
-the in-between mode applies (the net metering mode while net metering is on). So it does without a usable price, and with fixed prices when the
+the in-between mode applies. So it does without a usable price, and with fixed prices when the
 cheap price is at or above the expensive one. The battery's own SOC limits still apply: the smart
 modes do not order into a full or empty battery, and the quick modes report the refusal.
 
-**When it writes.** Price control writes the Operation mode only when its target changes, or when
+**Only on a change.** Price control writes the Operation mode only when its target changes, or when
 it is switched on: a mode set by hand holds until then.
 
 **One writer.** Leave price control off when an automation or planner of your own already sets
@@ -460,7 +550,9 @@ Price control**) or, if you have one, open its **Configure**. Choose the Nord Po
 With *Spot price incl. VAT*, the import factor is taken as the VAT factor to find the spot
 price: set it to 1 + your VAT rate.
 
-**4. Choose the day plan.** Set **Decision** to **Day plan**. Straight away the
+**4. Choose the day plan.** Set **Decision** to **Day plan**; in the Netherlands, switch **Net
+metering** on until 1 January 2027 (it is off by default). Switching either fills in the modes per
+band with their presets. Straight away the
 *Plan* sensor shows what it would do, and the *Price Control* tab of the dashboard the charge and
 discharge periods ahead. Price Control writes nothing while its own switch is off, so you can
 watch the plan first.
@@ -472,11 +564,11 @@ surcharge or the VAT setting is off.
 #### Your tariff
 
 Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor*
-+ *export surcharge*, or the import price while *Net metering* is on. All per kWh including VAT.
++ *export surcharge*, or the import price while *Net metering* is on ([more](#net-metering-and-the-export-price)). All per kWh including VAT.
 
 | Contract | Import factor | Import surcharge | Export | Net metering |
 |---|---|---|---|---|
-| Dutch dynamic contract, 2026 (default) | 1.21 | supplier surcharge + energy tax incl. VAT, 0.13505 | — | **on** until 31 December 2026 |
+| Dutch dynamic contract, 2026 (default tariff) | 1.21 | supplier surcharge + energy tax incl. VAT, 0.13505 | — | **switch on** until 31 December 2026 (default off) |
 | The same from 2027 | 1.21 | the new energy tax and surcharge | factor and surcharge from your contract, default 1.10 and 0.02 | off |
 | Other country | 1 + VAT rate, e.g. 1.19 in Germany | grid fees, taxes and supplier surcharge per kWh, incl. VAT | factor and surcharge from your contract | off |
 
@@ -484,12 +576,22 @@ Your supplier's price page or invoice lists the surcharge and the energy tax per
 that adds a percentage on top of the spot price instead of a fixed amount: multiply it into the
 import factor, for instance 1.21 × 1.02.
 
-**Net metering** means a kWh sent to the grid is worth the import price. It applies in the
-Netherlands until the end of 2026 (*salderen*). From 2027, switch it off; the export formula then
-applies, and the day plan makes fewer, larger-spread cycles. Elsewhere in Europe exports earn their
-own, lower price (net billing): leave it off and set the export factor and surcharge. Dutch net
-metering is settled per year up to your own consumption; the switch values every exported kWh at
-the import price, so with a large yearly surplus it is too optimistic.
+#### Net metering and the export price
+
+With **Net metering** on, the export price is the import price of the same quarter: a kWh you send
+to the grid is credited at what a kWh from the grid costs at that moment. The *Export price* sensor
+then shows the same as *Import price*, and the export factor and surcharge are not used. With it
+off, the export price follows its own formula, spot × export factor + export surcharge.
+
+- **The Netherlands until the end of 2026** (*salderen*): switch it on. From 1 January 2027 switch it
+  off; the day plan then makes fewer cycles, each with a larger spread.
+- **Elsewhere in Europe** exports earn their own, lower price (*net billing*): leave it off and set
+  the export factor and surcharge from your contract.
+- Dutch net metering is settled per year, up to your own consumption. The switch values every
+  exported kWh at the import price, so with a large yearly surplus it is too optimistic.
+
+Switching it also fills in the modes per band with their presets (see
+[Price control](#price-control)).
 
 #### When the day plan does not plan
 
@@ -542,13 +644,13 @@ The entry is a device named **External P1 meter**, whatever the reader, with the
 
 ### Several external meters
 
-Since v1.5.3 any number of external meters can be added — a YouLess, a HomeWizard and a Home
+Any number of external meters can be added — a YouLess, a HomeWizard and a Home
 Assistant sensor side by side on one splitter, say. Each battery has an **External meter** select,
 next to **Meter source**, listing them by type and address plus `none`:
 
 | Situation | Meter used |
 |---|---|
-| One external meter, nothing chosen | that one, as in v1.5.2 |
+| One external meter, nothing chosen | that one |
 | Several, nothing chosen | none, with a warning in the log, until one is chosen |
 | One chosen | that one; `Meter source` still decides between it and the Zendure meter |
 | `none` chosen | none: `auto` uses the Zendure meter, `external` stops the battery |
@@ -633,7 +735,7 @@ The **Meter source** select decides which meter feeds both loops:
 |---|---|
 | `zendure` | The Zendure P1 meter only, as in every version before 1.5.0. |
 | `external` | The external reader only. When it goes quiet the battery stops, exactly as with a silent Zendure meter. Use this for comparison runs, where a silent fallback would mix two meters in one block. |
-| `auto` | **Default since v1.5.1.** The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. Without an external reader configured this is exactly `zendure`. |
+| `auto` | **Default.** The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. Without an external reader configured this is exactly `zendure`. |
 
 The controller status carries `meter_source` (the setting) and `meter_active` (the meter in use
 at this moment). Both meters stay subscribed whatever the setting, and the choice is made per
@@ -649,8 +751,8 @@ non-numeric or beyond the connection's 17.25 kW stops the battery.
 A reader that does not answer is retried every 5 s after eight failed polls in a row, with one
 warning in the log; it does not keep four requests a second going to an address that is not
 there. A frozen `tm` counts as silence even when requests succeed — with the P1 cable pulled the
-YouLess was seen to keep answering while `tm` stood still, once for 52 days. Since v1.5.1 the
-first telegram after a start is not trusted either: a reader counts as live from the first `tm`
+YouLess was seen to keep answering while `tm` stood still, once for 52 days. The first telegram
+after a start is not trusted either: a reader counts as live from the first `tm`
 that moves.
 
 ### Adding a reader
@@ -682,8 +784,8 @@ The default is `standby`, so nothing moves until a mode is chosen deliberately.
 ### Two loops, because the two decisions have different tempos
 
 Which mode applies and which direction runs changes on the scale of minutes. Following the
-house between those decisions is a per-second job. Before v1.1.0 both ran on the battery poll,
-so a meter reporting every second was read once every ten and nine samples went in the bin.
+house between those decisions is a per-second job. Run on the battery poll,
+a meter reporting every second would be read once every ten and nine samples would go in the bin.
 
 **The mode loop** runs at the end of each battery refresh, so it always acts on readings from
 that same cycle. It owns everything that needs the device to be believed: mode, direction,
@@ -758,7 +860,7 @@ which is where 40 comes from.
 
 Both are settings rather than constants because the right value is a property of the house: the
 wander measured on this one varied between 4 and 146 W median over a single afternoon, a factor
-of thirty-five. Raising them is worth trying and easy to undo — see the notes under v1.3.0 for
+of thirty-five. Raising them is worth trying and easy to undo — see the notes under [v1.3.0](#v130--two-write-thresholds-you-can-set) for
 what was measured at 125 and 350 W, and why it is not the recommendation it first appeared to
 be.
 
@@ -813,7 +915,7 @@ Selecting `standby` sends one command and then goes quiet:
 
 The limits go to zero whether or not this controller set them — selecting standby should stop the battery, not hand it over. `smartMode` goes back to 0 in the same breath, because the smart modes force it to 1 to keep their frequent limit writes out of flash and the device will not drop to its low-power state while that flag is set. See [Standby draw](#known-limitations).
 
-**Once, and only once.** A zero is still a command, and repeating it every poll is what v0.5.0 removed: on a device running its own energy manager the manager sets its limit back a second later, the integration overwrites it on the next poll, and the two produce a square wave in grid power at the polling interval. After the command the controller is passive again, and a limit that appears afterwards is left alone.
+**Once, and only once.** A zero is still a command, and repeating it every poll would do harm: on a device running its own energy manager the manager sets its limit back a second later, the integration overwrites it on the next poll, and the two produce a square wave in grid power at the polling interval. After the command the controller is passive again, and a limit that appears afterwards is left alone.
 
 That is also what keeps the `writer` column in the trace meaningful: outside that one command, every limit change in `standby` came from somewhere else.
 
@@ -840,7 +942,7 @@ considered over when the device reports both limits at zero.
 
 ### Buffers and thresholds
 
-Both buffers mean the same thing: how many watts of grid **import** to aim for. The default is 5 W on each side, so the loop settles just on the consuming side of zero. That is deliberate — overshooting into import wastes the difference between the import tariff and the value of the stored energy, while undershooting into export gives away energy worth the import tariff for the feed-in rate, roughly a third of it.
+Both buffers mean the same thing: how many watts of grid **import** to aim for. The default is 5 W on each side, so the loop settles just on the consuming side of zero. That is deliberate — overshooting into import wastes the difference between the import tariff and the value of the stored energy, while undershooting into export gives away energy worth the import tariff for the [export price](#net-metering-and-the-export-price), often a third of it or less once net metering ends.
 
 Both start thresholds are a distance from zero, expressed as a positive number of watts. Which side of zero they sit on is in the name: `Start discharging at import` counts import, `Start charging at export` counts export.
 
@@ -852,7 +954,7 @@ Keep each start threshold further from zero than its buffer, or the direction ne
 
 With a 150 W charge floor and 100 W of surplus, the device charges 150 W: 100 from the surplus, 50 bought from the grid. That is the point — the energy is cheap now and worth more later. Note that zero-on-the-meter only holds while both floors are at 0.
 
-The two directions are not symmetric in value. Overcharging is compared against the future import tariff, the full retail price; overdischarging exports at the feed-in rate. Setting the charge floor is usually worthwhile, setting the discharge floor rarely is.
+The two directions are not symmetric in value. Overcharging is compared against the future import tariff, the full retail price; overdischarging exports at the [export price](#net-metering-and-the-export-price). Setting the charge floor is usually worthwhile, setting the discharge floor rarely is.
 
 ### Reversing direction
 
@@ -908,7 +1010,7 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
-| **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Net metering mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
+| **Price Control entry** | 23 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
@@ -930,7 +1032,7 @@ together, the cell readings catch up on the next payload.
 Over three days the sensor produced eight transitions — four to each limit, each with a return to
 `none` in between, no chattering and no intermediate states.
 
-Since v1.5.4 the smart modes act on it themselves; see [Safety](#safety).
+The smart modes act on it themselves; see [Safety](#safety).
 
 **Treat `unavailable` separately from `none`.** The sensor spent ten seconds unavailable once in
 those three days. Anything keying off this entity should distinguish "no limit active" from "no
@@ -953,11 +1055,22 @@ Integration is trapezoidal: each interval uses the average of the previous and c
 
 All sources are AC-side fields, matching the side the meter is on. Conversion loss therefore stays visible as the gap between the grid figures and the battery figures rather than being absorbed into them.
 
+**In short**, measured on a SolarFlow 3000 Mix AC+ with one internal pack; method and raw figures
+in the sections below:
+
+| | Measured |
+|---|---|
+| [Charge efficiency](#the-charge-side-has-its-own-characteristic) at 3 kW, AC → cells | **95.2 %** |
+| [Discharge losses](#separating-the-fixed-and-proportional-parts) | a fixed ~33 W plus 97.4 % conversion: 95 %+ at high power, 81–84 % at 100–200 W |
+| [Usable capacity](#usable-capacity) | **8.8 kWh** at the cells; 9.3 kWh at the AC port for 0 → 100 % |
+| [Idle draw](#known-limitations) | 29–36 W while awake; about 5 W once `standby` lets the device sleep (Backup mode `closed`) |
+| [Zendure P1 meter delay](#the-delay) | 0.4–1.1 s behind a YouLess on the same port; repeats its previous value in 28 % of the seconds |
+
 ### Conversion efficiency
 
 Two diagnostic sensors surface that loss. `Charge efficiency` is DC over AC, `Discharge efficiency` is AC over DC. Only packs in the matching state contribute.
 
-The figure drops sharply at low power, because the converter's own consumption is nearly constant. How large that fixed part is depends on Backup mode — see [Standby draw](#known-limitations). On a 3000 Mix AC+ with `Backup mode = closed` it is around 27 W; with `economic` it is around 41 W.
+The figure drops sharply at low power, because the converter's own consumption is nearly constant. How large that fixed part is depends on Backup mode — see [Standby draw](#known-limitations). On a 3000 Mix AC+ with `Backup mode = closed` it is around 33 W (a loss of 36–40 W at 30–190 W); with `economic` it is around 41 W.
 
 Measured over eight uninterrupted hours at a stable discharge, 29,239 samples with `closed`:
 
@@ -989,6 +1102,8 @@ P_DC = 1.027 × P_AC + 32.9
 
 **A fixed term of 33 W and a marginal conversion of 97.4%.** Stronger than the fit: the loss itself sits between 36 and 40 W across the whole range, median 38. There is no poor efficiency at low power — there is one fixed cost that dominates when little is flowing.
 
+That fixed loss is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle — and on whether your tariff still nets import against export.
+
 #### The charge side has its own characteristic
 
 Three `quick_charge` windows at a fixed 3000 W limit, on two different days and across a state of charge from 26% to 99%:
@@ -1014,7 +1129,7 @@ The device publishes no capacity figure, so it is derived from charge windows: e
 
 **Median 93.2 Wh AC per percentage point**, or 88.3 Wh on the cell side.
 
-| | 3000 Mix AC+ with one 3840 Wh pack ×2 |
+| | 3000 Mix AC+, one internal pack (`I8000`) |
 |---|---|
 | Usable capacity, cell side | **8.8 kWh** |
 | Energy needed at the AC port for 0 → 100% | **9.3 kWh** |
@@ -1022,8 +1137,6 @@ The device publishes no capacity figure, so it is derived from charge windows: e
 Which of the two you want depends on the question. Planning purchases in metered kilowatt-hours needs the AC figure; sizing what the battery can deliver needs the cell figure. Eleven further discharge windows gave 86 to 88 Wh per point on the cell side, consistent with the table.
 
 Short windows are unreliable here: window 2 spans nine points, where rounding of the whole-percent scale weighs heavily. The two long windows, 60 and 91 points, are the ones to trust.
-
-That is not a measurement error, and it cuts both ways: trickle-discharging is expensive, but so is leaving the converter awake with nothing to do. Whichever is worse depends on how long it sits idle — and on whether your tariff still nets import against export.
 
 ---
 
@@ -1120,7 +1233,7 @@ recorder:
 ```
 
 The status changes only when the state or the reason changes, so it adds little to the database.
-The four energy sensors are worth keeping for the same reason: without them the Energy dashboard
+The five energy sensors are worth keeping for the same reason: without them the Energy dashboard
 has no history for the battery.
 
 ### The sample trace
@@ -1138,7 +1251,7 @@ one and no file would ever be closed properly.
 The row is the measurement and the command side by side — grid power as accepted for control
 and as the meter reported it, battery power on both the AC side and at the cells with the pack
 state that signs it, state of charge and the SOC limit flag, both limits, `acMode`, `smartMode`,
-the age of the battery payload, and the loop's own bookkeeping. Since v1.5.0 the row also names the
+the age of the battery payload, and the loop's own bookkeeping. The row also names the
 meter the reading came from (`meter_source`) and carries the external meter's raw power next to
 the Zendure one (`external_w` beside `grid_raw_w`), so the lag between the two is measured
 continuously rather than in one test. `grid_raw_w` is always the Zendure meter.
@@ -1203,7 +1316,7 @@ grid monitoring does not stop when the backup outlet is closed, and the draw doe
 
 **The flag is only worth those 25 W at a zero limit.** Once the converter is actually converting
 it is awake regardless: measured at 500 W of charging, the cells gave 453 W with the flag set and
-453 W with it clear. The 47 W of loss there matches `27 + 0.035 × 500` from the curve above. The
+453 W with it clear. The 47 W of loss there is close to what the discharge fit gives (`32.9 + 0.027 × 500` ≈ 46 W), though the charge side has its own characteristic. The
 flag governs where limit writes are stored, not the power state.
 
 **At a state-of-charge limit the device drops to 5 W on its own, flag or no flag.** Over 58.9 hours
@@ -1228,14 +1341,14 @@ flag cannot be separated from Home Assistant. Reports elsewhere of the device re
 on its own were not reproducible here; what looked like that turned out to be the device's own
 energy manager still running alongside.
 
-**At a state-of-charge limit the controller keeps ordering, and reports success.** The device
-refuses outright — not a taper, a flat zero — while the loop carries on writing a limit and
-reports `discharge at 143 W, within 10 W` or `charging at maximum`, because it reads the limit
-back rather than the power. Observed at both ends: 630 samples in `quick_charge` at 100% with an
+**At a state-of-charge limit `quick_*` and `manual` keep their order.** The device refuses it —
+not a taper, a flat zero — and the status adds `refused by device: battery full
+(upper limit)` or `… empty (lower limit)`. The smart modes no longer order into a closed direction
+(see [Safety](#safety)). Before v1.5.4 they did: 630 samples in `quick_charge` at 100% with an
 ordered 3000 W and `battery_ac_w` exactly 0, and 4380 samples in `smart_discharge_only` at 9% with
 an ordered 58–178 W and the same flat zero.
 
-Nothing breaks, but two things follow. In a charge mode at the top the discharge limit stays at
+Nothing breaks, but two things follow. In `quick_charge` at the top the discharge limit stays at
 zero, so the battery cannot cover a household peak while sitting full; at the bottom the mirror
 applies to solar surplus. And the rest state never engages, because the limit is not zero. Watch
 `SOC limit status` rather than the reported power if you need to know whether an order is landing.
@@ -1245,7 +1358,7 @@ its meaning is unknown. Reported as-is.
 
 **Efficiency is not constant.** The converter's overhead has a fixed part and a proportional one,
 and the fixed part dominates. Treating it as a constant, in either direction, gives wrong answers
-at the other end of the range. The fixed part also depends on Backup mode: around 27 W with
+at the other end of the range. The fixed part also depends on Backup mode: around 33 W with
 `closed`, around 41 W with `economic`, so a curve measured under one does not describe the other.
 Discharging under `closed` it works out at `P_DC = 1.027 × P_AC + 32.9`; charging does not follow
 that line and needs its own figures — see [Conversion efficiency](#conversion-efficiency).
@@ -1261,13 +1374,36 @@ to average out the sampling offset between the AC and cell readings.
 
 ## Changelog
 
-The current releases are listed in full, with v1.5.4 — the last one to change the control loop — kept in full below it. Earlier ones are grouped by minor version, keeping the
+Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.1 — One set of modes for fixed prices and the day plan
+
+No change to the control loop. After updating, restart Home Assistant.
+
+- **One set of modes for both ways of deciding.** The cheap price mode, the expensive price mode
+  and the in-between mode now drive the day plan too, and the day plan plans with them:
+  `smart_charge_only` plans no charging from the grid, `smart_discharge_only` plans covering the
+  house only. In v1.6.0 the day plan always charged and discharged at full power. The *Net metering
+  mode* select is gone; the in-between mode does its job.
+- **Presets that follow your choice.** Switching *Decision* or *Net metering* fills the three
+  modes in once: fixed prices `quick_charge` / `smart_discharge_only`, the day plan
+  `quick_charge` / `quick_discharge`, and in between `smart_matching`, except the day plan with
+  net metering: `standby`. Replayed on 30 days (the simpler modes replay in [Price control](#price-control);
+  not comparable with the € 1.58 of v1.6.0): with net metering the day plan earns € 1.73 a day
+  resting in between against € 1.67 holding the grid at zero; without, € 0.67 against € 1.02.
+  See [Price control](#price-control).
+- **Updating from v1.6.0 changes nothing in what the battery does**: the modes are set once to
+  what v1.6.0 did (with the day plan: `quick_charge` and `quick_discharge`; with net metering on:
+  the former net metering mode as in-between mode). The *Net metering mode* entity is left behind
+  as unavailable; remove it under *Settings → Entities*.
+- Various presentation, documentation and consistency updates. One of them can touch an
+  automation: *SOC calibration status* now reads `normal` or `calibrating` (it showed
+  *uncalibrated* and *calibrated*, which was wrong).
 
 ### v1.6.0 — Dynamic tariffs with a day plan, eleven languages and a dashboard
 
-No change to the control loop. The first release since v1.5.5; it takes in v1.5.6, which was not
-released on its own.
+No change to the control loop. The first release since v1.5.5.
 
 **Price control with a day plan**
 
@@ -1279,12 +1415,14 @@ released on its own.
   (HACS integration) it works out per quarter of an hour whether to charge, discharge or neither,
   by dynamic programming over the energy in the cells.
 - **The day plan trades**: it charges with `quick_charge` and discharges with `quick_discharge` at
-  the battery's full power; the mode selects per band are for fixed prices. The **expected house
+  the battery's full power; the mode selects per band are for fixed prices (changed in v1.6.1: the
+  modes drive the day plan too). The **expected house
   load** values the part of a discharge that covers the house at the import price.
 - **Separate import and export prices**, each spot × factor + surcharge, with a *Net metering
   (export = import price)* switch for as long as a kWh sent to the grid is worth the import price,
   and a *Net metering mode* that takes the place of the in-between mode while it is on: `standby`
-  by default, since moving energy through the battery then only costs losses and wear.
+  by default, since moving energy through the battery then only costs losses and wear (changed in
+  v1.6.1: the Net metering mode select is gone, and that reasoning was too short — see v1.6.1).
 - **Conversion losses** on both sides, **wear** and a **minimum margin** per kWh, all entities.
   The margin is an amount per kWh, not a percentage.
 - Sensors *Electricity price*, *Import price*, *Export price*, *Plan* (the charge and discharge
@@ -1749,7 +1887,7 @@ unknowns were documented rather than suspected.
 | Resource | Used for |
 |---|---|
 | [Zendure/zenSDK](https://github.com/Zendure/zenSDK) | Local HTTP API and SolarFlow property reference |
-| Zendure SolarFlow FAQ | Grid-monitoring standby behaviour under VDE-AR-N 4105 and UL 1741 |
+| Zendure SolarFlow FAQ | The grid-monitoring explanation for standby draw (VDE-AR-N 4105, UL 1741), since shown to be incomplete |
 | Community zenSDK automation | Control-loop structure: undershot first step, idle gating, direction hold |
 
 ---

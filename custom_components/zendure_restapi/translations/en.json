@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "In-between mode"
       },
-      "net_metering_mode": {
-        "name": "Net metering mode"
-      },
       "operation_mode": {
         "name": "Operation mode"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Uncalibrated",
-          "calibrated": "Calibrated"
+          "normal": "Normal",
+          "calibrating": "Calibrating"
         },
         "name": "SOC calibration status"
       },

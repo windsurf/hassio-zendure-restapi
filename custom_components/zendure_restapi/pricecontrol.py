@@ -13,10 +13,16 @@ Two ways to decide, chosen with the Decision select:
 - **Day plan** (v1.6.0). A plan over the prices of today and tomorrow from a
   Nord Pool sensor (HACS integration), with the import price and the export
   value each from a formula of their own, the conversion losses and a
-  minimum margin per kWh; see dayplan.py. It trades: a charge period
-  runs quick_charge, a discharge period quick_discharge, both at the
-  battery's full power; every other period takes the in-between mode, or
-  the net metering mode while Net metering is on.
+  minimum margin per kWh; see dayplan.py. A charge period runs the cheap
+  price mode, a discharge period the expensive price mode, every other
+  period the in-between mode.
+
+The three modes per band are shared by both ways of deciding (v1.6.1). The
+day plan also plans with them: quick_charge charges from the grid,
+smart_charge_only does not; quick_discharge sells at full power,
+smart_discharge_only covers the house only. Switching Decision or Net
+metering fills the three in once with the presets of const.price_presets;
+after that they are free to change until the next switch.
 
 Both end in an Operation mode, so everything after the decision is shared. The Operation mode is written only when the target changes, or
 when price control is switched on. A mode set by hand therefore holds until
@@ -25,8 +31,7 @@ default: an automation or planner that already steers the Operation mode
 stays the only one that does.
 
 Without a usable price, or a day plan without a price list or battery data,
-the target is the in-between mode (the net metering mode while Net metering
-is on), which charges and discharges nothing on purpose. A
+the target is the in-between mode. A
 cheap price at or above the expensive one is treated the same way: the two
 limits contradict each other, so neither applies.
 """
@@ -46,10 +51,13 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    PRICE_MODE_OPTIONS,
+    price_presets,
     DECISION_PLAN,
     DOMAIN,
     MODE_QUICK_CHARGE,
     MODE_QUICK_DISCHARGE,
+    MODE_STANDBY,
     OPT_CHARGE_EFFICIENCY,
     OPT_DISCHARGE_EFFICIENCY,
     OPT_EXPORT_FACTOR,
@@ -63,7 +71,6 @@ from .const import (
     OPT_NET_METERING,
     OPT_OPERATION_MODE,
     OPT_PRICE_BETWEEN_MODE,
-    OPT_PRICE_NET_METERING_MODE,
     OPT_PRICE_CHEAP,
     OPT_PRICE_CHEAP_MODE,
     OPT_PRICE_CONTAINS,
@@ -97,6 +104,11 @@ from .registry import pack_model
 from .settings import ZendureSettings
 
 _LOGGER = logging.getLogger(__name__)
+
+# The setting behind the net metering mode select of v1.6.0, removed in v1.6.1,
+# and the mark that the band modes have been carried over from v1.6.0.
+OLD_NET_METERING_MODE = "price_net_metering_mode"
+MIGRATED_V161 = "price_modes_v161"
 
 # Dynamic tariffs change per quarter or per hour. Deciding just after every
 # quarter also catches a price sensor that changes its attributes but not its
@@ -192,6 +204,9 @@ class PriceControl:
         self.export_value: float | None = None
         self.plan: Plan | None = None
         self._generation = 0
+        # Decision and Net metering as last seen; None until the first update,
+        # so a restart never overwrites the modes.
+        self._stand: tuple[str, bool] | None = None
 
     # ── Life cycle ───────────────────────────────────────────────────────
 
@@ -222,6 +237,20 @@ class PriceControl:
                 self._unsub_price = async_track_state_change_event(
                     self.hass, [entity], self._on_price
                 )
+        stand = (
+            str(self._settings.get(OPT_PRICE_DECISION)),
+            self._settings.get_bool(OPT_NET_METERING),
+        )
+        if self._stand is None and self._migrate_net_metering_mode():
+            return  # the write calls this method again
+        if self._stand is not None and stand != self._stand:
+            # Decision or Net metering switched: the presets of the new
+            # stand, once. Writing them calls this method again, with the
+            # same stand, so it does not repeat.
+            self._stand = stand
+            self._settings.set_many(price_presets(*stand))
+            return
+        self._stand = stand
         enabled = self._settings.get_bool(OPT_PRICE_CONTROL)
         switched_on = enabled and not self._enabled
         self._enabled = enabled
@@ -229,6 +258,30 @@ class PriceControl:
             # Apply the current target now, even if it equals the last one.
             self._last_target = None
         self.evaluate()
+
+    def _migrate_net_metering_mode(self) -> bool:
+        """Carry the behaviour of v1.6.0 over to the shared band modes, once.
+
+        In v1.6.0 the day plan always charged with quick_charge and
+        discharged with quick_discharge, whatever the band modes said, and a
+        fourth select, the net metering mode (standby unless changed),
+        replaced the in-between mode while Net metering was on. From v1.6.1
+        the band modes are what both ways of deciding use, so they are set
+        to what v1.6.0 did: the battery keeps doing the same. Runs once per
+        entry, marked in the options.
+        """
+        options = dict(self._entry.options)
+        if options.get(MIGRATED_V161):
+            return False
+        old = options.pop(OLD_NET_METERING_MODE, MODE_STANDBY)
+        if options.get(OPT_PRICE_DECISION) == DECISION_PLAN:
+            options[OPT_PRICE_CHEAP_MODE] = MODE_QUICK_CHARGE
+            options[OPT_PRICE_EXPENSIVE_MODE] = MODE_QUICK_DISCHARGE
+        if options.get(OPT_NET_METERING) and old in PRICE_MODE_OPTIONS[OPT_PRICE_BETWEEN_MODE]:
+            options[OPT_PRICE_BETWEEN_MODE] = old
+        options[MIGRATED_V161] = True
+        self.hass.config_entries.async_update_entry(self._entry, options=options)
+        return True
 
     @callback
     def _on_price(self, _event: Event) -> None:
@@ -281,9 +334,9 @@ class PriceControl:
             eta_charge=s.get_float(OPT_CHARGE_EFFICIENCY) / 100,
             eta_discharge=s.get_float(OPT_DISCHARGE_EFFICIENCY) / 100,
             house_kw=s.get_float(OPT_HOUSE_LOAD) / 1000,
-            # The day plan trades: full power both ways.
-            grid_charge=True,
-            sell=True,
+            # The plan can only do what the band modes do.
+            grid_charge=s.get(OPT_PRICE_CHEAP_MODE) == MODE_QUICK_CHARGE,
+            sell=s.get(OPT_PRICE_EXPENSIVE_MODE) == MODE_QUICK_DISCHARGE,
         )
 
     # ── Decision ─────────────────────────────────────────────────────────
@@ -351,31 +404,21 @@ class PriceControl:
                 ACTION_CHARGE: PRICE_STATUS_CHEAP,
                 ACTION_DISCHARGE: PRICE_STATUS_EXPENSIVE,
             }.get(plan.action, PRICE_STATUS_BETWEEN),
-            trading=True,
         )
 
     @callback
-    def _apply(self, band: str, trading: bool = False) -> None:
+    def _apply(self, band: str) -> None:
         """The mode for a band, written when price control is on and it changed.
 
-        Fixed prices take the mode chosen for each band. The day plan trades:
-        it charges with quick_charge and discharges with quick_discharge, at
-        the battery's full power; in between it takes the in-between mode.
-        While Net metering is on, the net metering mode takes the place of the
-        in-between mode, in both ways of deciding and without a price.
+        Both ways of deciding take the mode chosen for each band: the cheap
+        price mode, the expensive price mode, and the in-between mode for
+        everything else, including no price or no plan.
         """
-        if trading and band == PRICE_STATUS_CHEAP:
-            self.target = MODE_QUICK_CHARGE
-        elif trading and band == PRICE_STATUS_EXPENSIVE:
-            self.target = MODE_QUICK_DISCHARGE
-        else:
-            mode_key = {
-                PRICE_STATUS_CHEAP: OPT_PRICE_CHEAP_MODE,
-                PRICE_STATUS_EXPENSIVE: OPT_PRICE_EXPENSIVE_MODE,
-            }.get(band, OPT_PRICE_BETWEEN_MODE)
-            if mode_key == OPT_PRICE_BETWEEN_MODE and self._settings.get_bool(OPT_NET_METERING):
-                mode_key = OPT_PRICE_NET_METERING_MODE
-            self.target = str(self._settings.get(mode_key))
+        mode_key = {
+            PRICE_STATUS_CHEAP: OPT_PRICE_CHEAP_MODE,
+            PRICE_STATUS_EXPENSIVE: OPT_PRICE_EXPENSIVE_MODE,
+        }.get(band, OPT_PRICE_BETWEEN_MODE)
+        self.target = str(self._settings.get(mode_key))
 
         if not self._enabled:
             self.status = PRICE_STATUS_OFF

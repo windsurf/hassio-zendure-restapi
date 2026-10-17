@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.0 | October 2026
+# ZENDURE RESTAPI DASHBOARD - v1.6.1 | October 2026
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in two views, read through
@@ -686,7 +686,7 @@ views:
         - **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.
         - **Day plan**: over the Nord Pool prices of today and tomorrow (the Nord Pool integration from HACS), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.
 
-        Fixed prices take the mode chosen for each band below. The day plan trades: it charges with *quick_charge* and discharges with *quick_discharge* at the battery's full power, and takes the in-between mode otherwise; while *Net metering* is on, the *net metering mode* takes its place. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
+        Both take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
 
         Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up Nord Pool: see *Price control* in the README.
       grid_options:
@@ -728,9 +728,13 @@ views:
         {% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}
         {% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}
         **Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}
+
         **Charge** {{ ns.c | join(', ') if ns.c else '-' }}
+
         **Discharge** {{ ns.d | join(', ') if ns.d else '-' }}
+
         **Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh
+
         **Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}
         {% endif %}
       grid_options:
@@ -869,16 +873,7 @@ views:
       features:
       - type: select-options
       grid_options:
-        columns: 12
-        rows: 2
-    - type: tile
-      entity: select.price_control_expensive_price_mode
-      icon: mdi:battery-arrow-down
-      features_position: bottom
-      features:
-      - type: select-options
-      grid_options:
-        columns: 12
+        columns: 8
         rows: 2
     - type: tile
       entity: select.price_control_in_between_mode
@@ -887,16 +882,16 @@ views:
       features:
       - type: select-options
       grid_options:
-        columns: 12
+        columns: 8
         rows: 2
     - type: tile
-      entity: select.price_control_net_metering_mode
-      icon: mdi:swap-horizontal
+      entity: select.price_control_expensive_price_mode
+      icon: mdi:battery-arrow-down
       features_position: bottom
       features:
       - type: select-options
       grid_options:
-        columns: 12
+        columns: 8
         rows: 2
   - type: grid
     column_span: 2
@@ -954,12 +949,6 @@ views:
       features:
       - type: numeric-input
         style: slider
-    - type: markdown
-      content: |
-        **Import price** = spot x import factor + import surcharge. **Export price** = spot x export factor + export surcharge, or the import price while **net metering** applies (Netherlands until the end of 2026). Surcharges, wear cost and margin per kWh, including VAT.
-      grid_options:
-        columns: full
-        rows: auto
   - type: grid
     column_span: 2
     cards:

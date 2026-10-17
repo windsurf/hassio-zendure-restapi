@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Läge däremellan"
       },
-      "net_metering_mode": {
-        "name": "Läge vid nettodebitering"
-      },
       "operation_mode": {
         "name": "Driftläge"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Okalibrerad",
-          "calibrated": "Kalibrerad"
+          "normal": "Normal",
+          "calibrating": "Kalibrerar"
         },
         "name": "SOC-kalibreringsstatus"
       },

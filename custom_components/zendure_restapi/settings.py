@@ -91,3 +91,12 @@ class ZendureSettings:
         options = {**self._entry.options, key: value}
         self._hass.config_entries.async_update_entry(self._entry, options=options)
         _LOGGER.debug("Setting %s = %s", key, value)
+
+    def set_many(self, values: dict[str, Any]) -> None:
+        """Persist several settings in one write: one update, not one per key."""
+        changed = {k: v for k, v in values.items() if self.get(k) != v}
+        if not changed:
+            return
+        options = {**self._entry.options, **changed}
+        self._hass.config_entries.async_update_entry(self._entry, options=options)
+        _LOGGER.debug("Settings %s", changed)

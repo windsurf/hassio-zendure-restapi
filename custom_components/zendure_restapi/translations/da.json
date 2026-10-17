@@ -183,9 +183,6 @@
       "in_between_mode": {
         "name": "Tilstand imellem"
       },
-      "net_metering_mode": {
-        "name": "Tilstand ved nettoafregning"
-      },
       "operation_mode": {
         "name": "Driftstilstand"
       }
@@ -248,8 +245,8 @@
       },
       "soc_calibration_status": {
         "state": {
-          "uncalibrated": "Ikke kalibreret",
-          "calibrated": "Kalibreret"
+          "normal": "Normal",
+          "calibrating": "Kalibrerer"
         },
         "name": "SOC-kalibreringsstatus"
       },

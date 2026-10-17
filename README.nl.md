@@ -8,12 +8,12 @@
 
 🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
-**Je Zendure SolarFlow-thuisaccu in Home Assistant, 100% lokaal, in drie stappen.**
-Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde.
+**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.**
+Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde: nul op de meter.
 
 **🔌 Works with HomeWizard.** Heb je al een HomeWizard P1-meter? Meer heb je niet nodig — een Zendure-meter is niet vereist. YouLess, EcoTracker, Shelly Pro 3EM en de Zendure-meters werken ook.
 
-**💶 Dynamische tarieven, ingebouwd.** Heb je een dynamisch contract? Price Control plant laden en ontladen per kwartier over de Nord Pool-prijzen van vandaag en morgen — import- en exportprijs, omzetverlies en slijtage meegerekend. Geen automation te schrijven: zet hem aan.
+**💶 Dynamische tarieven, ingebouwd.** Heb je een dynamisch contract, zoals Zonneplan, Tibber, Frank Energie of ANWB Energie? Price Control plant laden en ontladen per kwartier over de Nord Pool-prijzen van vandaag en morgen — import- en exportprijs, omzetverlies en slijtage meegerekend. Salderen zit erin: zolang het geldt één schakelaar aan, vanaf 2027 uit. Geen automation te schrijven: zet hem aan.
 
 ![Zendure-dashboard](images/dashboard.png)
 
@@ -82,8 +82,12 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 ## 🚀 Aan de slag
 
-**1. Zet de lokale API aan** — onder EN 18031 staat die standaard uit.
-In de Zendure-app: voeg **HEMS** toe en sluit de app daarna af. Controleer het vanuit een browser:
+**1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit.
+In de Zendure-app, twee instellingen:
+- voeg **HEMS** toe — dat zet de lokale API aan;
+- kies onder **Energieplan** de **Aangepaste modus** — anders blijft de eigen sturing van Zendure naast deze integratie naar de accu schrijven.
+
+Sluit de app daarna af. Controleer het vanuit een browser:
 `http://<ip-accu>/properties/report` moet JSON tonen.
 
 **2. Installeer via HACS**
@@ -91,6 +95,8 @@ In de Zendure-app: voeg **HEMS** toe en sluit de app daarna af. Controleer het v
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=windsurf&repository=hassio-zendure-restapi&category=integration)
 
 Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://github.com/windsurf/hassio-zendure-restapi`, categorie **Integratie**. Installeer **Zendure RestAPI** en herstart Home Assistant.
+
+[![Integratie toevoegen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Voeg je apparaten toe**
 Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Vink **Zendure RestAPI-dashboard aanmaken** aan, dan staat het dashboard in je zijbalk. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
@@ -118,8 +124,8 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 
 Twee manieren om de accu te sturen op een dynamisch tarief, in een eigen apparaat:
 
-- **Vaste prijzen** — op of onder een **goedkope prijs** laadt de accu, op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul. Elke prijssensor werkt: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen.
-- **Dagplan** (nieuw in v1.6.0) — over de [Nord Pool](https://github.com/custom-components/nordpool)-prijzen van vandaag en morgen bepaalt het per kwartier of de accu laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Het handelt: laden en ontladen op het volle vermogen van de accu. Klaar voor het einde van de saldering in 2027: zet die uit en de exportprijs volgt zijn eigen formule.
+- **Vaste prijzen** — op of onder een **goedkope prijs** laadt de accu (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen.
+- **Dagplan** (nieuw in v1.6.0) — over de [Nord Pool](https://github.com/custom-components/nordpool)-prijzen van vandaag en morgen bepaalt het per kwartier of de accu laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de accu; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
 
 Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,58 per dag** op — evenveel als een volledige energieplanner op dezelfde dagen; de vaste prijzen € 0,21.
 
@@ -128,7 +134,7 @@ Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,
 1. Installeer **Nord Pool** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration)) en **ApexCharts Card** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)); herstart Home Assistant en ververs de browser.
 2. **Integratie toevoegen → Nord Pool**: *Region* je prijsgebied (`NL` voor Nederland), *Currency* `EUR`, *Include VAT* aan, *Price in cents* uit, *Energy scale* `kWh`, *Template for additional costs* laten staan.
 3. Voeg Prijssturing toe (hieronder) met die sensor, `sensor.nordpool_kwh_…`, en zet *De prijssensor bevat* op **Spotprijs incl. btw**.
-4. Zet **Beslissing** op **Dagplan** en vergelijk **Importprijs** met de prijs van je leverancier voor dit kwartier; wijkt hij af, pas dan *Importopslag* aan.
+4. Zet **Beslissing** op **Dagplan** en zet tot 1 januari 2027 **Salderen** aan. Vergelijk **Importprijs** met de prijs van je leverancier voor dit kwartier; wijkt hij af, pas dan *Importopslag* aan.
 
 Volledige uitleg, tariefinstellingen voor andere contracten en landen: [Setting up Nord Pool](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-nord-pool-for-the-day-plan) (Engels).
 
@@ -166,7 +172,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.0:** **prijssturing voor dynamische tarieven**, met een **dagplan** over de Nord Pool-prijzen — aparte import- en exportprijzen, omzetverlies en een marge per kWh; entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt. **v1.5.5:** alleen documentatie — hoe deze integratie zich verhoudt tot de zenSDK van Zendure, een nieuwe meting van twee meters naast elkaar, en de controllerstatus in de recorder houden. **v1.5.4:** de slimme modi bestellen niet meer in een volle of lege accu en zeggen waarom; `manual` op 0 W kan rusten. **v1.5.3:** meerdere externe meters naast elkaar, met een select *External meter* op de accu om er een te kiezen; elke vermogenssensor in Home Assistant als externe meter. **v1.5.2:** de externe P1-meter als eigen apparaat met sensoren voor vermogen, status en energie; HomeWizard P1-meters worden automatisch gevonden; instelschermen in elf talen; externe meter op het dashboard. Bij een upgrade vanaf v1.5.0/v1.5.1 verhuizen je meterinstellingen vanzelf mee.
+**Laatste release – v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen — met saldering laat het dagplan de accu tussen de blokken rusten; de app-instelling noemt beide stappen, HEMS en Aangepaste modus. **v1.6.0:** **prijssturing voor dynamische tarieven**, met een **dagplan** over de Nord Pool-prijzen — aparte import- en exportprijzen, omzetverlies en een marge per kWh; entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt.
 
 ## Meer
 
