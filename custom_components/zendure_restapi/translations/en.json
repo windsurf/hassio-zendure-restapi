@@ -8,7 +8,7 @@
           "zendure": "Zendure device (battery or P1 meter)",
           "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)",
-          "price_control": "Price control (dynamic trading)"
+          "price_control": "Price control (dynamic tariffs)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Price control",
-        "description": "Sets the Operation mode of a battery from the electricity price: charge when it is cheap, discharge when it is expensive, hold the grid at zero in between. It is off until you switch it on.",
+        "description": "Sets the Operation mode of a battery from the electricity price: with two fixed prices, or with a day plan over the Nord Pool prices of today and tomorrow. It is off until you switch it on.",
         "data": {
           "battery_entry": "Battery",
-          "price_entity": "Price sensor (price per kWh)"
+          "price_entity": "Price sensor (price per kWh)",
+          "price_contains": "The price sensor holds"
+        },
+        "data_description": {
+          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Price control",
         "data": {
-          "price_entity": "Price sensor (price per kWh)"
+          "price_entity": "Price sensor (price per kWh)",
+          "price_contains": "The price sensor holds"
+        },
+        "data_description": {
+          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "External meter"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Fixed prices",
+          "day_plan": "Day plan"
+        },
+        "name": "Decision"
+      },
       "cheap_price_mode": {
         "name": "Cheap price mode"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "In-between mode"
+      },
+      "net_metering_mode": {
+        "name": "Net metering mode"
       },
       "operation_mode": {
         "name": "Operation mode"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Off",
           "no_price": "No price",
+          "no_plan": "No plan",
           "cheap": "Cheap",
           "between": "In between",
           "expensive": "Expensive"
         },
         "name": "Status"
+      },
+      "plan": {
+        "state": {
+          "charge": "Charge",
+          "discharge": "Discharge",
+          "idle": "In between"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Phase A apparent power"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "PV energy"
       },
+      "expected_margin": {
+        "name": "Expected margin"
+      },
+      "export_price": {
+        "name": "Export price"
+      },
       "external_energy_exported": {
         "name": "Energy exported"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Enclosure temperature"
+      },
+      "import_price": {
+        "name": "Import price"
       },
       "iot_state": {
         "name": "IoT connection state"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Charge buffer"
       },
+      "charge_efficiency": {
+        "name": "Charge efficiency"
+      },
       "charge_max_limit": {
         "name": "Charge power limit"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Discharge buffer"
       },
+      "discharge_efficiency": {
+        "name": "Discharge efficiency"
+      },
+      "expected_house_load": {
+        "name": "Expected house load"
+      },
       "expensive_price": {
         "name": "Expensive price"
+      },
+      "export_factor": {
+        "name": "Export factor"
+      },
+      "export_surcharge": {
+        "name": "Export surcharge"
+      },
+      "import_factor": {
+        "name": "Import factor"
+      },
+      "import_surcharge": {
+        "name": "Import surcharge"
       },
       "input_limit": {
         "name": "Charge limit (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Lower SOC limit"
       },
+      "minimum_margin": {
+        "name": "Minimum margin"
+      },
       "mode_threshold": {
         "name": "Mode threshold"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Trim threshold"
+      },
+      "wear_cost": {
+        "name": "Wear cost"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Fan forced on"
+      },
+      "net_metering": {
+        "name": "Net metering (export = import price)"
       },
       "smart_mode": {
         "name": "Skip flash write"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Trace recording"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Spot price incl. VAT",
+        "spot": "Spot price excl. VAT",
+        "import_price": "Import price (whole tariff)"
       }
     }
   }

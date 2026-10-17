@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.5.6 | October 2026
+# ZENDURE RESTAPI DASHBOARD - v1.6.0 | October 2026
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in two views, read through
@@ -9,8 +9,11 @@
 #   Zendure RestAPI - the battery, the Zendure P1 meter and an
 #                     external P1 meter, the controller
 #   Price Control   - the Price Control device: on/off, status,
-#                     the price, both price limits and the mode
-#                     per band (entity ids price_control_*)
+#                     decision, the day plan with its periods
+#                     and a chart (apexcharts-card, HACS), the
+#                     fixed prices and the mode per band, the
+#                     tariff, losses and margin as sliders
+#                     (entity ids price_control_*)
 #
 # INSTALL:
 #   Automatic: tick "Create the Zendure RestAPI dashboard" when
@@ -595,6 +598,10 @@ views:
       entity: sensor.zendure_p1_meter_3_phase_phase_b_apparent_power
     - type: tile
       entity: sensor.zendure_p1_meter_3_phase_phase_c_apparent_power
+    - type: tile
+      entity: sensor.zendure_p1_meter_3_phase_energy_imported
+    - type: tile
+      entity: sensor.zendure_p1_meter_3_phase_energy_exported
   - type: grid
     column_span: 2
     visibility:
@@ -627,8 +634,6 @@ views:
     - type: tile
       entity: sensor.external_p1_meter_status
     - type: tile
-      entity: sensor.external_p1_meter_telegram_age
-    - type: tile
       entity: sensor.external_p1_meter_energy_imported
       visibility:
       - condition: state
@@ -644,9 +649,10 @@ views:
   path: price-control
   icon: mdi:cash-clock
   type: sections
-  max_columns: 3
+  max_columns: 4
   sections:
   - type: grid
+    column_span: 2
     cards:
     - type: heading
       heading: Price Control
@@ -659,38 +665,352 @@ views:
         entity: select.zendure_solarflow_3000_mix_ac_operation_mode
     - type: tile
       entity: switch.price_control
+      icon: mdi:cash-clock
     - type: tile
       entity: sensor.price_control_status
+      icon: mdi:cash-sync
     - type: tile
-      entity: sensor.price_control_electricity_price
-    - type: tile
-      entity: select.zendure_solarflow_3000_mix_ac_operation_mode
-    - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+      grid_options:
+        columns: 12
+        rows: 1
+      entity: select.price_control_decision
+      icon: mdi:source-branch
+      vertical: false
+      features:
+      - type: select-options
+      features_position: inline
     - type: markdown
+      content: |-
+        **Decision** chooses how price control decides.
+
+        - **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.
+        - **Day plan**: over the Nord Pool prices of today and tomorrow (the Nord Pool integration from HACS), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.
+
+        Fixed prices take the mode chosen for each band below. The day plan trades: it charges with *quick_charge* and discharges with *quick_discharge* at the battery's full power, and takes the in-between mode otherwise; while *Net metering* is on, the *net metering mode* takes its place. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
+
+        Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up Nord Pool: see *Price control* in the README.
       grid_options:
         columns: full
         rows: auto
-      content: |-
-        At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, in between it follows the meter or rests - each in the mode chosen below.
-
-        Price control writes the Operation mode only when the price crosses a limit, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
-
-        Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard.
   - type: grid
+    column_span: 2
     cards:
     - type: heading
-      heading: Price limits
+      heading: Day plan
+      heading_style: title
+      icon: mdi:calendar-clock
+      badges:
+      - type: entity
+        entity: sensor.price_control_plan
+      - type: entity
+        entity: sensor.price_control_expected_margin
+    - type: tile
+      entity: switch.price_control_net_metering
+      icon: mdi:swap-horizontal
+      features_position: bottom
+      grid_options:
+        columns: 12
+        rows: 1
+    - type: tile
+      entity: sensor.price_control_plan
+      icon: mdi:calendar-clock
+    - type: tile
+      entity: sensor.price_control_expected_margin
+      icon: mdi:cash-check
+    - type: markdown
+      content: |
+        {% set p = 'sensor.price_control_plan' %}
+        {% if states(p) in ['unavailable', 'unknown'] %}
+        No day plan: *Decision* is on *Fixed prices*, or there is no Nord Pool price list or battery data yet.
+        {% else %}
+        {% set nc = state_attr(p, 'next_change') %}
+        {% set ns = namespace(c=[], d=[]) %}
+        {% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}
+        {% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}
+        **Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}
+        **Charge** {{ ns.c | join(', ') if ns.c else '-' }}
+        **Discharge** {{ ns.d | join(', ') if ns.d else '-' }}
+        **Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh
+        **Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}
+        {% endif %}
+      grid_options:
+        columns: full
+        rows: auto
+    - type: custom:apexcharts-card
+      graph_span: 24h
+      span:
+        start: day
+      now:
+        show: true
+        label: Now
+      header:
+        show: false
+      yaxis:
+      - decimals: 0
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: dd-MM HH:mm
+      series:
+      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+        name: Grid (P1)
+        type: area
+        unit: W
+        color: '#1E88E5'
+        opacity: 0.25
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        group_by:
+          func: avg
+          duration: 5min
+        show:
+          in_header: false
+          legend_value: false
+      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.25
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        group_by:
+          func: avg
+          duration: 5min
+        show:
+          in_header: false
+          legend_value: false
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        opacity: 0.25
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        group_by:
+          func: avg
+          duration: 5min
+        show:
+          in_header: false
+          legend_value: false
+        transform: return x * -1;
+      - entity: sensor.price_control_plan
+        name: Plan
+        type: line
+        unit: W
+        stroke_width: 2
+        curve: stepline
+        float_precision: 0
+        color: '#757575'
+        show:
+          in_header: false
+          legend_value: false
+        data_generator: |
+          const a = entity.attributes;
+          const now = Date.now();
+          const pts = [[now, 0, 0]];
+          [...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {
+            pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);
+            pts.push([new Date(r.end).getTime(), 0, 0]);
+          });
+          if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);
+          pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);
+          return pts.map(p => [p[0], p[1]]);
+      grid_options:
+        columns: 24
+        rows: auto
+      hours_12: false
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Pricing modes
       heading_style: title
       icon: mdi:cash-multiple
-    - type: entities
-      entities:
-      - number.price_control_cheap_price
-      - number.price_control_expensive_price
-      - select.price_control_cheap_price_mode
-      - select.price_control_expensive_price_mode
-      - select.price_control_in_between_mode
+    - type: tile
+      entity: number.price_control_cheap_price
+      icon: mdi:cash-minus
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_expensive_price
+      icon: mdi:cash-plus
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: heading
+      heading: Mode per band
+      heading_style: subtitle
+      icon: mdi:tune-vertical
+    - type: tile
+      entity: select.price_control_cheap_price_mode
+      icon: mdi:battery-arrow-up
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: select.price_control_expensive_price_mode
+      icon: mdi:battery-arrow-down
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: select.price_control_in_between_mode
+      icon: mdi:scale-balance
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: select.price_control_net_metering_mode
+      icon: mdi:swap-horizontal
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
   - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Tariff
+      heading_style: title
+      icon: mdi:receipt-text-outline
+    - type: tile
+      entity: sensor.price_control_import_price
+      icon: mdi:transmission-tower-import
+      show_entity_picture: false
+      vertical: false
+      features:
+      - type: trend-graph
+      features_position: bottom
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_import_factor
+      icon: mdi:multiplication
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_import_surcharge
+      icon: mdi:cash-plus
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: sensor.price_control_export_price
+      icon: mdi:transmission-tower-import
+      vertical: false
+      features_position: bottom
+      features:
+      - type: trend-graph
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_export_factor
+      icon: mdi:multiplication
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_export_surcharge
+      icon: mdi:cash-minus
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: markdown
+      content: |
+        **Import price** = spot x import factor + import surcharge. **Export price** = spot x export factor + export surcharge, or the import price while **net metering** applies (Netherlands until the end of 2026). Surcharges, wear cost and margin per kWh, including VAT.
+      grid_options:
+        columns: full
+        rows: auto
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Losses and margin
+      heading_style: title
+      icon: mdi:battery-heart-variant
+    - type: tile
+      entity: sensor.price_control_electricity_price
+      grid_options:
+        columns: 12
+        rows: 1
+      features:
+      - type: trend-graph
+    - type: tile
+      entity: number.price_control_charge_efficiency
+      icon: mdi:battery-arrow-up-outline
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_discharge_efficiency
+      icon: mdi:battery-arrow-down-outline
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_wear_cost
+      icon: mdi:battery-heart-variant
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_minimum_margin
+      icon: mdi:cash-check
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.price_control_expected_house_load
+      icon: mdi:home-lightning-bolt
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+  - type: grid
+    column_span: 2
     cards:
     - type: heading
       heading: Battery and grid
@@ -698,9 +1018,16 @@ views:
       icon: mdi:home-battery
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+      icon: mdi:battery-charging
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_battery_power
+      icon: mdi:flash
     - type: tile
       entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+      icon: mdi:transmission-tower
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_soc_limit_status
+      icon: mdi:battery-alert-variant-outline
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+      icon: mdi:cog-sync-outline

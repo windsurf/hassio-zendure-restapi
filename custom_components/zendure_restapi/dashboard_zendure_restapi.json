@@ -1,1061 +1,1522 @@
 {
- "title": "Zendure RestAPI",
- "views": [
-  {
-   "title": "Zendure RestAPI",
-   "path": "zendure-restapi",
-   "icon": "mdi:home-battery",
-   "type": "sections",
-   "max_columns": 4,
-   "sections": [
+  "title": "Zendure RestAPI",
+  "views": [
     {
-     "type": "grid",
-     "column_span": 4,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Zendure Home Battery",
-       "heading_style": "title",
-       "icon": "mdi:home-battery",
-       "badges": [
+      "title": "Zendure RestAPI",
+      "path": "zendure-restapi",
+      "icon": "mdi:home-battery",
+      "type": "sections",
+      "max_columns": 4,
+      "sections": [
         {
-         "type": "entity",
-         "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge"
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Zendure Home Battery",
+              "heading_style": "title",
+              "icon": "mdi:home-battery",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_state"
+                },
+                {
+                  "type": "entity",
+                  "entity": "select.zendure_solarflow_3000_mix_ac_converter_mode"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+              "icon": "mdi:battery-charging"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_power",
+              "icon": "mdi:flash"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_state",
+              "icon": "mdi:battery-sync"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_limit_status",
+              "icon": "mdi:battery-alert-variant-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_remaining_discharge_time",
+              "icon": "mdi:battery-clock"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_error",
+              "icon": "mdi:alert-circle-outline"
+            }
+          ]
         },
         {
-         "type": "entity",
-         "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_state"
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Operation mode",
+              "heading_style": "title",
+              "icon": "mdi:state-machine",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status"
+                }
+              ]
+            },
+            {
+              "type": "markdown",
+              "content": "{% set s = states('sensor.zendure_solarflow_3000_mix_ac_controller_status') %}\n{% set a = state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'reason') %}\n\n**Status** {{ s }} - {{ a }}\n\n**Direction** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'direction') }} | **Target** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'target_power') }} W\n\n**Grid** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_power') }} W | **Battery** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'battery_power') }} W\n",
+              "grid_options": {
+                "rows": "auto",
+                "columns": "full"
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode",
+              "icon": "mdi:state-machine",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status",
+              "icon": "mdi:cog-sync-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "switch.zendure_solarflow_3000_mix_ac_trace_recording",
+              "vertical": false,
+              "features_position": "bottom"
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_trim_strength",
+              "vertical": false,
+              "features_position": "bottom"
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_direction_change_delay",
+              "vertical": false,
+              "features_position": "bottom"
+            }
+          ]
         },
         {
-         "type": "entity",
-         "entity": "select.zendure_solarflow_3000_mix_ac_converter_mode"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
-       "icon": "mdi:battery-charging"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_power",
-       "icon": "mdi:flash"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_state",
-       "icon": "mdi:battery-sync"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_limit_status",
-       "icon": "mdi:battery-alert-variant-outline"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_remaining_discharge_time",
-       "icon": "mdi:battery-clock"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_error",
-       "icon": "mdi:alert-circle-outline"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Operation mode",
-       "heading_style": "title",
-       "icon": "mdi:state-machine",
-       "badges": [
-        {
-         "type": "entity",
-         "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode"
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Overview",
+              "heading_style": "title",
+              "icon": "mdi:gauge"
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+              "min": -3000,
+              "max": 3000,
+              "needle": true,
+              "severity": {
+                "green": -1500,
+                "yellow": 0,
+                "red": 1500
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+              "min": 0,
+              "max": 100,
+              "needle": true,
+              "severity": {
+                "green": 70,
+                "yellow": 30,
+                "red": 0
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
+              "min": 0,
+              "max": 3000,
+              "needle": true,
+              "severity": {
+                "green": 0,
+                "yellow": 1000,
+                "red": 2000
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
+              "min": 0,
+              "max": 3000,
+              "needle": true,
+              "severity": {
+                "green": 0,
+                "yellow": 1000,
+                "red": 2000
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "number.zendure_solarflow_3000_mix_ac_charge_limit_ac",
+              "min": 0,
+              "max": 3000,
+              "needle": true,
+              "severity": {
+                "green": 2000,
+                "yellow": 1000,
+                "red": 0
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "number.zendure_solarflow_3000_mix_ac_discharge_limit",
+              "min": 0,
+              "max": 3000,
+              "needle": true,
+              "severity": {
+                "green": 0,
+                "yellow": 1000,
+                "red": 2000
+              },
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency",
+              "min": 0,
+              "max": 100,
+              "needle": true,
+              "severity": {
+                "green": 85,
+                "yellow": 60,
+                "red": 0
+              },
+              "unit": "%",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency",
+                  "state_not": "unknown"
+                }
+              ],
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "gauge",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency",
+              "min": 0,
+              "max": 100,
+              "needle": true,
+              "severity": {
+                "green": 85,
+                "yellow": 60,
+                "red": 0
+              },
+              "unit": "%",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency",
+                  "state_not": "unknown"
+                }
+              ],
+              "grid_options": {
+                "columns": 6,
+                "rows": "auto"
+              }
+            }
+          ]
         },
         {
-         "type": "entity",
-         "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status"
-        }
-       ]
-      },
-      {
-       "type": "markdown",
-       "content": "{% set s = states('sensor.zendure_solarflow_3000_mix_ac_controller_status') %}\n{% set a = state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'reason') %}\n\n**Status** {{ s }} - {{ a }}\n\n**Direction** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'direction') }} | **Target** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'target_power') }} W\n\n**Grid** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_power') }} W | **Battery** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'battery_power') }} W\n",
-       "grid_options": {
-        "rows": "auto",
-        "columns": "full"
-       }
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode",
-       "icon": "mdi:state-machine",
-       "features_position": "bottom",
-       "features": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Device control",
+              "heading_style": "title",
+              "icon": "mdi:tune-variant"
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_converter_mode",
+              "icon": "mdi:swap-vertical-bold",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "switch.zendure_solarflow_3000_mix_ac_skip_flash_write",
+              "icon": "mdi:flash-off",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "toggle"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "switch.zendure_solarflow_3000_mix_ac_soc_protection",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "toggle"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_lower_soc_limit",
+              "icon": "mdi:battery-low",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_upper_soc_limit",
+              "icon": "mdi:battery-charging-high",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_charge_limit_ac",
+              "icon": "mdi:battery-arrow-up",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_discharge_limit",
+              "icon": "mdi:battery-arrow-down",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_meter_source",
+              "icon": "mdi:meter-electric-outline",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_manual_power",
+              "icon": "mdi:hand-back-right-outline",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            }
+          ]
+        },
         {
-         "type": "select-options"
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Controller settings",
+              "heading_style": "title",
+              "icon": "mdi:tune"
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_max_charge_power",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_max_discharge_power",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_min_charge_power",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_min_discharge_power",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_charge_buffer",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_discharge_buffer",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_start_charging_at_export",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_start_discharging_at_import",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_mode_threshold",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_trim_threshold",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Power flow",
+              "heading_style": "title",
+              "icon": "mdi:transmission-tower"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_charge_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_discharge_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_string_1"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_string_2"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_backup_output_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_backup_output_power_2"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Energy",
+              "heading_style": "title",
+              "icon": "mdi:chart-donut"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_charged"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_discharged"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_energy_imported"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_energy_exported"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_energy"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Configuration",
+              "heading_style": "title",
+              "icon": "mdi:wrench-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_backup_mode",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_pv_export",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_charge_power_limit",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.zendure_solarflow_3000_mix_ac_inverter_power_limit",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Battery 1",
+              "heading_style": "title",
+              "icon": "mdi:battery-high"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state_of_charge"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_voltage"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_current"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_temperature"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_max_cell_voltage"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_serial_number"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_model"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "System status",
+              "heading_style": "title",
+              "icon": "mdi:cog-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_grid_connected"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_data_ready"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_ac_state"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_dc_state"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_state"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_pass_through"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_reverse_flow"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Diagnostics",
+              "heading_style": "title",
+              "icon": "mdi:stethoscope"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_fault_level"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_enclosure_temperature"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_signal_strength"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_ac_coupling_status"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_dc_bus_voltage"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_module_count"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_calibration_status"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_fan_speed_step"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_heating"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_lamp"
+            },
+            {
+              "type": "tile",
+              "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_dry_contact"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Zendure P1 Meter",
+              "heading_style": "title",
+              "icon": "mdi:meter-electric",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+              "icon": "mdi:transmission-tower"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_phase_a_apparent_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_phase_b_apparent_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_phase_c_apparent_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_energy_imported"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_energy_exported"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "sensor.external_p1_meter_status",
+              "state": [
+                "live",
+                "stale",
+                "unreachable"
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "External P1 Meter",
+              "heading_style": "title",
+              "icon": "mdi:meter-electric-outline",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.external_p1_meter_status"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "select.zendure_solarflow_3000_mix_ac_external_meter",
+              "icon": "mdi:meter-electric",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.external_p1_meter_power",
+              "icon": "mdi:transmission-tower"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.external_p1_meter_status"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.external_p1_meter_energy_imported",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "sensor.external_p1_meter_energy_imported",
+                  "state_not": "unavailable"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.external_p1_meter_energy_exported",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "sensor.external_p1_meter_energy_exported",
+                  "state_not": "unavailable"
+                }
+              ]
+            }
+          ]
         }
-       ],
-       "grid_options": {
-        "columns": 12,
-        "rows": 2
-       }
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status",
-       "icon": "mdi:cog-sync-outline"
-      },
-      {
-       "type": "tile",
-       "entity": "switch.zendure_solarflow_3000_mix_ac_trace_recording",
-       "vertical": false,
-       "features_position": "bottom"
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_trim_strength",
-       "vertical": false,
-       "features_position": "bottom"
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_direction_change_delay",
-       "vertical": false,
-       "features_position": "bottom"
-      }
-     ]
+      ]
     },
     {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Overview",
-       "heading_style": "title",
-       "icon": "mdi:gauge"
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
-       "min": -3000,
-       "max": 3000,
-       "needle": true,
-       "severity": {
-        "green": -1500,
-        "yellow": 0,
-        "red": 1500
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
-       "min": 0,
-       "max": 100,
-       "needle": true,
-       "severity": {
-        "green": 70,
-        "yellow": 30,
-        "red": 0
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
-       "min": 0,
-       "max": 3000,
-       "needle": true,
-       "severity": {
-        "green": 0,
-        "yellow": 1000,
-        "red": 2000
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
-       "min": 0,
-       "max": 3000,
-       "needle": true,
-       "severity": {
-        "green": 0,
-        "yellow": 1000,
-        "red": 2000
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "number.zendure_solarflow_3000_mix_ac_charge_limit_ac",
-       "min": 0,
-       "max": 3000,
-       "needle": true,
-       "severity": {
-        "green": 2000,
-        "yellow": 1000,
-        "red": 0
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "number.zendure_solarflow_3000_mix_ac_discharge_limit",
-       "min": 0,
-       "max": 3000,
-       "needle": true,
-       "severity": {
-        "green": 0,
-        "yellow": 1000,
-        "red": 2000
-       },
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency",
-       "min": 0,
-       "max": 100,
-       "needle": true,
-       "severity": {
-        "green": 85,
-        "yellow": 60,
-        "red": 0
-       },
-       "unit": "%",
-       "visibility": [
+      "title": "Price Control",
+      "path": "price-control",
+      "icon": "mdi:cash-clock",
+      "type": "sections",
+      "max_columns": 4,
+      "sections": [
         {
-         "condition": "state",
-         "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency",
-         "state_not": "unknown"
-        }
-       ],
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      },
-      {
-       "type": "gauge",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency",
-       "min": 0,
-       "max": 100,
-       "needle": true,
-       "severity": {
-        "green": 85,
-        "yellow": 60,
-        "red": 0
-       },
-       "unit": "%",
-       "visibility": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Price Control",
+              "heading_style": "title",
+              "icon": "mdi:cash-clock",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_status"
+                },
+                {
+                  "type": "entity",
+                  "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "switch.price_control",
+              "icon": "mdi:cash-clock"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_status",
+              "icon": "mdi:cash-sync"
+            },
+            {
+              "type": "tile",
+              "grid_options": {
+                "columns": 12,
+                "rows": 1
+              },
+              "entity": "select.price_control_decision",
+              "icon": "mdi:source-branch",
+              "vertical": false,
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "features_position": "inline"
+            },
+            {
+              "type": "markdown",
+              "content": "**Decision** chooses how price control decides.\n\n- **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.\n- **Day plan**: over the Nord Pool prices of today and tomorrow (the Nord Pool integration from HACS), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.\n\nFixed prices take the mode chosen for each band below. The day plan trades: it charges with *quick_charge* and discharges with *quick_discharge* at the battery's full power, and takes the in-between mode otherwise; while *Net metering* is on, the *net metering mode* takes its place. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.\n\nNot there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up Nord Pool: see *Price control* in the README.",
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              }
+            }
+          ]
+        },
         {
-         "condition": "state",
-         "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency",
-         "state_not": "unknown"
-        }
-       ],
-       "grid_options": {
-        "columns": 6,
-        "rows": "auto"
-       }
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Device control",
-       "heading_style": "title",
-       "icon": "mdi:tune-variant"
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_converter_mode",
-       "icon": "mdi:swap-vertical-bold",
-       "features_position": "bottom",
-       "features": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Day plan",
+              "heading_style": "title",
+              "icon": "mdi:calendar-clock",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_plan"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_expected_margin"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "switch.price_control_net_metering",
+              "icon": "mdi:swap-horizontal",
+              "features_position": "bottom",
+              "grid_options": {
+                "columns": 12,
+                "rows": 1
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_plan",
+              "icon": "mdi:calendar-clock"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_expected_margin",
+              "icon": "mdi:cash-check"
+            },
+            {
+              "type": "markdown",
+              "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan: *Decision* is on *Fixed prices*, or there is no Nord Pool price list or battery data yet.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "custom:apexcharts-card",
+              "graph_span": "24h",
+              "span": {
+                "start": "day"
+              },
+              "now": {
+                "show": true,
+                "label": "Now"
+              },
+              "header": {
+                "show": false
+              },
+              "yaxis": [
+                {
+                  "decimals": 0
+                }
+              ],
+              "apex_config": {
+                "chart": {
+                  "height": 240
+                },
+                "legend": {
+                  "show": true
+                },
+                "tooltip": {
+                  "x": {
+                    "format": "dd-MM HH:mm"
+                  }
+                }
+              },
+              "series": [
+                {
+                  "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+                  "name": "Grid (P1)",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#1E88E5",
+                  "opacity": 0.25,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "5min"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
+                  "name": "Discharging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#FFB300",
+                  "opacity": 0.25,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "5min"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
+                  "name": "Charging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#E53935",
+                  "opacity": 0.25,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "5min"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "transform": "return x * -1;"
+                },
+                {
+                  "entity": "sensor.price_control_plan",
+                  "name": "Plan",
+                  "type": "line",
+                  "unit": "W",
+                  "stroke_width": 2,
+                  "curve": "stepline",
+                  "float_precision": 0,
+                  "color": "#757575",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "data_generator": "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\nif (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\npts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n"
+                }
+              ],
+              "grid_options": {
+                "columns": 24,
+                "rows": "auto"
+              },
+              "hours_12": false
+            }
+          ]
+        },
         {
-         "type": "select-options"
-        }
-       ],
-       "grid_options": {
-        "columns": 12,
-        "rows": 2
-       }
-      },
-      {
-       "type": "tile",
-       "entity": "switch.zendure_solarflow_3000_mix_ac_skip_flash_write",
-       "icon": "mdi:flash-off",
-       "features_position": "bottom",
-       "features": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Pricing modes",
+              "heading_style": "title",
+              "icon": "mdi:cash-multiple"
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_cheap_price",
+              "icon": "mdi:cash-minus",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_expensive_price",
+              "icon": "mdi:cash-plus",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "heading",
+              "heading": "Mode per band",
+              "heading_style": "subtitle",
+              "icon": "mdi:tune-vertical"
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_cheap_price_mode",
+              "icon": "mdi:battery-arrow-up",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_expensive_price_mode",
+              "icon": "mdi:battery-arrow-down",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_in_between_mode",
+              "icon": "mdi:scale-balance",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_net_metering_mode",
+              "icon": "mdi:swap-horizontal",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            }
+          ]
+        },
         {
-         "type": "toggle"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "switch.zendure_solarflow_3000_mix_ac_soc_protection",
-       "features_position": "bottom",
-       "features": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Tariff",
+              "heading_style": "title",
+              "icon": "mdi:receipt-text-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_import_price",
+              "icon": "mdi:transmission-tower-import",
+              "show_entity_picture": false,
+              "vertical": false,
+              "features": [
+                {
+                  "type": "trend-graph"
+                }
+              ],
+              "features_position": "bottom",
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_import_factor",
+              "icon": "mdi:multiplication",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_import_surcharge",
+              "icon": "mdi:cash-plus",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_export_price",
+              "icon": "mdi:transmission-tower-import",
+              "vertical": false,
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "trend-graph"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_export_factor",
+              "icon": "mdi:multiplication",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_export_surcharge",
+              "icon": "mdi:cash-minus",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "markdown",
+              "content": "**Import price** = spot x import factor + import surcharge. **Export price** = spot x export factor + export surcharge, or the import price while **net metering** applies (Netherlands until the end of 2026). Surcharges, wear cost and margin per kWh, including VAT.\n",
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              }
+            }
+          ]
+        },
         {
-         "type": "toggle"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_lower_soc_limit",
-       "icon": "mdi:battery-low",
-       "features_position": "bottom",
-       "features": [
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Losses and margin",
+              "heading_style": "title",
+              "icon": "mdi:battery-heart-variant"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.price_control_electricity_price",
+              "grid_options": {
+                "columns": 12,
+                "rows": 1
+              },
+              "features": [
+                {
+                  "type": "trend-graph"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_charge_efficiency",
+              "icon": "mdi:battery-arrow-up-outline",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_discharge_efficiency",
+              "icon": "mdi:battery-arrow-down-outline",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_wear_cost",
+              "icon": "mdi:battery-heart-variant",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_minimum_margin",
+              "icon": "mdi:cash-check",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_expected_house_load",
+              "icon": "mdi:home-lightning-bolt",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            }
+          ]
+        },
         {
-         "type": "numeric-input",
-         "style": "slider"
+          "type": "grid",
+          "column_span": 2,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Battery and grid",
+              "heading_style": "title",
+              "icon": "mdi:home-battery"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+              "icon": "mdi:battery-charging"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_power",
+              "icon": "mdi:flash"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+              "icon": "mdi:transmission-tower"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_limit_status",
+              "icon": "mdi:battery-alert-variant-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status",
+              "icon": "mdi:cog-sync-outline"
+            }
+          ]
         }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_upper_soc_limit",
-       "icon": "mdi:battery-charging-high",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_charge_limit_ac",
-       "icon": "mdi:battery-arrow-up",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_discharge_limit",
-       "icon": "mdi:battery-arrow-down",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_meter_source",
-       "icon": "mdi:meter-electric-outline",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "select-options"
-        }
-       ],
-       "grid_options": {
-        "columns": 12,
-        "rows": 2
-       }
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_manual_power",
-       "icon": "mdi:hand-back-right-outline",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ],
-       "grid_options": {
-        "columns": 12,
-        "rows": 2
-       }
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Controller settings",
-       "heading_style": "title",
-       "icon": "mdi:tune"
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_max_charge_power",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_max_discharge_power",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_min_charge_power",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_min_discharge_power",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_charge_buffer",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_discharge_buffer",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_start_charging_at_export",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_start_discharging_at_import",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_mode_threshold",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_trim_threshold",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Power flow",
-       "heading_style": "title",
-       "icon": "mdi:transmission-tower"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_charge_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_discharge_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_string_1"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_string_2"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_backup_output_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_backup_output_power_2"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Energy",
-       "heading_style": "title",
-       "icon": "mdi:chart-donut"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_charged"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_discharged"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_energy_imported"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_energy_exported"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_energy"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Configuration",
-       "heading_style": "title",
-       "icon": "mdi:wrench-outline"
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_backup_mode",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "select-options"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_pv_export",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "select-options"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_charge_power_limit",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "number.zendure_solarflow_3000_mix_ac_inverter_power_limit",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "numeric-input",
-         "style": "slider"
-        }
-       ]
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Battery 1",
-       "heading_style": "title",
-       "icon": "mdi:battery-high"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state_of_charge"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_voltage"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_current"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_temperature"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_max_cell_voltage"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_serial_number"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_model"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "System status",
-       "heading_style": "title",
-       "icon": "mdi:cog-outline"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_grid_connected"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_data_ready"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_ac_state"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_dc_state"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_state"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_pass_through"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_reverse_flow"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Diagnostics",
-       "heading_style": "title",
-       "icon": "mdi:stethoscope"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_fault_level"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_enclosure_temperature"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_signal_strength"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_ac_coupling_status"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_dc_bus_voltage"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_module_count"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_calibration_status"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_fan_speed_step"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_heating"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_lamp"
-      },
-      {
-       "type": "tile",
-       "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_dry_contact"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Zendure P1 Meter",
-       "heading_style": "title",
-       "icon": "mdi:meter-electric",
-       "badges": [
-        {
-         "type": "entity",
-         "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
-       "icon": "mdi:transmission-tower"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_phase_a_apparent_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_phase_b_apparent_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_phase_c_apparent_power"
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "column_span": 2,
-     "visibility": [
-      {
-       "condition": "state",
-       "entity": "sensor.external_p1_meter_status",
-       "state": [
-        "live",
-        "stale",
-        "unreachable"
-       ]
-      }
-     ],
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "External P1 Meter",
-       "heading_style": "title",
-       "icon": "mdi:meter-electric-outline",
-       "badges": [
-        {
-         "type": "entity",
-         "entity": "sensor.external_p1_meter_status"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_external_meter",
-       "icon": "mdi:meter-electric",
-       "features_position": "bottom",
-       "features": [
-        {
-         "type": "select-options"
-        }
-       ],
-       "grid_options": {
-        "columns": 12,
-        "rows": 2
-       }
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.external_p1_meter_power",
-       "icon": "mdi:transmission-tower"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.external_p1_meter_status"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.external_p1_meter_telegram_age"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.external_p1_meter_energy_imported",
-       "visibility": [
-        {
-         "condition": "state",
-         "entity": "sensor.external_p1_meter_energy_imported",
-         "state_not": "unavailable"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.external_p1_meter_energy_exported",
-       "visibility": [
-        {
-         "condition": "state",
-         "entity": "sensor.external_p1_meter_energy_exported",
-         "state_not": "unavailable"
-        }
-       ]
-      }
-     ]
+      ]
     }
-   ]
-  },
-  {
-   "title": "Price Control",
-   "path": "price-control",
-   "icon": "mdi:cash-clock",
-   "type": "sections",
-   "max_columns": 3,
-   "sections": [
-    {
-     "type": "grid",
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Price Control",
-       "heading_style": "title",
-       "icon": "mdi:cash-clock",
-       "badges": [
-        {
-         "type": "entity",
-         "entity": "sensor.price_control_status"
-        },
-        {
-         "type": "entity",
-         "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode"
-        }
-       ]
-      },
-      {
-       "type": "tile",
-       "entity": "switch.price_control"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.price_control_status"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.price_control_electricity_price"
-      },
-      {
-       "type": "tile",
-       "entity": "select.zendure_solarflow_3000_mix_ac_operation_mode"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status"
-      },
-      {
-       "type": "markdown",
-       "grid_options": {
-        "columns": "full",
-        "rows": "auto"
-       },
-       "content": "At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, in between it follows the meter or rests - each in the mode chosen below.\n\nPrice control writes the Operation mode only when the price crosses a limit, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.\n\nNot there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard."
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Price limits",
-       "heading_style": "title",
-       "icon": "mdi:cash-multiple"
-      },
-      {
-       "type": "entities",
-       "entities": [
-        "number.price_control_cheap_price",
-        "number.price_control_expensive_price",
-        "select.price_control_cheap_price_mode",
-        "select.price_control_expensive_price_mode",
-        "select.price_control_in_between_mode"
-       ]
-      }
-     ]
-    },
-    {
-     "type": "grid",
-     "cards": [
-      {
-       "type": "heading",
-       "heading": "Battery and grid",
-       "heading_style": "title",
-       "icon": "mdi:home-battery"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_power"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total"
-      },
-      {
-       "type": "tile",
-       "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_limit_status"
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

@@ -8,7 +8,7 @@
           "zendure": "Urządzenie Zendure (bateria lub licznik P1)",
           "external_meter": "Zewnętrzny licznik P1 (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Czujnik Home Assistant jako licznik zewnętrzny (Zonneplan, DSMR, …)",
-          "price_control": "Sterowanie cenowe (handel dynamiczny)"
+          "price_control": "Sterowanie cenowe (taryfy dynamiczne)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Sterowanie cenowe",
-        "description": "Ustawia tryb pracy baterii według ceny energii: ładuje, gdy jest tania, rozładowuje, gdy jest droga, a pomiędzy utrzymuje sieć na zerze. Jest wyłączone, dopóki go nie włączysz.",
+        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach Nord Pool z dziś i jutra. Jest wyłączone, dopóki go nie włączysz.",
         "data": {
           "battery_entry": "Bateria",
-          "price_entity": "Czujnik ceny (cena za kWh)"
+          "price_entity": "Czujnik ceny (cena za kWh)",
+          "price_contains": "Czujnik ceny zawiera"
+        },
+        "data_description": {
+          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Sterowanie cenowe",
         "data": {
-          "price_entity": "Czujnik ceny (cena za kWh)"
+          "price_entity": "Czujnik ceny (cena za kWh)",
+          "price_contains": "Czujnik ceny zawiera"
+        },
+        "data_description": {
+          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Licznik zewnętrzny"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Stałe ceny",
+          "day_plan": "Plan dzienny"
+        },
+        "name": "Decyzja"
+      },
       "cheap_price_mode": {
         "name": "Tryb przy niskiej cenie"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Tryb pośredni"
+      },
+      "net_metering_mode": {
+        "name": "Tryb przy net-meteringu"
       },
       "operation_mode": {
         "name": "Tryb pracy"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Wyłączony",
           "no_price": "Brak ceny",
+          "no_plan": "Brak planu",
           "cheap": "Tanio",
           "between": "Pomiędzy",
           "expensive": "Drogo"
         },
         "name": "Stan"
+      },
+      "plan": {
+        "state": {
+          "charge": "Ładowanie",
+          "discharge": "Rozładowanie",
+          "idle": "Pomiędzy"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Moc pozorna faza A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "Energia PV"
       },
+      "expected_margin": {
+        "name": "Oczekiwana marża"
+      },
+      "export_price": {
+        "name": "Cena sprzedaży"
+      },
       "external_energy_exported": {
         "name": "Energia oddana"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Temperatura obudowy"
+      },
+      "import_price": {
+        "name": "Cena zakupu"
       },
       "iot_state": {
         "name": "Stan połączenia IoT"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Bufor ładowania"
       },
+      "charge_efficiency": {
+        "name": "Sprawność ładowania"
+      },
       "charge_max_limit": {
         "name": "Maksymalna moc ładowania"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Bufor rozładowania"
       },
+      "discharge_efficiency": {
+        "name": "Sprawność rozładowania"
+      },
+      "expected_house_load": {
+        "name": "Oczekiwane zużycie domu"
+      },
       "expensive_price": {
         "name": "Wysoka cena"
+      },
+      "export_factor": {
+        "name": "Współczynnik sprzedaży"
+      },
+      "export_surcharge": {
+        "name": "Dopłata do sprzedaży"
+      },
+      "import_factor": {
+        "name": "Współczynnik zakupu"
+      },
+      "import_surcharge": {
+        "name": "Dopłata do zakupu"
       },
       "input_limit": {
         "name": "Limit ładowania (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Dolna granica SOC"
       },
+      "minimum_margin": {
+        "name": "Minimalna marża"
+      },
       "mode_threshold": {
         "name": "Próg trybu"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Próg korekty"
+      },
+      "wear_cost": {
+        "name": "Koszt zużycia"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Wentylator wymuszony"
+      },
+      "net_metering": {
+        "name": "Net-metering (eksport = cena zakupu)"
       },
       "smart_mode": {
         "name": "Pomiń zapis do flash"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Zapis śladu"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Cena spot z VAT",
+        "spot": "Cena spot bez VAT",
+        "import_price": "Cena zakupu (cała taryfa)"
       }
     }
   }

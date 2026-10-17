@@ -8,7 +8,7 @@
           "zendure": "Zendure-apparaat (accu of P1-meter)",
           "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)",
-          "price_control": "Prijssturing (dynamisch handelen)"
+          "price_control": "Prijssturing (dynamische tarieven)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Prijssturing",
-        "description": "Zet de werkmodus van een accu op basis van de stroomprijs: laden als hij goedkoop is, ontladen als hij duur is, en het net op nul daartussen. Hij staat uit tot je hem aanzet.",
+        "description": "Zet de werkmodus van een accu op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de Nord Pool-prijzen van vandaag en morgen. Hij staat uit tot je hem aanzet.",
         "data": {
           "battery_entry": "Accu",
-          "price_entity": "Prijssensor (prijs per kWh)"
+          "price_entity": "Prijssensor (prijs per kWh)",
+          "price_contains": "De prijssensor bevat"
+        },
+        "data_description": {
+          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Prijssturing",
         "data": {
-          "price_entity": "Prijssensor (prijs per kWh)"
+          "price_entity": "Prijssensor (prijs per kWh)",
+          "price_contains": "De prijssensor bevat"
+        },
+        "data_description": {
+          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Externe meter"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Vaste prijzen",
+          "day_plan": "Dagplan"
+        },
+        "name": "Beslissing"
+      },
       "cheap_price_mode": {
         "name": "Modus bij goedkope prijs"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Modus daartussen"
+      },
+      "net_metering_mode": {
+        "name": "Modus bij saldering"
       },
       "operation_mode": {
         "name": "Werkmodus"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Uit",
           "no_price": "Geen prijs",
+          "no_plan": "Geen plan",
           "cheap": "Goedkoop",
           "between": "Daartussen",
           "expensive": "Duur"
         },
         "name": "Status"
+      },
+      "plan": {
+        "state": {
+          "charge": "Laden",
+          "discharge": "Ontladen",
+          "idle": "Daartussen"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Schijnbaar vermogen fase A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "PV-energie"
       },
+      "expected_margin": {
+        "name": "Verwachte marge"
+      },
+      "export_price": {
+        "name": "Exportprijs"
+      },
       "external_energy_exported": {
         "name": "Energie teruggeleverd"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Temperatuur behuizing"
+      },
+      "import_price": {
+        "name": "Importprijs"
       },
       "iot_state": {
         "name": "IoT-verbindingsstatus"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Laadbuffer"
       },
+      "charge_efficiency": {
+        "name": "Laadrendement"
+      },
       "charge_max_limit": {
         "name": "Maximaal laadvermogen"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Ontlaadbuffer"
       },
+      "discharge_efficiency": {
+        "name": "Ontlaadrendement"
+      },
+      "expected_house_load": {
+        "name": "Verwacht huisverbruik"
+      },
       "expensive_price": {
         "name": "Dure prijs"
+      },
+      "export_factor": {
+        "name": "Exportfactor"
+      },
+      "export_surcharge": {
+        "name": "Exportopslag"
+      },
+      "import_factor": {
+        "name": "Importfactor"
+      },
+      "import_surcharge": {
+        "name": "Importopslag"
       },
       "input_limit": {
         "name": "Laadlimiet (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Ondergrens SOC"
       },
+      "minimum_margin": {
+        "name": "Minimale marge"
+      },
       "mode_threshold": {
         "name": "Drempel modus"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Drempel bijsturen"
+      },
+      "wear_cost": {
+        "name": "Slijtagekosten"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Ventilator altijd aan"
+      },
+      "net_metering": {
+        "name": "Salderen (teruglevering = inkoopprijs)"
       },
       "smart_mode": {
         "name": "Flash-schrijven overslaan"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Trace opnemen"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Spotprijs incl. btw",
+        "spot": "Spotprijs excl. btw",
+        "import_price": "Importprijs (heel tarief)"
       }
     }
   }

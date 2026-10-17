@@ -4,6 +4,7 @@
 [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
 [![100% lokal](https://img.shields.io/badge/100%25-lokal-brightgreen.svg)](#warum-diese-integration)
 [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-unterstützte-zähler)
+[![Dynamische Tarife](https://img.shields.io/badge/dynamische-Tarife-f5a623.svg)](#-preissteuerung)
 
 🇬🇧 [English version](README.md) · 🇳🇱 [Nederlandse versie](README.nl.md)
 
@@ -11,6 +12,8 @@
 Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS installieren, Batterie hinzufügen, Modus wählen – die Batterie hält deinen Netzbezug auf null, einmal pro Sekunde.
 
 **🔌 Works with HomeWizard.** Du hast schon einen HomeWizard-P1-Zähler? Mehr brauchst du nicht – ein Zendure-Zähler ist nicht nötig. YouLess, EcoTracker, Shelly Pro 3EM und die Zendure-Zähler funktionieren ebenfalls.
+
+**💶 Dynamische Tarife, eingebaut.** Du hast einen dynamischen Stromtarif? Price Control plant Laden und Entladen je Viertelstunde über die Nord-Pool-Preise von heute und morgen – Bezugs- und Einspeisepreis, Umwandlungsverluste und Verschleiß eingerechnet. Keine Automation zu schreiben: einschalten.
 
 ![Zendure-Dashboard](images/dashboard.png)
 
@@ -35,14 +38,6 @@ Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS i
 Installiere es, und wenn etwas nicht stimmt – oder wenn einfach alles funktioniert – eröffne einen
 [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
 mit dem Diagnose-Download im Anhang. Ein Bericht genügt, um ein Modell von 🧪 auf ✅ zu bringen. Deutsch ist willkommen.
-
-### ✅ Getestete Setups
-
-| Gerät | Firmware (lokale API) | Zähler | Home Assistant | Gemeldet von |
-|---|---|---|---|---|
-| SolarFlow 3000 Mix AC+ | 3, Pack 4142 | Zendure P1-Zähler, YouLess LS120 | 2026.10 | Entwickler, täglich |
-
-Läuft es bei dir in einem anderen Setup? Trag deins im [Forenthema](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) oder mit einem Modellbericht ein – jede Zeile hier erleichtert dem nächsten Käufer die Wahl.
 
 ---
 
@@ -71,9 +66,11 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 
 - **100 % lokal.** Spricht direkt mit dem eigenen HTTP-Server der Batterie in deinem Netzwerk. Funktioniert weiter, wenn Internet oder Zendure-Cloud ausfallen.
 - **Nulleinspeisung, einmal pro Sekunde.** Eine schnelle Schleife folgt deinem Zähler jede Sekunde; eine langsamere regelt Richtung und Sicherheit. Gebaut und abgestimmt auf Messungen, nicht auf Annahmen.
-- **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar über deine eigene Preis-Automation.
+- **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar von Hand, über Price Control oder über deine eigene Automation.
+- **Dynamische Tarife, eingebaut.** Price Control steuert die Batterie über zwei feste Preise oder über einen Tagesplan auf den Nord-Pool-Preisen – siehe [Preissteuerung](#-preissteuerung).
+- **Einstellungen sind Entitäten.** Jede Einstellung übersteht einen Neustart und lässt sich live im Dashboard oder per Automation ändern. Updates über HACS lassen deine eigene Konfiguration in Ruhe.
 - **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – im Netzwerk gefunden oder per IP hinzugefügt, direkt gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor. Oder jeder Leistungssensor, den Home Assistant schon hat.
-- **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler.
+- **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler; jede hat ihren eigenen Regler, ihre Zählerwahl und ihre Preissteuerung.
 - **Geringer Standby-Verbrauch, gemessen.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist: etwa 5 W statt 29–36 W (Backup mode `closed`), für jede Stunde Stillstand.
 - **Schont den Flash-Speicher.** Die Smart-Modi schreiben ihre Grenzwerte in den Arbeitsspeicher, nicht in den Flash – Zehntausende Schreibvorgänge pro Jahr, die das Gerät nicht abnutzen.
 - **Lässt eine volle Batterie in Ruhe.** An den eigenen SOC-Grenzen des Geräts wird nichts in die gesperrte Richtung bestellt: Eine ganze Nacht bei 100 % kostete zwei Grenzwertänderungen, und der Status sagt, warum.
@@ -119,9 +116,25 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 
 ## 💶 Preissteuerung
 
-Dynamischer Handel, eingebaut: bei oder unter einem **günstigen Preis** lädt die Batterie, bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null. Füge sie als eigenes Gerät hinzu: **Integration hinzufügen → Zendure RestAPI → Preissteuerung**, wähle die Batterie und deinen Preissensor — Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie oder deinen eigenen. Das Gerät **Price Control** erscheint neben deiner Batterie; schalte es dort ein. Beide Preise und der Modus je Preisband lassen sich live ändern, auf diesem Gerät oder im Tab *Price Control* des Dashboards.
+Zwei Wege, die Batterie nach einem dynamischen Tarif zu steuern, in einem eigenen Gerät:
 
-Standardmäßig aus: steuert schon eine eigene Automation oder ein Planer den Betriebsmodus, lass sie aus. Details in der [technischen Referenz](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Englisch).
+- **Feste Preise** – bei oder unter einem **günstigen Preis** lädt die Batterie, bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null. Jeder Preissensor geht: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie oder dein eigener.
+- **Tagesplan** (neu in v1.6.0) – über die [Nord Pool](https://github.com/custom-components/nordpool)-Preise von heute und morgen bestimmt er je Viertelstunde, ob die Batterie lädt, entlädt oder keines von beiden, mit getrennten Bezugs- und Einspeisepreisen, Umwandlungsverlusten, Verschleiß und einer Mindestmarge pro kWh. Er handelt: Laden und Entladen mit der vollen Leistung der Batterie. Bereit für das Ende der niederländischen Saldierung 2027: ausschalten, und der Einspeisepreis folgt seiner eigenen Formel.
+
+Auf 30 Tagen einer echten Anlage nachgespielt brachte der Tagesplan **€ 1,58 pro Tag** – so viel wie ein vollständiger Energieplaner an denselben Tagen; die festen Preise € 0,21.
+
+**Tagesplan – zwei Voraussetzungen aus HACS:** **Nord Pool** für die Preise, **ApexCharts Card** für die Grafik.
+
+1. **Nord Pool** ([in HACS öffnen](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration)) und **ApexCharts Card** ([in HACS öffnen](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)) installieren; Home Assistant neu starten und den Browser neu laden.
+2. **Integration hinzufügen → Nord Pool**: *Region* dein Preisgebiet (`GER` für Deutschland, `AT` für Österreich), *Currency* `EUR`, *Include VAT* an, *Price in cents* aus, *Energy scale* `kWh`, *Template for additional costs* unverändert lassen.
+3. Preissteuerung (unten) mit diesem Sensor hinzufügen, `sensor.nordpool_kwh_…`, und *Der Preissensor enthält* auf **Spotpreis inkl. MwSt.** stellen.
+4. **Entscheidung** auf **Tagesplan** stellen und **Bezugspreis** mit dem Preis deines Anbieters für diese Viertelstunde vergleichen; weicht er ab, *Bezugsaufschlag* und *Bezugsfaktor* anpassen.
+
+Ausführliche Anleitung, Tarifeinstellungen für andere Verträge und Länder: [Setting up Nord Pool](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-nord-pool-for-the-day-plan) (Englisch).
+
+**Hinzufügen:** **Integration hinzufügen → Zendure RestAPI → Preissteuerung**, Batterie und Preissensor wählen. Das Gerät **Price Control** erscheint neben deiner Batterie; schalte es dort ein. Jede Einstellung lässt sich live ändern, auf diesem Gerät oder im Tab *Price Control* des Dashboards.
+
+Standardmäßig aus, und sie schreibt den Betriebsmodus nur, wenn sich ihre Entscheidung ändert; ein von Hand gesetzter Modus bleibt also stehen. Steuert schon eine eigene Automation oder ein Planer den Betriebsmodus, lass sie aus. Details in der [technischen Referenz](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Englisch).
 
 ---
 
@@ -153,7 +166,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.5.6:** Entitätsnamen in elf Sprachen, mit Entity-IDs, die englisch bleiben; das Dashboard **Zendure RestAPI** auf Wunsch angelegt; **Preissteuerung** für dynamischen Handel, eingebaut. **v1.5.5:** nur Dokumentation – wie sich diese Integration zu Zendures zenSDK verhält, eine neue Messung zweier Zähler nebeneinander und der Controller-Status im Recorder. **v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
+**Neueste Version – v1.6.0:** **Preissteuerung für dynamische Tarife**, mit einem **Tagesplan** über die Nord-Pool-Preise – getrennte Bezugs- und Einspeisepreise, Umwandlungsverluste und eine Marge pro kWh; Entitätsnamen in elf Sprachen, mit Entity-IDs, die englisch bleiben; das Dashboard **Zendure RestAPI** auf Wunsch angelegt. **v1.5.5:** nur Dokumentation – wie sich diese Integration zu Zendures zenSDK verhält, eine neue Messung zweier Zähler nebeneinander und der Controller-Status im Recorder. **v1.5.4:** Die Smart-Modi bestellen nichts mehr in eine volle oder leere Batterie und sagen, warum; `manual` auf 0 W kann ruhen. **v1.5.3:** mehrere externe Zähler nebeneinander, mit einem Select *External meter* an der Batterie zur Auswahl; jeder Leistungssensor in Home Assistant als externer Zähler. **v1.5.2:** der externe P1-Zähler als eigenes Gerät mit Sensoren für Leistung, Status und Energie; HomeWizard-P1-Zähler werden automatisch gefunden; Einrichtungsdialoge in elf Sprachen; externer Zähler im Dashboard. Beim Update von v1.5.0/v1.5.1 ziehen deine Zählereinstellungen von selbst um.
 
 ## Mehr
 

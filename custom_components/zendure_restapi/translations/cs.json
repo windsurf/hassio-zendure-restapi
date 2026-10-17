@@ -8,7 +8,7 @@
           "zendure": "Zařízení Zendure (baterie nebo elektroměr P1)",
           "external_meter": "Externí elektroměr P1 (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Senzor Home Assistant jako externí elektroměr (Zonneplan, DSMR, …)",
-          "price_control": "Řízení podle ceny (dynamické obchodování)"
+          "price_control": "Řízení podle ceny (dynamické tarify)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Řízení podle ceny",
-        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: nabíjí, když je levná, vybíjí, když je drahá, a mezi tím drží síť na nule. Je vypnuto, dokud ho nezapnete.",
+        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: se dvěma pevnými cenami, nebo s denním plánem nad cenami Nord Pool na dnešek a zítřek. Je vypnuto, dokud ho nezapnete.",
         "data": {
           "battery_entry": "Baterie",
-          "price_entity": "Cenový senzor (cena za kWh)"
+          "price_entity": "Cenový senzor (cena za kWh)",
+          "price_contains": "Cenový senzor obsahuje"
+        },
+        "data_description": {
+          "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Řízení podle ceny",
         "data": {
-          "price_entity": "Cenový senzor (cena za kWh)"
+          "price_entity": "Cenový senzor (cena za kWh)",
+          "price_contains": "Cenový senzor obsahuje"
+        },
+        "data_description": {
+          "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Externí elektroměr"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Pevné ceny",
+          "day_plan": "Denní plán"
+        },
+        "name": "Rozhodování"
+      },
       "cheap_price_mode": {
         "name": "Režim při nízké ceně"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Režim mezi cenami"
+      },
+      "net_metering_mode": {
+        "name": "Režim při net meteringu"
       },
       "operation_mode": {
         "name": "Provozní režim"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Vypnuto",
           "no_price": "Žádná cena",
+          "no_plan": "Žádný plán",
           "cheap": "Levné",
           "between": "Mezi",
           "expensive": "Drahé"
         },
         "name": "Stav"
+      },
+      "plan": {
+        "state": {
+          "charge": "Nabíjení",
+          "discharge": "Vybíjení",
+          "idle": "Mezi"
+        },
+        "name": "Plán"
       },
       "a_aprt_power": {
         "name": "Zdánlivý výkon fáze A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "Energie FV"
       },
+      "expected_margin": {
+        "name": "Očekávaná marže"
+      },
+      "export_price": {
+        "name": "Výkupní cena"
+      },
       "external_energy_exported": {
         "name": "Dodaná energie"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Teplota skříně"
+      },
+      "import_price": {
+        "name": "Nákupní cena"
       },
       "iot_state": {
         "name": "Stav připojení IoT"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Rezerva nabíjení"
       },
+      "charge_efficiency": {
+        "name": "Účinnost nabíjení"
+      },
       "charge_max_limit": {
         "name": "Maximální nabíjecí výkon"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Rezerva vybíjení"
       },
+      "discharge_efficiency": {
+        "name": "Účinnost vybíjení"
+      },
+      "expected_house_load": {
+        "name": "Očekávaná spotřeba domu"
+      },
       "expensive_price": {
         "name": "Vysoká cena"
+      },
+      "export_factor": {
+        "name": "Výkupní faktor"
+      },
+      "export_surcharge": {
+        "name": "Výkupní přirážka"
+      },
+      "import_factor": {
+        "name": "Nákupní faktor"
+      },
+      "import_surcharge": {
+        "name": "Nákupní přirážka"
       },
       "input_limit": {
         "name": "Limit nabíjení (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Dolní mez SOC"
       },
+      "minimum_margin": {
+        "name": "Minimální marže"
+      },
       "mode_threshold": {
         "name": "Práh režimu"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Práh korekce"
+      },
+      "wear_cost": {
+        "name": "Náklady na opotřebení"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Ventilátor trvale zapnut"
+      },
+      "net_metering": {
+        "name": "Net metering (export = nákupní cena)"
       },
       "smart_mode": {
         "name": "Přeskočit zápis do flash"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Záznam trasování"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Spotová cena s DPH",
+        "spot": "Spotová cena bez DPH",
+        "import_price": "Nákupní cena (celý tarif)"
       }
     }
   }

@@ -8,7 +8,7 @@
           "zendure": "Appareil Zendure (batterie ou compteur P1)",
           "external_meter": "Compteur P1 externe (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)",
-          "price_control": "Pilotage par le prix (trading dynamique)"
+          "price_control": "Pilotage par le prix (tarifs dynamiques)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Pilotage par le prix",
-        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : charger quand il est bas, décharger quand il est élevé, réseau à zéro entre les deux. Désactivé tant que vous ne l'activez pas.",
+        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix Nord Pool d'aujourd'hui et de demain. Désactivé tant que vous ne l'activez pas.",
         "data": {
           "battery_entry": "Batterie",
-          "price_entity": "Capteur de prix (prix par kWh)"
+          "price_entity": "Capteur de prix (prix par kWh)",
+          "price_contains": "Le capteur de prix contient"
+        },
+        "data_description": {
+          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Pilotage par le prix",
         "data": {
-          "price_entity": "Capteur de prix (prix par kWh)"
+          "price_entity": "Capteur de prix (prix par kWh)",
+          "price_contains": "Le capteur de prix contient"
+        },
+        "data_description": {
+          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Compteur externe"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Prix fixes",
+          "day_plan": "Plan journalier"
+        },
+        "name": "Décision"
+      },
       "cheap_price_mode": {
         "name": "Mode à prix bas"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Mode intermédiaire"
+      },
+      "net_metering_mode": {
+        "name": "Mode en compensation nette"
       },
       "operation_mode": {
         "name": "Mode de fonctionnement"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Arrêt",
           "no_price": "Pas de prix",
+          "no_plan": "Pas de plan",
           "cheap": "Bon marché",
           "between": "Intermédiaire",
           "expensive": "Cher"
         },
         "name": "État"
+      },
+      "plan": {
+        "state": {
+          "charge": "Charge",
+          "discharge": "Décharge",
+          "idle": "Intermédiaire"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Puissance apparente phase A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "Énergie PV"
       },
+      "expected_margin": {
+        "name": "Marge attendue"
+      },
+      "export_price": {
+        "name": "Prix de revente"
+      },
       "external_energy_exported": {
         "name": "Énergie exportée"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Température du boîtier"
+      },
+      "import_price": {
+        "name": "Prix d'achat"
       },
       "iot_state": {
         "name": "État de la connexion IoT"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Marge de charge"
       },
+      "charge_efficiency": {
+        "name": "Rendement de charge"
+      },
       "charge_max_limit": {
         "name": "Puissance de charge maximale"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Marge de décharge"
       },
+      "discharge_efficiency": {
+        "name": "Rendement de décharge"
+      },
+      "expected_house_load": {
+        "name": "Consommation attendue de la maison"
+      },
       "expensive_price": {
         "name": "Prix élevé"
+      },
+      "export_factor": {
+        "name": "Facteur de revente"
+      },
+      "export_surcharge": {
+        "name": "Supplément de revente"
+      },
+      "import_factor": {
+        "name": "Facteur d'achat"
+      },
+      "import_surcharge": {
+        "name": "Supplément d'achat"
       },
       "input_limit": {
         "name": "Limite de charge (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Limite SOC basse"
       },
+      "minimum_margin": {
+        "name": "Marge minimale"
+      },
       "mode_threshold": {
         "name": "Seuil du mode"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Seuil de correction"
+      },
+      "wear_cost": {
+        "name": "Coût d'usure"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Ventilateur forcé"
+      },
+      "net_metering": {
+        "name": "Compensation nette (injection = prix d'achat)"
       },
       "smart_mode": {
         "name": "Ne pas écrire en flash"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Enregistrement de trace"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Prix spot TTC",
+        "spot": "Prix spot HT",
+        "import_price": "Prix d'achat (tarif complet)"
       }
     }
   }

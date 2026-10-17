@@ -8,7 +8,7 @@
           "zendure": "Dispositivo Zendure (batería o contador P1)",
           "external_meter": "Contador P1 externo (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Sensor de Home Assistant como contador externo (Zonneplan, DSMR, …)",
-          "price_control": "Control por precio (trading dinámico)"
+          "price_control": "Control por precio (tarifas dinámicas)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Control por precio",
-        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: carga cuando es bajo, descarga cuando es alto y red a cero entre medias. Está apagado hasta que lo actives.",
+        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: con dos precios fijos o con un plan diario sobre los precios Nord Pool de hoy y mañana. Está apagado hasta que lo actives.",
         "data": {
           "battery_entry": "Batería",
-          "price_entity": "Sensor de precio (precio por kWh)"
+          "price_entity": "Sensor de precio (precio por kWh)",
+          "price_contains": "El sensor de precio contiene"
+        },
+        "data_description": {
+          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Control por precio",
         "data": {
-          "price_entity": "Sensor de precio (precio por kWh)"
+          "price_entity": "Sensor de precio (precio por kWh)",
+          "price_contains": "El sensor de precio contiene"
+        },
+        "data_description": {
+          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Contador externo"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Precios fijos",
+          "day_plan": "Plan diario"
+        },
+        "name": "Decisión"
+      },
       "cheap_price_mode": {
         "name": "Modo con precio bajo"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Modo intermedio"
+      },
+      "net_metering_mode": {
+        "name": "Modo con balance neto"
       },
       "operation_mode": {
         "name": "Modo de funcionamiento"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Apagado",
           "no_price": "Sin precio",
+          "no_plan": "Sin plan",
           "cheap": "Barato",
           "between": "Intermedio",
           "expensive": "Caro"
         },
         "name": "Estado"
+      },
+      "plan": {
+        "state": {
+          "charge": "Carga",
+          "discharge": "Descarga",
+          "idle": "Intermedio"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Potencia aparente fase A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "Energía FV"
       },
+      "expected_margin": {
+        "name": "Margen esperado"
+      },
+      "export_price": {
+        "name": "Precio de venta"
+      },
       "external_energy_exported": {
         "name": "Energía exportada"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Temperatura de la carcasa"
+      },
+      "import_price": {
+        "name": "Precio de compra"
       },
       "iot_state": {
         "name": "Estado de la conexión IoT"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Margen de carga"
       },
+      "charge_efficiency": {
+        "name": "Eficiencia de carga"
+      },
       "charge_max_limit": {
         "name": "Potencia de carga máxima"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Margen de descarga"
       },
+      "discharge_efficiency": {
+        "name": "Eficiencia de descarga"
+      },
+      "expected_house_load": {
+        "name": "Consumo doméstico esperado"
+      },
       "expensive_price": {
         "name": "Precio alto"
+      },
+      "export_factor": {
+        "name": "Factor de venta"
+      },
+      "export_surcharge": {
+        "name": "Recargo de venta"
+      },
+      "import_factor": {
+        "name": "Factor de compra"
+      },
+      "import_surcharge": {
+        "name": "Recargo de compra"
       },
       "input_limit": {
         "name": "Límite de carga (CA)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Límite SOC inferior"
       },
+      "minimum_margin": {
+        "name": "Margen mínimo"
+      },
       "mode_threshold": {
         "name": "Umbral del modo"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Umbral de corrección"
+      },
+      "wear_cost": {
+        "name": "Coste de desgaste"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Ventilador siempre encendido"
+      },
+      "net_metering": {
+        "name": "Balance neto (exportación = precio de compra)"
       },
       "smart_mode": {
         "name": "Omitir escritura en flash"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Grabación de traza"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Precio spot con IVA",
+        "spot": "Precio spot sin IVA",
+        "import_price": "Precio de compra (tarifa completa)"
       }
     }
   }

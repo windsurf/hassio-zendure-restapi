@@ -1,22 +1,32 @@
 """Price control: the Operation mode of a battery set from the electricity price.
 
 An entry and a device of its own, linked to one battery. Its own settings —
-price sensor, the two prices, the mode per band, on/off — live in its own
+price sensor, how to decide, prices, tariff, modes, on/off — live in its own
 entry; the Operation mode it writes lives in the battery's entry.
 
-Dynamic trading in its simplest form. At or below the cheap price the battery
-charges, at or above the expensive price it discharges, and in between it
-follows the meter or rests — each of the three in the mode chosen for it.
-Works with any sensor that gives the current price per kWh.
+Two ways to decide, chosen with the Decision select:
 
-The Operation mode is written only when the target changes, or when price
-control is switched on. A mode set by hand therefore holds until the price
-crosses one of the two limits; it is not taken back every quarter of an hour.
-Off by default: an automation or planner that already steers the Operation
-mode stays the only one that does.
+- **Fixed prices** (since v1.6.0). At or below the cheap price the battery
+  charges, at or above the expensive price it discharges, and in between it
+  follows the meter or rests. Works with any sensor that gives the current
+  price per kWh.
+- **Day plan** (v1.6.0). A plan over the prices of today and tomorrow from a
+  Nord Pool sensor (HACS integration), with the import price and the export
+  value each from a formula of their own, the conversion losses and a
+  minimum margin per kWh; see dayplan.py. It trades: a charge period
+  runs quick_charge, a discharge period quick_discharge, both at the
+  battery's full power; every other period takes the in-between mode, or
+  the net metering mode while Net metering is on.
 
-Without a usable price — no sensor chosen, or the sensor unavailable — the
-target is the in-between mode, which buys and sells nothing on purpose. A
+Both end in an Operation mode, so everything after the decision is shared. The Operation mode is written only when the target changes, or
+when price control is switched on. A mode set by hand therefore holds until
+the decision changes; it is not taken back every quarter of an hour. Off by
+default: an automation or planner that already steers the Operation mode
+stays the only one that does.
+
+Without a usable price, or a day plan without a price list or battery data,
+the target is the in-between mode (the net metering mode while Net metering
+is on), which charges and discharges nothing on purpose. A
 cheap price at or above the expensive one is treated the same way: the two
 limits contradict each other, so neither applies.
 """
@@ -24,7 +34,6 @@ limits contradict each other, so neither applies.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -32,32 +41,68 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_state_change_event,
-    async_track_time_interval,
+    async_track_time_change,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    DECISION_PLAN,
+    DOMAIN,
+    MODE_QUICK_CHARGE,
+    MODE_QUICK_DISCHARGE,
+    OPT_CHARGE_EFFICIENCY,
+    OPT_DISCHARGE_EFFICIENCY,
+    OPT_EXPORT_FACTOR,
+    OPT_EXPORT_SURCHARGE,
+    OPT_HOUSE_LOAD,
+    OPT_IMPORT_FACTOR,
+    OPT_IMPORT_SURCHARGE,
+    OPT_MAX_CHARGE_POWER,
+    OPT_MAX_DISCHARGE_POWER,
+    OPT_MIN_MARGIN,
+    OPT_NET_METERING,
     OPT_OPERATION_MODE,
     OPT_PRICE_BETWEEN_MODE,
+    OPT_PRICE_NET_METERING_MODE,
     OPT_PRICE_CHEAP,
     OPT_PRICE_CHEAP_MODE,
+    OPT_PRICE_CONTAINS,
     OPT_PRICE_CONTROL,
+    OPT_PRICE_DECISION,
     OPT_PRICE_ENTITY,
     OPT_PRICE_EXPENSIVE,
     OPT_PRICE_EXPENSIVE_MODE,
+    OPT_WEAR_COST,
+    PACK_PREFIX,
     PRICE_STATUS_BETWEEN,
     PRICE_STATUS_CHEAP,
     PRICE_STATUS_EXPENSIVE,
+    PRICE_STATUS_NO_PLAN,
     PRICE_STATUS_NO_PRICE,
     PRICE_STATUS_OFF,
     SIGNAL_PRICE_CHANGED,
 )
+from .dayplan import (
+    ACTION_CHARGE,
+    ACTION_DISCHARGE,
+    Battery,
+    Plan,
+    Tariff,
+    ahead,
+    make_plan,
+    price_scale,
+    read_prices,
+)
+from .registry import pack_model
 from .settings import ZendureSettings
 
 _LOGGER = logging.getLogger(__name__)
 
-# Dynamic tariffs change per quarter or per hour; checking every quarter also
-# catches a price sensor that changes its attributes but not its state.
-INTERVAL = timedelta(minutes=15)
+# Dynamic tariffs change per quarter or per hour. Deciding just after every
+# quarter also catches a price sensor that changes its attributes but not its
+# state, and plans again with the state of charge of that moment.
+QUARTERS = [0, 15, 30, 45]
+SECOND = 5
 
 
 def decide(
@@ -71,6 +116,50 @@ def decide(
     if price >= expensive:
         return PRICE_STATUS_EXPENSIVE
     return PRICE_STATUS_BETWEEN
+
+
+def battery_state(
+    data: dict[str, Any], pack_count: int, battery: ZendureSettings
+) -> tuple[float, float, float, float] | None:
+    """Usable and stored kWh, charge and discharge kW, from the battery's last poll.
+
+    Capacity is the nominal capacity of the packs; usable is the part between
+    the lower and the upper SOC limit, stored the part above the lower limit.
+    The powers are the lower of the controller setting and the device
+    ceiling, as the controller itself uses them. None when something is
+    missing.
+    """
+    capacity = 0.0
+    for index in range(1, pack_count + 1):
+        prefix = f"{PACK_PREFIX}{index}."
+        _, kwh = pack_model(data.get(f"{prefix}sn"), data.get(f"{prefix}packType"))
+        if kwh:
+            capacity += kwh
+    try:
+        soc = float(data["electricLevel"])
+        floor = float(data.get("minSoc", 0)) / 10
+        ceiling = float(data.get("socSet", 1000)) / 10
+    except (KeyError, TypeError, ValueError):
+        return None
+    if capacity <= 0 or ceiling <= floor:
+        return None
+
+    def power(key: str, device_key: str) -> float:
+        setting = battery.get_int(key)
+        try:
+            device = int(data.get(device_key) or 0)
+        except (TypeError, ValueError):
+            device = 0
+        return (min(setting, device) if device > 0 else setting) / 1000
+
+    usable = capacity * (ceiling - floor) / 100
+    stored = capacity * max(0.0, min(soc, ceiling) - floor) / 100
+    return (
+        usable,
+        stored,
+        power(OPT_MAX_CHARGE_POWER, "chargeMaxLimit"),
+        power(OPT_MAX_DISCHARGE_POWER, "inverseMaxPower"),
+    )
 
 
 class PriceControl:
@@ -99,12 +188,18 @@ class PriceControl:
         self.unit: str | None = None
         self.status: str = PRICE_STATUS_OFF
         self.target: str | None = None
+        self.import_price: float | None = None
+        self.export_value: float | None = None
+        self.plan: Plan | None = None
+        self._generation = 0
 
     # ── Life cycle ───────────────────────────────────────────────────────
 
     @callback
     def async_start(self) -> None:
-        self._unsub_timer = async_track_time_interval(self.hass, self._on_timer, INTERVAL)
+        self._unsub_timer = async_track_time_change(
+            self.hass, self._on_timer, minute=QUARTERS, second=SECOND
+        )
         self.async_update()
 
     @callback
@@ -143,34 +238,144 @@ class PriceControl:
     def _on_timer(self, _now: Any) -> None:
         self.evaluate()
 
-    # ── Decision ─────────────────────────────────────────────────────────
+    # ── Inputs ───────────────────────────────────────────────────────────
 
-    def _read_price(self) -> float | None:
+    def _read_price(self) -> tuple[float | None, dict[str, Any]]:
         if not self._entity:
-            return None
+            return None, {}
         state = self.hass.states.get(self._entity)
         if state is None:
-            return None
+            return None, {}
         self.unit = state.attributes.get("unit_of_measurement")
         try:
-            return float(state.state)
+            return float(state.state), dict(state.attributes)
         except (TypeError, ValueError):
+            return None, dict(state.attributes)
+
+    def tariff(self) -> Tariff:
+        s = self._settings
+        return Tariff(
+            import_factor=s.get_float(OPT_IMPORT_FACTOR),
+            import_surcharge=s.get_float(OPT_IMPORT_SURCHARGE),
+            export_factor=s.get_float(OPT_EXPORT_FACTOR),
+            export_surcharge=s.get_float(OPT_EXPORT_SURCHARGE),
+            net_metering=s.get_bool(OPT_NET_METERING),
+            contains=str(s.get(OPT_PRICE_CONTAINS)),
+        )
+
+    def _battery_input(self) -> Battery | None:
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._battery_entry_id)
+        data = getattr(coordinator, "data", None)
+        if not data:
             return None
+        state = battery_state(data, getattr(coordinator, "pack_count", 0), self._battery)
+        if state is None:
+            return None
+        usable, stored, charge_kw, discharge_kw = state
+        s = self._settings
+        return Battery(
+            usable_kwh=usable,
+            stored_kwh=stored,
+            charge_kw=charge_kw,
+            discharge_kw=discharge_kw,
+            eta_charge=s.get_float(OPT_CHARGE_EFFICIENCY) / 100,
+            eta_discharge=s.get_float(OPT_DISCHARGE_EFFICIENCY) / 100,
+            house_kw=s.get_float(OPT_HOUSE_LOAD) / 1000,
+            # The day plan trades: full power both ways.
+            grid_charge=True,
+            sell=True,
+        )
+
+    # ── Decision ─────────────────────────────────────────────────────────
+
+    def _plan_inputs(self, tariff: Tariff, attributes: dict[str, Any]) -> tuple | str:
+        """What the day plan needs, or the status when it cannot plan."""
+        periods = ahead(read_prices(attributes), dt_util.now())
+        if not periods:
+            return PRICE_STATUS_NO_PRICE
+        battery = self._battery_input()
+        if battery is None:
+            return PRICE_STATUS_NO_PLAN
+        return (
+            periods,
+            tariff,
+            battery,
+            self._settings.get_float(OPT_WEAR_COST),
+            self._settings.get_float(OPT_MIN_MARGIN),
+        )
 
     @callback
     def evaluate(self) -> None:
-        """Work out the band and, when price control is on, the mode."""
-        self.price = self._read_price()
-        band = decide(
-            self.price,
-            self._settings.get_float(OPT_PRICE_CHEAP),
-            self._settings.get_float(OPT_PRICE_EXPENSIVE),
+        """Work out the band and, when price control is on, the mode.
+
+        The day plan is worked out in the executor: two days of quarters take
+        tens of milliseconds, too long for the event loop on a small machine.
+        """
+        self.price, attributes = self._read_price()
+        if self.price is not None:
+            # Per kWh in the currency's main unit, whatever the sensor's scale.
+            self.price = round(self.price * price_scale(attributes), 6)
+        tariff = self.tariff()
+        if self.price is None:
+            self.import_price = self.export_value = None
+        else:
+            spot = tariff.spot(self.price)
+            self.import_price = round(tariff.import_price(spot), 5)
+            self.export_value = round(tariff.export_value(spot), 5)
+
+        self._generation += 1
+        if self._settings.get(OPT_PRICE_DECISION) != DECISION_PLAN:
+            self.plan = None
+            self._apply(
+                decide(
+                    self.price,
+                    self._settings.get_float(OPT_PRICE_CHEAP),
+                    self._settings.get_float(OPT_PRICE_EXPENSIVE),
+                )
+            )
+            return
+        inputs = self._plan_inputs(tariff, attributes)
+        if isinstance(inputs, str):
+            self.plan = None
+            self._apply(inputs)
+            return
+        self.hass.async_create_task(self._async_plan(self._generation, inputs))
+
+    async def _async_plan(self, generation: int, inputs: tuple) -> None:
+        plan = await self.hass.async_add_executor_job(make_plan, *inputs)
+        if generation != self._generation:
+            return  # overtaken by a newer evaluation
+        self.plan = plan
+        self._apply(
+            {
+                ACTION_CHARGE: PRICE_STATUS_CHEAP,
+                ACTION_DISCHARGE: PRICE_STATUS_EXPENSIVE,
+            }.get(plan.action, PRICE_STATUS_BETWEEN),
+            trading=True,
         )
-        mode_key = {
-            PRICE_STATUS_CHEAP: OPT_PRICE_CHEAP_MODE,
-            PRICE_STATUS_EXPENSIVE: OPT_PRICE_EXPENSIVE_MODE,
-        }.get(band, OPT_PRICE_BETWEEN_MODE)
-        self.target = str(self._settings.get(mode_key))
+
+    @callback
+    def _apply(self, band: str, trading: bool = False) -> None:
+        """The mode for a band, written when price control is on and it changed.
+
+        Fixed prices take the mode chosen for each band. The day plan trades:
+        it charges with quick_charge and discharges with quick_discharge, at
+        the battery's full power; in between it takes the in-between mode.
+        While Net metering is on, the net metering mode takes the place of the
+        in-between mode, in both ways of deciding and without a price.
+        """
+        if trading and band == PRICE_STATUS_CHEAP:
+            self.target = MODE_QUICK_CHARGE
+        elif trading and band == PRICE_STATUS_EXPENSIVE:
+            self.target = MODE_QUICK_DISCHARGE
+        else:
+            mode_key = {
+                PRICE_STATUS_CHEAP: OPT_PRICE_CHEAP_MODE,
+                PRICE_STATUS_EXPENSIVE: OPT_PRICE_EXPENSIVE_MODE,
+            }.get(band, OPT_PRICE_BETWEEN_MODE)
+            if mode_key == OPT_PRICE_BETWEEN_MODE and self._settings.get_bool(OPT_NET_METERING):
+                mode_key = OPT_PRICE_NET_METERING_MODE
+            self.target = str(self._settings.get(mode_key))
 
         if not self._enabled:
             self.status = PRICE_STATUS_OFF
@@ -196,10 +401,30 @@ class PriceControl:
         return {
             "price": self.price,
             "price_entity": self._entity or None,
+            "decision": self._settings.get(OPT_PRICE_DECISION),
             "target_mode": self.target,
             "operation_mode": self._battery.get(OPT_OPERATION_MODE),
             "cheap_price": self._settings.get_float(OPT_PRICE_CHEAP),
             "expensive_price": self._settings.get_float(OPT_PRICE_EXPENSIVE),
+            "import_price": self.import_price,
+            "export_value": self.export_value,
+        }
+
+    @property
+    def plan_attributes(self) -> dict[str, Any]:
+        plan = self.plan
+        if plan is None:
+            return {}
+        change = plan.next_change()
+        return {
+            "charge_periods": plan.ranges(ACTION_CHARGE),
+            "discharge_periods": plan.ranges(ACTION_DISCHARGE),
+            "next_change": change.isoformat() if change else None,
+            "charge_kwh": round(sum(plan.charge_kwh), 2),
+            "discharge_kwh": round(sum(plan.discharge_kwh), 2),
+            "stored_kwh": round(plan.stored_kwh, 2),
+            "usable_kwh": round(plan.usable_kwh, 2),
+            "plan_until": plan.periods[-1].end.isoformat() if plan.periods else None,
         }
 
     @property

@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.5.6"
+INTEGRATION_VERSION = "1.6.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -215,11 +215,11 @@ OPT_METER_SOURCE = "meter_source"
 # Unset with one external meter configured means that one.
 OPT_EXTERNAL_METER = "external_meter"
 EXTERNAL_NONE = "none"
-# A one-off request to create the Zendure RestAPI dashboard (v1.5.6). Set by
+# A one-off request to create the Zendure RestAPI dashboard (v1.6.0). Set by
 # the config flow or the options, cleared once the request has been handled.
 OPT_CREATE_DASHBOARD = "create_dashboard"
 
-# ── Price control (v1.5.6) ───────────────────────────────────────────────
+# ── Price control (v1.6.0) ───────────────────────────────────────────────
 # The Operation mode of one battery set from the electricity price: an entry
 # and a device of its own, added like an external meter. Off until switched
 # on, so an automation or planner that already steers the Operation mode stays
@@ -228,7 +228,7 @@ DEVICE_TYPE_PRICE = "price_control"
 CONF_BATTERY_ENTRY = "battery_entry"
 # Our own steering, not a Zendure product: no Zendure in the name.
 PRICE_DEVICE_NAME = "Price Control"
-PRICE_MODEL = "Dynamic trading"
+PRICE_MODEL = "Dynamic tariffs"
 OPT_PRICE_ENTITY = "price_entity"
 OPT_PRICE_CONTROL = "price_control"
 OPT_PRICE_CHEAP = "price_cheap"
@@ -236,21 +236,51 @@ OPT_PRICE_EXPENSIVE = "price_expensive"
 OPT_PRICE_CHEAP_MODE = "price_cheap_mode"
 OPT_PRICE_EXPENSIVE_MODE = "price_expensive_mode"
 OPT_PRICE_BETWEEN_MODE = "price_between_mode"
+# In between while net metering applies: an exported kWh is worth the import
+# price, so moving energy through the battery only costs conversion losses
+# and wear. Standby by default.
+OPT_PRICE_NET_METERING_MODE = "price_net_metering_mode"
 PRICE_MODE_OPTIONS = {
     OPT_PRICE_CHEAP_MODE: (MODE_QUICK_CHARGE, MODE_SMART_CHARGE),
     OPT_PRICE_EXPENSIVE_MODE: (MODE_SMART_DISCHARGE, MODE_QUICK_DISCHARGE),
     OPT_PRICE_BETWEEN_MODE: (MODE_SMART_MATCHING, MODE_STANDBY),
+    OPT_PRICE_NET_METERING_MODE: (MODE_STANDBY, MODE_SMART_MATCHING),
 }
 PRICE_STATUS_OFF = "off"
 PRICE_STATUS_NO_PRICE = "no_price"
 PRICE_STATUS_CHEAP = "cheap"
 PRICE_STATUS_BETWEEN = "between"
 PRICE_STATUS_EXPENSIVE = "expensive"
+PRICE_STATUS_NO_PLAN = "no_plan"
 PRICE_STATUSES = (
-    PRICE_STATUS_OFF, PRICE_STATUS_NO_PRICE, PRICE_STATUS_CHEAP,
+    PRICE_STATUS_OFF, PRICE_STATUS_NO_PRICE, PRICE_STATUS_NO_PLAN, PRICE_STATUS_CHEAP,
     PRICE_STATUS_BETWEEN, PRICE_STATUS_EXPENSIVE,
 )
 SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
+
+# ── Price control: the day plan (v1.6.0) ─────────────────────────────────
+# A second way to decide, next to the two fixed prices: a plan over the
+# prices of today and tomorrow (Nord Pool, HACS integration), with separate
+# import and export formulas, conversion losses and a margin per kWh. See
+# dayplan.py.
+OPT_PRICE_DECISION = "price_decision"
+DECISION_FIXED = "fixed_prices"
+DECISION_PLAN = "day_plan"
+PRICE_DECISIONS = (DECISION_FIXED, DECISION_PLAN)
+# What the price sensor holds; the formulas need the bare spot price.
+OPT_PRICE_CONTAINS = "price_contains"
+PRICE_CONTAINS_OPTIONS = ("spot_vat", "spot", "import_price")
+OPT_NET_METERING = "net_metering"
+OPT_IMPORT_FACTOR = "import_factor"
+OPT_IMPORT_SURCHARGE = "import_surcharge"
+OPT_EXPORT_FACTOR = "export_factor"
+OPT_EXPORT_SURCHARGE = "export_surcharge"
+OPT_WEAR_COST = "wear_cost"
+OPT_MIN_MARGIN = "minimum_margin"
+OPT_HOUSE_LOAD = "expected_house_load"
+OPT_CHARGE_EFFICIENCY = "charge_efficiency"
+OPT_DISCHARGE_EFFICIENCY = "discharge_efficiency"
+PLAN_ACTIONS = ("charge", "discharge", "idle")
 
 DEFAULTS = {
     OPT_OPERATION_MODE: MODE_STANDBY,   # hands off until a mode is chosen
@@ -294,6 +324,22 @@ DEFAULTS = {
     OPT_PRICE_CHEAP_MODE: MODE_QUICK_CHARGE,
     OPT_PRICE_EXPENSIVE_MODE: MODE_SMART_DISCHARGE,
     OPT_PRICE_BETWEEN_MODE: MODE_SMART_MATCHING,
+    OPT_PRICE_NET_METERING_MODE: MODE_STANDBY,
+    # Day plan. The tariff defaults are a Dutch dynamic contract in 2026:
+    # import = spot x 1.21 + supplier surcharge and energy tax incl. VAT,
+    # export = spot x 1.10 + 0.02 once net metering has ended.
+    OPT_PRICE_DECISION: DECISION_FIXED,
+    OPT_PRICE_CONTAINS: "spot_vat",     # the Nord Pool sensor's own default
+    OPT_NET_METERING: False,
+    OPT_IMPORT_FACTOR: 1.21,
+    OPT_IMPORT_SURCHARGE: 0.13505,      # per kWh
+    OPT_EXPORT_FACTOR: 1.10,
+    OPT_EXPORT_SURCHARGE: 0.02,         # per kWh
+    OPT_WEAR_COST: 0.02,                # per kWh through the battery
+    OPT_MIN_MARGIN: 0.02,               # per kWh, below this no cycle
+    OPT_HOUSE_LOAD: 400,                # W the battery covers while discharging
+    OPT_CHARGE_EFFICIENCY: 95,          # %, grid to cells
+    OPT_DISCHARGE_EFFICIENCY: 96,       # %, cells to house
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────

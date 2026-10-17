@@ -17,12 +17,10 @@ import aiohttp
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
+    CONF_BATTERY_ENTRY,
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
     CONF_EXPORT_ENTITY,
-    CONF_SOURCE_ENTITY,
-    EXTERNAL_KIND_LABELS,
-    EXTERNAL_TYPE_HA_SENSOR,
     CONF_EXTERNAL_INTERVAL,
     CONF_EXTERNAL_TYPE,
     CONF_HOST,
@@ -31,6 +29,8 @@ from .const import (
     CONF_PRODUCT,
     CONF_SCAN_INTERVAL,
     CONF_SN,
+    CONF_SOURCE_ENTITY,
+    DEFAULTS,
     DEFAULT_EXTERNAL_INTERVAL,
     DEFAULT_EXTERNAL_TYPE,
     DEFAULT_PORT,
@@ -38,28 +38,43 @@ from .const import (
     DEVICE_TYPE_BATTERY,
     DEVICE_TYPE_EXTERNAL,
     DEVICE_TYPE_METER,
-    OPT_CREATE_DASHBOARD,
-    CONF_BATTERY_ENTRY,
     DEVICE_TYPE_PRICE,
-    PRICE_DEVICE_NAME,
-    OPT_PRICE_ENTITY,
-    EXTERNAL_DEVICE_NAME,
-    EXTERNAL_TYPE_HOMEWIZARD_V1,
-    HOMEWIZARD_P1_PRODUCT,
-    ZEROCONF_HOMEWIZARD,
     DOMAIN,
+    EXTERNAL_DEVICE_NAME,
+    EXTERNAL_KIND_LABELS,
+    EXTERNAL_TYPE_HA_SENSOR,
+    EXTERNAL_TYPE_HOMEWIZARD_V1,
     EXTERNAL_TYPE_LABELS,
+    HOMEWIZARD_P1_PRODUCT,
     MAX_EXTERNAL_INTERVAL,
     MAX_SCAN_INTERVAL,
     METER_MARKER_KEY,
     MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
+    OPT_CREATE_DASHBOARD,
+    OPT_PRICE_CONTAINS,
+    OPT_PRICE_ENTITY,
+    PRICE_CONTAINS_OPTIONS,
+    PRICE_DEVICE_NAME,
+    ZEROCONF_HOMEWIZARD,
 )
 from .p1meter import ADAPTERS, state_power
 from .registry import is_known_model, meter_name, model_name, parse_service_name
 
 _LOGGER = logging.getLogger(__name__)
 
+
+
+
+def _contains_selector() -> selector.SelectSelector:
+    """What the price sensor holds; the day plan works back to the spot price."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=list(PRICE_CONTAINS_OPTIONS),
+            translation_key="price_contains",
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
 
 class ProbeResult:
     """What a single report fetch tells us about a device."""
@@ -173,7 +188,10 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_BATTERY_ENTRY: battery_id,
                     CONF_DEVICE_NAME: name,
                 },
-                options={OPT_PRICE_ENTITY: user_input[OPT_PRICE_ENTITY]},
+                options={
+                    OPT_PRICE_ENTITY: user_input[OPT_PRICE_ENTITY],
+                    OPT_PRICE_CONTAINS: user_input.get(OPT_PRICE_CONTAINS, DEFAULTS[OPT_PRICE_CONTAINS]),
+                },
             )
         schema = vol.Schema(
             {
@@ -189,6 +207,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(OPT_PRICE_ENTITY): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                vol.Required(OPT_PRICE_CONTAINS, default=DEFAULTS[OPT_PRICE_CONTAINS]): _contains_selector(),
             }
         )
         return self.async_show_form(step_id="price_control", data_schema=schema)
@@ -517,7 +536,7 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
     async def async_step_price(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Price control: the price sensor. Everything else is an entity."""
+        """Price control: the price sensor and what it holds. Everything else is an entity."""
         entry = self.config_entry
         if user_input is not None:
             return self.async_create_entry(title="", data={**entry.options, **user_input})
@@ -526,6 +545,10 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(
                     OPT_PRICE_ENTITY, default=entry.options.get(OPT_PRICE_ENTITY) or vol.UNDEFINED
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Required(
+                    OPT_PRICE_CONTAINS,
+                    default=entry.options.get(OPT_PRICE_CONTAINS, DEFAULTS[OPT_PRICE_CONTAINS]),
+                ): _contains_selector(),
             }
         )
         return self.async_show_form(step_id="price", data_schema=schema)

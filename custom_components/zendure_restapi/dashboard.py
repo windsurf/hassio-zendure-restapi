@@ -5,7 +5,8 @@ and Price Control — shipped inside the integration as
 dashboard_zendure_restapi.json because HACS installs only this folder. Before
 it is saved, the entity ids of the reference device are swapped for those of
 the devices actually set up, the power gauges get the device's own AC limit,
-and cards for entities that do not exist here are left out.
+and cards for entities that do not exist here are left out. The day plan
+chart needs apexcharts-card from HACS and appears only when it is installed.
 
 Home Assistant has no public call for an integration to add a dashboard. The
 dashboards collection is reached through the handler of the websocket command
@@ -67,13 +68,16 @@ def build_config(
     external: bool,
     ceiling: int,
     price: str | None = None,
+    custom_cards: set[str] | None = None,
 ) -> dict[str, Any]:
     """The template, fitted to the devices of this installation.
 
     `known` holds the entity ids in the registry, `battery`, `meter` and
     `price` the entity id prefixes of the battery, the Zendure P1 meter and
     the battery's Price Control (None when there is none), `external` whether
-    an external meter is set up.
+    an external meter is set up. `custom_cards` holds the custom card types
+    installed as dashboard resources; a custom card that is not installed is
+    left out. None keeps them all.
     """
     text = json.dumps(template)
     if price and price != TEMPLATE_PRICE:
@@ -116,10 +120,27 @@ def build_config(
             headings = {c.get("heading") for c in section.get("cards", [])}
             if not meter and P1_SECTION_HEADING in headings:
                 continue
+            # A section whose entity cards are all gone goes too, with the
+            # text that explains them.
+            had = any(_has_entity(c) for c in section.get("cards", []))
             cards = []
             for card in section.get("cards", []):
                 if not present(card.get("entity")):
                     continue
+                kind = str(card.get("type", ""))
+                if kind.startswith("custom:") and custom_cards is not None and kind not in custom_cards:
+                    continue
+                if "series" in card:
+                    # A chart: series of missing entities go; without the
+                    # generated series, which is what the chart is for, all of it.
+                    kept = [x for x in card["series"] if present(x.get("entity"))]
+                    if any("data_generator" in x for x in card["series"]) and not any(
+                        "data_generator" in x for x in kept
+                    ):
+                        continue
+                    card["series"] = kept
+                    if not kept:
+                        continue
                 if "badges" in card:
                     card["badges"] = [b for b in card["badges"] if present(b.get("entity"))]
                 if "entities" in card:
@@ -135,11 +156,36 @@ def build_config(
                     if card.get("min") == -TEMPLATE_CEILING:
                         card["min"] = -ceiling
                 cards.append(card)
-            if any(c.get("type") != "heading" for c in cards):
+            if any(c.get("type") != "heading" for c in cards) and (
+                not had or any(_has_entity(c) for c in cards)
+            ):
                 section["cards"] = cards
                 sections.append(section)
         view["sections"] = sections
     return config
+
+
+def _has_entity(card: dict[str, Any]) -> bool:
+    return bool(
+        card.get("entity") or card.get("entities") or card.get("series") or card.get("badges")
+    )
+
+
+# Custom cards the template may use, found by the file name of their resource.
+CUSTOM_CARDS = {"apexcharts-card": "custom:apexcharts-card"}
+
+
+async def _custom_cards(hass: HomeAssistant) -> set[str]:
+    """The custom cards from CUSTOM_CARDS that are installed as resources."""
+    resources = getattr(hass.data.get("lovelace"), "resources", None)
+    if resources is None:
+        return set()
+    try:
+        await resources.async_get_info()  # loads the stored resources
+        urls = [str(item.get("url", "")) for item in resources.async_items()]
+    except Exception:  # noqa: BLE001 - no resources means no custom cards
+        return set()
+    return {card for name, card in CUSTOM_CARDS.items() if any(name in url for url in urls)}
 
 
 def _collection(hass: HomeAssistant) -> Any:
@@ -189,6 +235,7 @@ async def async_create_dashboard(
         config = build_config(
             template, known=known, battery=battery, meter=meter,
             external=external, ceiling=ceiling, price=price,
+            custom_cards=await _custom_cards(hass),
         )
         await collection.async_create_item(
             {

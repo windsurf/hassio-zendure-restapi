@@ -19,8 +19,21 @@ from .const import (
     OPERATION_MODES,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
+    OPT_PRICE_CONTAINS,
+    OPT_PRICE_DECISION,
+    PRICE_CONTAINS_OPTIONS,
+    PRICE_DECISIONS,
     PRICE_MODE_OPTIONS,
 )
+
+# Settings with a fixed set of values: a stored value outside it falls back
+# to the default.
+CHOICES = {
+    OPT_METER_SOURCE: METER_SOURCES,
+    OPT_PRICE_DECISION: PRICE_DECISIONS,
+    OPT_PRICE_CONTAINS: PRICE_CONTAINS_OPTIONS,
+    **PRICE_MODE_OPTIONS,
+}
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,9 +60,7 @@ class ZendureSettings:
                 value, DEFAULTS[key],
             )
             return DEFAULTS[key]
-        if key == OPT_METER_SOURCE and value not in METER_SOURCES:
-            return DEFAULTS[key]
-        if key in PRICE_MODE_OPTIONS and value not in PRICE_MODE_OPTIONS[key]:
+        if key in CHOICES and value not in CHOICES[key]:
             return DEFAULTS[key]
         return value
 

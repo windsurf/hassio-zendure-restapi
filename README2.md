@@ -44,6 +44,14 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 with the diagnostics download attached, whether it works or not. One report is enough to move a model up a level.
 Details on what differs per model are under [Device support](#device-support).
 
+### ✅ Tested setups
+
+| Device | Firmware (local API) | Meter | Home Assistant | Reported by |
+|---|---|---|---|---|
+| SolarFlow 3000 Mix AC+ | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
+
+Running it on another setup? Add yours in the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) or with a model report.
+
 ---
 
 ## Before you start
@@ -253,7 +261,10 @@ fields, units and sign conventions would remove a class of integration errors en
 
 `dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in two views, built from
 standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the
-switch, its status, the price, both price limits and the mode per band (see
+switch, its status and decision, the day plan with its charge and discharge periods and the
+expected margin, a chart of the plan (with [apexcharts-card](https://github.com/RomRider/apexcharts-card)
+installed), the fixed prices and the mode per band, and the tariff, losses and margin — every
+setting a tile with a slider, a select or a toggle (see
 [Price control](#price-control)); without one it explains how to add it.
 The view **Zendure RestAPI** has thirteen sections:
 
@@ -264,14 +275,16 @@ The view **Zendure RestAPI** has thirteen sections:
 | Overview | gauges for grid, state of charge, AC input and output, both limits, and the conversion efficiencies once measured |
 | Device control | converter mode, SOC limits and protection, charge and discharge limit, Meter source, manual power |
 | Controller settings | the ten controller settings |
-| Power flow, Energy, Configuration, Battery 1, System status, Diagnostics, Zendure P1 Meter | readings and device settings |
-| External P1 Meter | power, status, telegram age, the External meter select and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
+| Power flow, Energy, Configuration, Battery 1, System status, Diagnostics | readings and device settings |
+| Zendure P1 Meter | grid power, the three phases, energy imported and exported |
+| External P1 Meter | the External meter select, power, status and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
 
 **Created for you.** Tick *Create the Zendure RestAPI dashboard* when adding the battery — or
 later under the battery's **Configure** — and the dashboard **Zendure RestAPI** appears in the
 sidebar: an ordinary dashboard, editable like any other. Before saving it, the integration fits
 the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges
-up to the battery's own AC limit, and no cards for entities your model does not report. Without
+up to the battery's own AC limit, and no cards for entities your model does not report; a section
+whose entities are all missing goes with its text. Without
 a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An
 existing dashboard at `/zendure-restapi` is never overwritten; delete it and tick the option
 again to rebuild it. A notification says what happened.
@@ -296,50 +309,201 @@ verify under **Developer tools → States** filtered on `zendure` if cards come 
 
 ## Price control
 
-Dynamic trading, built in. At or below the **cheap price** the battery charges, at or above the
-**expensive price** it discharges, and in between it follows the meter or rests — each band in a
-mode of your choosing. Any sensor that gives the current price per kWh will do: Nord Pool,
-EnergyZero, Zonneplan, Tibber, Frank Energie, or a template of your own.
+Steering on dynamic tariffs, built in, in two ways:
+
+- **Fixed prices.** At or below the **cheap price** the battery charges, at or above the
+  **expensive price** it discharges, and in between it follows the meter or rests. Any sensor
+  that gives the current price per kWh will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank
+  Energie, or a template of your own.
+- **Day plan** (v1.6.0). Over the prices of today and tomorrow from the **Nord Pool** integration
+  ([HACS](https://github.com/custom-components/nordpool)), it works out for every quarter of an
+  hour whether to charge, discharge or neither — with an import price and an export price each
+  from a formula of their own, the conversion losses on both sides, wear, and a minimum margin
+  per kWh that every cycle has to clear. It trades: it charges with `quick_charge` and
+  discharges with `quick_discharge`, at the battery's full power.
+
+Fixed prices take the mode chosen for each band; both take the in-between mode the rest of the
+time, or the net metering mode while *Net metering* is on. Either way the battery is driven
+exactly as by hand.
 
 **Setting it up.** Price control is a device of its own, linked to one battery — this
 integration's own steering, not a Zendure product, so it is simply called **Price Control**. Add
-it under **Add integration → Zendure RestAPI → Price control**, choose the battery and the price
-sensor; the sensor can be changed later under its **Configure**. Then switch it on. Everything
-else is an entity of the device, editable live and shown in the *Price Control* tab of the
-dashboard. Entity IDs start with `price_control`; a second Price Control, for a second battery,
-carries that battery in its name and IDs.
+it under **Add integration → Zendure RestAPI → Price control**, choose the battery, the price
+sensor and what that sensor holds; both can be changed later under its **Configure**. Then switch
+it on. Everything else is an entity of the device, editable live and shown in the *Price Control*
+tab of the dashboard. Entity IDs start with `price_control`; a second Price Control, for a second
+battery, carries that battery in its name and IDs.
 
 | Entity | What it does | Default |
 |---|---|---|
 | Price Control (`switch.price_control`) | on or off | off |
-| Cheap price | at or below: the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
-| Expensive price | at or above: the expensive-price mode | 0.35 |
-| Cheap price mode | `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | `quick_charge` |
-| Expensive price mode | `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | `smart_discharge_only` |
-| In-between mode | `smart_matching` (grid at zero) or `standby`; also without a usable price | `smart_matching` |
-| Electricity price | the price as price control reads it | — |
-| Status | `off`, `no_price`, `cheap`, `between` or `expensive`; the target mode as attribute | — |
+| Decision | `fixed_prices` or `day_plan` | `fixed_prices` |
+| Cheap price | fixed prices: at or below, the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
+| Expensive price | fixed prices: at or above, the expensive-price mode | 0.35 |
+| Cheap price mode | fixed prices: `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | `quick_charge` |
+| Expensive price mode | fixed prices: `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | `smart_discharge_only` |
+| In-between mode | both: `smart_matching` (grid at zero) or `standby`; also without a usable price | `smart_matching` |
+| Net metering (export = import price) | day plan: a kWh sent to the grid is worth the import price; both: the net metering mode replaces the in-between mode | off |
+| Net metering mode | both, while net metering is on: `standby` or `smart_matching`. With export worth the import price, moving energy through the battery only costs conversion losses and wear | `standby` |
+| Import factor, Import surcharge | day plan: import price = spot × factor + surcharge | 1.21, 0.13505 |
+| Export factor, Export surcharge | day plan: export price = spot × factor + surcharge, when net metering is off | 1.10, 0.02 |
+| Wear cost | day plan: per kWh through the battery | 0.02 |
+| Minimum margin | day plan: per kWh, below this no cycle | 0.02 |
+| Expected house load | day plan: the part of a discharge that covers the house and is worth the import price; the rest is sold | 400 W |
+| Charge efficiency, Discharge efficiency | day plan: grid to cells, cells to house | 95 %, 96 % |
+| Electricity price | the price the sensor gives, per kWh in Home Assistant's currency | — |
+| Import price, Export price | now, from the formulas | — |
+| Plan | day plan: `charge`, `discharge` or `idle` now; the charge and discharge blocks ahead, each with the power its mode runs at, as attributes | — |
+| Expected margin | day plan: what the plan earns over the prices known, after losses and wear | — |
+| Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`; the target mode and both prices as attributes | — |
 
-**How it decides.** On every price change, every quarter of an hour and at start-up. It writes
-the Operation mode only when its target changes, or when it is switched on: a mode set by hand
-holds until the price crosses a limit. Without a usable price — no sensor chosen, or the sensor
-unavailable — and with a cheap price at or above the expensive one, the in-between mode applies,
-which buys and sells nothing on purpose. The battery's own SOC limits still apply: the smart
+The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus
+supplier surcharge and energy tax; and for export, from 2027, the spot price plus 10 % and two
+cents. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per
+kWh including VAT.
+
+**What the price sensor holds.** The day plan works back to the bare spot price, because the
+formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the
+whole import price. See [Setting up Nord Pool for the day plan](#setting-up-nord-pool-for-the-day-plan).
+
+**How the day plan decides.** Every period can charge at full power, discharge at full power, or
+do neither. The full power is the lower of the battery's *Charge power limit* and the controller's
+*Max charge power*, and likewise *Inverter power limit* and *Max discharge power* — what
+`quick_charge` and `quick_discharge` themselves run at. By
+dynamic programming over the energy in the cells, working back from the last known price, the
+plan finds the best of the three for every period; energy still stored at the end counts at the
+median import price ahead. A kWh through the battery is worth discharging only when
+
+    value × discharge efficiency − import price ÷ charge efficiency − wear ≥ minimum margin
+
+with value the import price for the expected house load, and the export price for the rest. An
+amount per kWh, not a percentage: a percentage of a price near zero or below means nothing. The
+plan is made again every quarter of an hour, on every price change and when a setting changes,
+each time from the actual state of charge, and runs outside the event loop.
+
+**Replayed on a real installation.** 30 days, 16 September to 15 October 2026: a SolarFlow 3000
+Mix AC+ on a Dutch dynamic contract, quarter prices, the measured house load and solar, net
+metering. Every strategy on the same simulated battery:
+
+| Strategy | Per day | Under the 2027 rules |
+|---|---|---|
+| `smart_matching` only | € 0.07 | € 0.41 |
+| Fixed prices 0.15 / 0.35 | € 0.21 | € 0.49 |
+| Day plan (trading at full power) | **€ 1.58** | **€ 0.83** ¹ |
+| For comparison: the same plan discharging only to cover the house | € 0.33 | € 0.54 |
+| The owner's own home-energy planner, as it ran | € 1.58 | — |
+
+¹ With net metering off and the export formula, as it will be set from 2027.
+
+Trading at full power is where the value is: while net metering lasts the day plan earned as much
+as a full home-energy planner did on the same days, and under the 2027 rules it still earned more
+than covering the house alone.
+
+**When it cannot plan.** Without a price list (`no_price`) or without battery data (`no_plan`),
+the in-between mode applies (the net metering mode while net metering is on). So it does without a usable price, and with fixed prices when the
+cheap price is at or above the expensive one. The battery's own SOC limits still apply: the smart
 modes do not order into a full or empty battery, and the quick modes report the refusal.
+
+**When it writes.** Price control writes the Operation mode only when its target changes, or when
+it is switched on: a mode set by hand holds until then.
 
 **One writer.** Leave price control off when an automation or planner of your own already sets
 the Operation mode; two writers would undo each other's choices.
 
-**Set the gap wide enough.** A full cycle loses about a tenth of the energy at full power and up
-to a fifth at a few hundred watts (see [Conversion efficiency](#conversion-efficiency)), so the
-expensive price has to exceed the cheap one by more than that to earn anything. Two fixed prices
-are the simple start; a planner that looks at the whole day's prices does better, and drives the
-same Operation mode.
+### Setting up Nord Pool for the day plan
 
-**Next.** This is the simple version, on two fixed prices. A fuller one is planned for v1.5.7:
-the cheapest and most expensive periods of the day from the Nord Pool day prices (the HACS
-integration by default), separate import and export prices, conversion losses on both sides,
-and the spread as an amount per kWh after those losses.
+The day plan reads the price list of the **Nord Pool** integration from HACS
+([custom-components/nordpool](https://github.com/custom-components/nordpool)): the attributes
+`raw_today` and `raw_tomorrow`, per quarter of an hour or per hour, with tomorrow's prices from
+about 13:00. Fixed prices work with any price sensor; the day plan needs this one.
+
+Two prerequisites, both from HACS:
+
+| | For | Install |
+|---|---|---|
+| **Nord Pool** (integration) | the day-ahead prices; without it no day plan | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration), or **HACS → search *Nord Pool* → Download**; restart Home Assistant |
+| **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
+
+Install ApexCharts Card **before** the dashboard is created: the integration adds the chart only
+when the card is there. Already have the dashboard? Delete it and tick the option again, or paste
+the chart from `dashboard/zendure_restapi.yaml`.
+
+**1. Install** both, as above.
+
+**2. Add the integration.** **Settings → Devices & services → Add integration → Nord Pool**:
+
+| Field | Choose | Why |
+|---|---|---|
+| Region | your price area: `NL`, `BE`, `GER` (Germany), `FR`, `AT`, `SE3`, `DK1`, … | the day-ahead prices your contract follows |
+| Currency | the currency of your contract, `EUR` in the euro area | Price Control works in Home Assistant's currency |
+| Include VAT | **on** | matches *Spot price incl. VAT* in Price Control |
+| Decimal rounding precision | `3` or more | quarter prices differ by tenths of a cent |
+| Low price percentage | leave at `1` | not used |
+| Price in cents | **off** | cents and MWh are converted anyway, but euros per kWh read most easily |
+| Energy scale | `kWh` | as above |
+| Template for additional costs | leave as it is (`{{0.0\|float}}`) | the tariff goes into Price Control, not here |
+
+The sensor is called `sensor.nordpool_kwh_<area>_<currency>_<precision>_<cutoff>_<vat>`, for
+example `sensor.nordpool_kwh_nl_eur_3_10_021`. Check under **Developer tools → States** that it
+has the attribute `raw_today`.
+
+**3. Point Price Control at it.** Add Price Control (**Add integration → Zendure RestAPI →
+Price control**) or, if you have one, open its **Configure**. Choose the Nord Pool sensor and set
+*The price sensor holds*:
+
+| The Nord Pool sensor is set up with | The price sensor holds |
+|---|---|
+| Include VAT on, no additional costs (as above) | **Spot price incl. VAT** |
+| Include VAT off, no additional costs | **Spot price excl. VAT** |
+| Your whole tariff in *additional costs* (VAT on) | **Import price (whole tariff)** |
+
+With *Spot price incl. VAT*, the import factor is taken as the VAT factor to find the spot
+price: set it to 1 + your VAT rate.
+
+**4. Choose the day plan.** Set **Decision** to **Day plan**. Straight away the
+*Plan* sensor shows what it would do, and the *Price Control* tab of the dashboard the charge and
+discharge periods ahead. Price Control writes nothing while its own switch is off, so you can
+watch the plan first.
+
+**5. Check the price.** Compare **Import price** with what your supplier charges for the current
+quarter (app or website). A difference of a few tenths of a cent is rounding; more means a
+surcharge or the VAT setting is off.
+
+#### Your tariff
+
+Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor*
++ *export surcharge*, or the import price while *Net metering* is on. All per kWh including VAT.
+
+| Contract | Import factor | Import surcharge | Export | Net metering |
+|---|---|---|---|---|
+| Dutch dynamic contract, 2026 (default) | 1.21 | supplier surcharge + energy tax incl. VAT, 0.13505 | — | **on** until 31 December 2026 |
+| The same from 2027 | 1.21 | the new energy tax and surcharge | factor and surcharge from your contract, default 1.10 and 0.02 | off |
+| Other country | 1 + VAT rate, e.g. 1.19 in Germany | grid fees, taxes and supplier surcharge per kWh, incl. VAT | factor and surcharge from your contract | off |
+
+Your supplier's price page or invoice lists the surcharge and the energy tax per kWh. A supplier
+that adds a percentage on top of the spot price instead of a fixed amount: multiply it into the
+import factor, for instance 1.21 × 1.02.
+
+**Net metering** means a kWh sent to the grid is worth the import price. It applies in the
+Netherlands until the end of 2026 (*salderen*). From 2027, switch it off; the export formula then
+applies, and the day plan makes fewer, larger-spread cycles. Elsewhere in Europe exports earn their
+own, lower price (net billing): leave it off and set the export factor and surcharge. Dutch net
+metering is settled per year up to your own consumption; the switch values every exported kWh at
+the import price, so with a large yearly surplus it is too optimistic.
+
+#### When the day plan does not plan
+
+| Status | Cause | What to do |
+|---|---|---|
+| `no_price` | the sensor has no `raw_today`: not the HACS Nord Pool sensor, or not yet loaded | choose the `sensor.nordpool_kwh_…` sensor; wait for the first prices after a restart |
+| `no_plan` | the battery reports no state of charge or pack yet | wait for the battery; check that it is online |
+| plan stops at midnight | tomorrow's prices are not out yet | normal before about 13:00 |
+| *Import price* far off | VAT counted twice or not at all | match *The price sensor holds* to the Nord Pool setup above |
+
+**The built-in Nord Pool integration.** Home Assistant also has a Nord Pool integration of its own.
+Its sensors have no price list, so the day plan cannot use them. The HACS integration has the
+same name and takes its place once installed; anything set up with the built-in one has to be set
+up again.
 
 ---
 
@@ -744,7 +908,7 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
-| **Price Control entry** | 8 | Price Control (switch), Status, Electricity price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode |
+| **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Net metering mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
@@ -1097,33 +1261,71 @@ to average out the sampling offset between the AC and cell readings.
 
 ## Changelog
 
-The current release is listed in full, with v1.5.4 — the last one to change the control loop — kept in full below it. Earlier ones are grouped by minor version, keeping the
+The current releases are listed in full, with v1.5.4 — the last one to change the control loop — kept in full below it. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
 
-### v1.5.6 — Entity names in eleven languages, a dashboard and price control
+### v1.6.0 — Dynamic tariffs with a day plan, eleven languages and a dashboard
 
-No change to the control loop.
+No change to the control loop. The first release since v1.5.5; it takes in v1.5.6, which was not
+released on its own.
 
-- **Entity names are translated** — all 133 of them, in the same eleven languages as the setup
-  screens: `Laadtoestand`, `Ladezustand`, `État de charge`. Battery packs read as `Accu 1
-  temperatuur`, `Batterie 1 Temperatur`, with the number in its place for each language. The
-  operation modes keep their technical names.
+**Price control with a day plan**
+
+- **Price Control**, a device of its own: **Add integration → Zendure RestAPI → Price control**,
+  choose the battery and a price sensor, switch it on. Off by default. See
+  [Price control](#price-control).
+- Two ways to decide, chosen with *Decision*: **fixed prices** (a cheap and an expensive price,
+  with a mode per band), and the **day plan**: over the Nord Pool prices of today and tomorrow
+  (HACS integration) it works out per quarter of an hour whether to charge, discharge or neither,
+  by dynamic programming over the energy in the cells.
+- **The day plan trades**: it charges with `quick_charge` and discharges with `quick_discharge` at
+  the battery's full power; the mode selects per band are for fixed prices. The **expected house
+  load** values the part of a discharge that covers the house at the import price.
+- **Separate import and export prices**, each spot × factor + surcharge, with a *Net metering
+  (export = import price)* switch for as long as a kWh sent to the grid is worth the import price,
+  and a *Net metering mode* that takes the place of the in-between mode while it is on: `standby`
+  by default, since moving energy through the battery then only costs losses and wear.
+- **Conversion losses** on both sides, **wear** and a **minimum margin** per kWh, all entities.
+  The margin is an amount per kWh, not a percentage.
+- Sensors *Electricity price*, *Import price*, *Export price*, *Plan* (the charge and discharge
+  blocks ahead, each with the power its mode runs at) and *Expected margin*, and a *Status*.
+- *What the price sensor holds* — spot price incl. VAT, spot price, or the whole import price —
+  asked when adding Price Control and under **Configure**. Prices in cents or per MWh are
+  converted; *Electricity price* is always in Home Assistant's currency per kWh.
+- Replayed on 30 days of a real installation: € 1.58 a day while net metering lasts, the same as
+  a full home-energy planner on those days, against € 0.21 for the fixed prices.
+- A step-by-step [Nord Pool setup](#setting-up-nord-pool-for-the-day-plan), with both
+  prerequisites (Nord Pool and ApexCharts Card from HACS) and the tariff settings for other
+  contracts and countries.
+
+**The dashboard, created for you**
+
+- Tick *Create the Zendure RestAPI dashboard* when adding the battery, or later under
+  **Configure**. The dashboard **Zendure RestAPI** gets the entity IDs, gauge ranges and sections
+  of your own devices; an existing one is never overwritten, and a section whose entities are all
+  missing is left out with its text. See [Dashboard](#dashboard).
+- Two views: *Zendure RestAPI* and *Price Control*. The *Price Control* view shows the day plan
+  with its blocks and every setting as a tile with a slider, a select or a toggle.
+- **Day plan chart**, at the bottom of the *Day plan* section: today's plan as a step line —
+  charging below zero, discharging above — with the measured grid and battery power up to now.
+  It uses [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS and is added
+  only when that card is installed.
+- The *Zendure P1 Meter* section shows the energy counters; the *External P1 Meter* section
+  shows power, status and energy.
+- The dashboard file is now `dashboard/zendure_restapi.yaml`; `dashboard/zendure.yaml` is gone.
+
+**Eleven languages**
+
+- **Entity names are translated** — in the same eleven languages as the setup screens:
+  `Laadtoestand`, `Ladezustand`, `État de charge`. Battery packs read as `Accu 1 temperatuur`,
+  `Batterie 1 Temperatur`. The operation modes keep their technical names.
 - **Entity IDs stay English**, whatever the language: built from the English name, so dashboards,
   documentation and automations match everywhere. Existing IDs are untouched. See
-  [Languages](#languages).
-- English names are exactly those of v1.5.5. A test checks that every entity has a name in every
-  language, with the same placeholders, and that the English text has not moved.
-- **The dashboard, created for you**: tick *Create the Zendure RestAPI dashboard* when adding the
-  battery, or later under **Configure**. The dashboard **Zendure RestAPI** gets the entity IDs,
-  gauge ranges and sections of your own devices; an existing one is never overwritten. See
-  [Dashboard](#dashboard).
-- **Price control**, dynamic trading built in, as a device of its own: **Add integration →
-  Zendure RestAPI → Price control**, choose the battery and a price sensor, switch it on. A cheap
-  and an expensive price and the mode for each band are entities of the device **Price
-  Control**. Off by default. The simple version, on two fixed prices; a fuller one follows in
-  v1.5.7. See [Price control](#price-control).
-- The dashboard file is now `dashboard/zendure_restapi.yaml`, the whole dashboard in two views,
-  *Zendure RestAPI* and *Price Control*; `dashboard/zendure.yaml` is gone.
+  [Languages](#languages). English names are exactly those of v1.5.5.
+
+**Other**
+
+- *Tested setups* moved from the short READMEs to [Supported products](#-supported-products).
 - The options screen of a battery is titled *Options* now that it holds more than the polling
   interval.
 

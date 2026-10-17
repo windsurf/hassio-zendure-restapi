@@ -8,7 +8,7 @@
           "zendure": "Zendure-enhet (batteri eller P1-mätare)",
           "external_meter": "Extern P1-mätare (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant-sensor som extern mätare (Zonneplan, DSMR, …)",
-          "price_control": "Prisstyrning (dynamisk handel)"
+          "price_control": "Prisstyrning (dynamiska tariffer)"
         }
       },
       "zendure": {
@@ -50,10 +50,14 @@
       },
       "price_control": {
         "title": "Prisstyrning",
-        "description": "Ställer in ett batteris driftläge efter elpriset: laddar när det är lågt, urladdar när det är högt och håller nätet på noll däremellan. Den är av tills du slår på den.",
+        "description": "Ställer in ett batteris driftläge efter elpriset: med två fasta priser eller med en dagsplan över Nord Pool-priserna för i dag och i morgon. Den är av tills du slår på den.",
         "data": {
           "battery_entry": "Batteri",
-          "price_entity": "Prissensor (pris per kWh)"
+          "price_entity": "Prissensor (pris per kWh)",
+          "price_contains": "Prissensorn innehåller"
+        },
+        "data_description": {
+          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris."
         }
       }
     },
@@ -100,7 +104,11 @@
       "price": {
         "title": "Prisstyrning",
         "data": {
-          "price_entity": "Prissensor (pris per kWh)"
+          "price_entity": "Prissensor (pris per kWh)",
+          "price_contains": "Prissensorn innehåller"
+        },
+        "data_description": {
+          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris."
         }
       }
     },
@@ -156,6 +164,13 @@
         },
         "name": "Extern mätare"
       },
+      "price_decision": {
+        "state": {
+          "fixed_prices": "Fasta priser",
+          "day_plan": "Dagsplan"
+        },
+        "name": "Beslut"
+      },
       "cheap_price_mode": {
         "name": "Läge vid lågt pris"
       },
@@ -167,6 +182,9 @@
       },
       "in_between_mode": {
         "name": "Läge däremellan"
+      },
+      "net_metering_mode": {
+        "name": "Läge vid nettodebitering"
       },
       "operation_mode": {
         "name": "Driftläge"
@@ -266,11 +284,20 @@
         "state": {
           "off": "Av",
           "no_price": "Inget pris",
+          "no_plan": "Ingen plan",
           "cheap": "Billigt",
           "between": "Däremellan",
           "expensive": "Dyrt"
         },
         "name": "Status"
+      },
+      "plan": {
+        "state": {
+          "charge": "Ladda",
+          "discharge": "Urladda",
+          "idle": "Däremellan"
+        },
+        "name": "Plan"
       },
       "a_aprt_power": {
         "name": "Skenbar effekt fas A"
@@ -320,6 +347,12 @@
       "energy_pv": {
         "name": "PV-energi"
       },
+      "expected_margin": {
+        "name": "Förväntad marginal"
+      },
+      "export_price": {
+        "name": "Försäljningspris"
+      },
       "external_energy_exported": {
         "name": "Exporterad energi"
       },
@@ -361,6 +394,9 @@
       },
       "hyper_tmp": {
         "name": "Kapslingstemperatur"
+      },
+      "import_price": {
+        "name": "Köppris"
       },
       "iot_state": {
         "name": "IoT-anslutningsstatus"
@@ -537,6 +573,9 @@
       "charge_buffer": {
         "name": "Laddbuffert"
       },
+      "charge_efficiency": {
+        "name": "Laddningsverkningsgrad"
+      },
       "charge_max_limit": {
         "name": "Maximal laddeffekt"
       },
@@ -549,8 +588,26 @@
       "discharge_buffer": {
         "name": "Urladdningsbuffert"
       },
+      "discharge_efficiency": {
+        "name": "Urladdningsverkningsgrad"
+      },
+      "expected_house_load": {
+        "name": "Förväntad husförbrukning"
+      },
       "expensive_price": {
         "name": "Högt pris"
+      },
+      "export_factor": {
+        "name": "Försäljningsfaktor"
+      },
+      "export_surcharge": {
+        "name": "Försäljningstillägg"
+      },
+      "import_factor": {
+        "name": "Köpfaktor"
+      },
+      "import_surcharge": {
+        "name": "Köptillägg"
       },
       "input_limit": {
         "name": "Laddgräns (AC)"
@@ -576,6 +633,9 @@
       "min_soc": {
         "name": "Nedre SOC-gräns"
       },
+      "minimum_margin": {
+        "name": "Minsta marginal"
+      },
       "mode_threshold": {
         "name": "Lägestroskel"
       },
@@ -596,11 +656,17 @@
       },
       "trim_threshold": {
         "name": "Korrigeringströskel"
+      },
+      "wear_cost": {
+        "name": "Slitagekostnad"
       }
     },
     "switch": {
       "fanmode": {
         "name": "Fläkt alltid på"
+      },
+      "net_metering": {
+        "name": "Nettodebitering (export = inköpspris)"
       },
       "smart_mode": {
         "name": "Hoppa över flashskrivning"
@@ -610,6 +676,15 @@
       },
       "trace_recording": {
         "name": "Spårinspelning"
+      }
+    }
+  },
+  "selector": {
+    "price_contains": {
+      "options": {
+        "spot_vat": "Spotpris inkl. moms",
+        "spot": "Spotpris exkl. moms",
+        "import_price": "Köppris (hela tariffen)"
       }
     }
   }
