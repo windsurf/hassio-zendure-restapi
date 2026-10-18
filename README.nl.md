@@ -85,7 +85,7 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 **1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit.
 In de Zendure-app, twee instellingen:
 - voeg **HEMS** toe — dat zet de lokale API aan;
-- kies onder **Energieplan** de **Aangepaste modus** — anders blijft de eigen sturing van Zendure naast deze integratie naar de accu schrijven.
+- kies onder **Energieplan** de **Aangepaste modus** — anders blijft de eigen sturing van Zendure naast deze integratie naar de accu schrijven (vergeet je het, dan herinnert een melding onder *Instellingen → Reparaties* je eraan).
 
 Sluit de app daarna af. Controleer het vanuit een browser:
 `http://<ip-accu>/properties/report` moet JSON tonen.
@@ -172,7 +172,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen — met saldering laat het dagplan de accu tussen de blokken rusten; de app-instelling noemt beide stappen, HEMS en Aangepaste modus. **v1.6.0:** **prijssturing voor dynamische tarieven**, met een **dagplan** over de Nord Pool-prijzen — aparte import- en exportprijzen, omzetverlies en een marge per kWh; entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt.
+**Laatste release – v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart (in v1.6.1 kon de status op `off` blijven staan tot je hem uit en aan zette); de technische naslag begint met een inhoudsopgave, de hoofdstukken in leesvolgorde. **v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen — met saldering laat het dagplan de accu tussen de blokken rusten; de app-instelling noemt beide stappen, HEMS en Aangepaste modus. **v1.6.0:** **prijssturing voor dynamische tarieven**, met een **dagplan** over de Nord Pool-prijzen — aparte import- en exportprijzen, omzetverlies en een marge per kWh; entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt.
 
 ## Meer
 

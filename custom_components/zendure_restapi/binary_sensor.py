@@ -126,7 +126,44 @@ async def async_setup_entry(
             entity.override_identity(index)
             entities.append(entity)
 
+    runtime = hass.data[DOMAIN].get(f"{entry.entry_id}_runtime")
+    if runtime is not None:
+        entities.append(
+            ZendureSecondControllerSensor(
+                coordinator, SECOND_CONTROLLER_DESCRIPTION, device_id, model,
+                runtime["controller"],
+            )
+        )
+
     async_add_entities(entities)
+
+
+# Something other than this integration writing the limits while it steers:
+# the Zendure app not on Custom Mode, or an automation of your own (v1.6.2).
+SECOND_CONTROLLER_DESCRIPTION = BinarySensorEntityDescription(
+    key="second_controller",
+    name="Second controller",
+    device_class=BinarySensorDeviceClass.PROBLEM,
+    icon="mdi:account-multiple-outline",
+)
+
+
+class ZendureSecondControllerSensor(ZendureEntity, BinarySensorEntity):
+    """On while something else writes the battery limits alongside this integration."""
+
+    entity_description: BinarySensorEntityDescription
+
+    def __init__(self, coordinator, description, device_id, model, controller) -> None:
+        super().__init__(coordinator, description, device_id, model)
+        self._controller = controller
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def is_on(self) -> bool:
+        return self._controller.second_controller
 
 
 class ZendureBinarySensor(ZendureEntity, BinarySensorEntity):

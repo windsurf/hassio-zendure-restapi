@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "Compensazione SOC"
+      },
+      "second_controller": {
+        "name": "Secondo regolatore"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Prezzo spot IVA esclusa",
         "import_price": "Prezzo di prelievo (tariffa completa)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Qualcos'altro controlla anche {device}",
+      "description": "Qualcosa di diverso da questa integrazione modifica i limiti della batteria mentre essa regola: {count} volte o più in un quarto d'ora. Due regolatori si annullano a vicenda. Di solito l'app Zendure è ancora su un proprio piano energetico: aprila e scegli **Custom Mode** in **Energy plan**. Altrimenti ferma l'altra automazione o integrazione che scrive sulla batteria. Questo messaggio scompare da solo dopo un'ora senza tali scritture."
     }
   }
 }

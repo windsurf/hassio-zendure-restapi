@@ -21,6 +21,17 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 ---
 
+## Contents
+
+- **Install:** [Supported products](#-supported-products) · [Before you start](#before-you-start) · [Installation via HACS](#installation-via-hacs) · [Manual Installation](#manual-installation) · [Setup](#setup)
+- **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter)
+- **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
+- **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard)
+- **Reference:** [Supported Entities](#supported-entities) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
+- **History:** [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
+
+---
+
 ## 📌 Supported products
 
 Every SolarFlow on the local zenSDK API speaks the same protocol, so every model below can be installed and read out. What differs is how much of the control loop has been proven on it. Only the 3000 Mix AC+ has been run by the author; everything else rests on the shared protocol, Zendure's property documentation and Zendure's own Home Assistant integration, which drives these models over the same local API.
@@ -58,12 +69,14 @@ Running it on another setup? Add yours in the [forum topic](https://community.ho
 
 Under EN 18031 the local HTTP API is **disabled by default**. Enable it first:
 
-> Zendure app → add **HEMS** → under **Energy plan** choose **Custom mode** → exit the app to apply.
+> Zendure app → add **HEMS** → under **Energy plan** choose **Custom Mode** → exit the app to apply.
 
-HEMS switches the local API on. Custom mode switches Zendure's own control off. Leave any other
+HEMS switches the local API on. Custom Mode switches Zendure's own control off. Leave any other
 energy plan on (Auto, ZENKI, self-consumption, TOU) and the device keeps adjusting `outputLimit`
 itself, about every 20 seconds, alongside this integration: two controllers on one battery. The
-trace shows it as *foreign writes*.
+integration notices: the binary sensor *Second controller* turns on and a repair appears under
+*Settings → Repairs* once something else has moved the limits five times in a quarter of an hour
+while the integration steers. Both clear by themselves after an hour without such writes.
 
 Verify from a terminal before configuring anything.
 
@@ -87,6 +100,8 @@ API is still off and no amount of configuration will help.
 1. HACS → Integrations → three-dot menu → Custom repositories
 2. Add `https://github.com/windsurf/hassio-zendure-restapi`, category **Integration**
 3. Install **Zendure RestAPI**, then restart Home Assistant
+
+---
 
 ## Manual Installation
 
@@ -131,6 +146,13 @@ The confidence per model is listed under [Supported products](#-supported-produc
 
 **One battery steers at a time.** Two batteries in a smart mode would each see the whole grid deviation and correct it twice between them, so the second battery to enter a smart mode is stopped with status `blocked` and a reason naming the first. Manual, quick and standby are unaffected. One Home Assistant instance is assumed to be one grid connection. Sharing a deviation between batteries is a planned extension and needs measurements from a two-device installation first.
 
+**The device tapers the last percent when charging, not when discharging.** Charging at 3 kW, the
+3000 Mix AC+ holds full power to about 98–99 %, then steps down by itself — roughly 2.8, 1.8 and
+1.2 kW, each held for about a minute — and stops at 100 %, the charge limit still at 3000 W. Seen
+three times in the same pattern (13, 14 and 18 October 2026). Discharging runs at full power down to
+the lower limit and stops there; no taper. The last percent of a charge therefore takes three to
+four minutes instead of under two; nothing in the integration causes or needs to correct it.
+
 **Battery packs** get a `Model` sensor derived from the serial number and `packType`, with the nominal capacity as an attribute. The table follows Zendure's own integration; on this installation only the Mix series' internal pack (`I8000`) has been confirmed.
 
 **Have a model that is not marked reference?** Open a *New model report* issue and attach the diagnostics download (device page → three dots → Download diagnostics). Serial numbers and addresses are redacted, and the file lists every property this version has no entity for.
@@ -140,125 +162,6 @@ The confidence per model is listed under [Supported products](#-supported-produc
 The meter reports a flat payload with a `deviceId` and **no serial number at all**. Identity
 therefore falls back to `deviceId`, and no writable entities are created because writes require
 a serial. It is read-only by nature.
-
----
-
-## What the P1 meter does and does not give you
-
-The meter is the only feedback the control loop has, so it is worth being precise about what it
-can tell you. What follows was measured on a three-phase meter (`meterType` 3, `protocolType`
-51) against a second, independent P1 reader on the same connection point through a splitter —
-so both saw the same electricity at the same instant. Roughly 1,300 paired samples at 0.36 s
-and 1.1 s intervals, in two runs, one with the controller in `standby` so nothing was steering
-the grid.
-
-### What it gets right
-
-**The reading is accurate.** Over 60 samples at rest, the two meters averaged −22.6 W and
-−18.6 W with a spread of 16.5 W on both. The 4 W gap is smaller than the sample-to-sample
-noise, so there is no measurable systematic error.
-
-**The phase readings are consistent with the total.** `a_aprt_power + b_aprt_power +
-c_aprt_power` matches `total_power` to within 0.2 W on average. Single snapshots disagree by
-tens of watts because the fields are not sampled at the same instant, but there is no offset.
-
-**The sign convention holds.** Positive is import, negative is export, confirmed against the
-reference meter across the full range from −1,700 W to +2,250 W.
-
-**Fast to query.** Round trips average 23 ms with a worst case of 31 ms and no failures over 30
-consecutive requests. The network is never the bottleneck.
-
-### The refresh rate
-
-**`total_power` updates roughly once per second**, in step with the meter's own P1 telegram.
-Sampled four times a second, each value repeats about three times before changing.
-
-Polling faster than 1 s therefore returns the same number again. Below that there is nothing to
-gain, and the same holds for the reference meter — this is a property of the telegram, not of
-the device.
-
-### The delay
-
-**The meter lags a second reader by 0.4 to 1.1 seconds.** This is the finding that matters most
-for control, and it is consistent rather than occasional.
-
-| Load step | Delay behind the reference |
-|---|---|
-| 2,234 W, rise | 1,111 ms |
-| 1,414 W, rise | 740 ms |
-| 1,900 W, rise | 389 ms |
-| 2,250 W, rise | 0 ms |
-
-That last one is not a contradiction: the step happened to coincide with a refresh. A single
-observation would have concluded the meters were equally fast, which is exactly what the first
-run did conclude before the other three were measured.
-
-Cross-correlating every sample rather than only the steps confirms it independently. The best
-agreement between the meter and the reference is at a shift of one to two samples — 0.4 to
-0.7 s — and it holds in both runs, so it is not an artefact of the controller acting on the
-grid.
-
-Visible in the raw samples, where the meter holds a stale value for three cycles after a load
-appears:
-
-```
-T+0.000   reference 2234 W    meter  -69 W
-T+0.376   reference 2234 W    meter  -69 W
-T+0.742   reference 2234 W    meter  -69 W
-T+1.111   reference 2179 W    meter 2179 W
-```
-
-**What this means in practice.** A control loop reading this meter is acting on a picture of the
-grid that is up to a second old. At a 10 s control interval that is a fraction of the cycle and
-hardly matters; at a 1 s interval it is the dominant source of error. It also sets a floor on
-how tightly any loop can hold the grid at zero, no matter how fast it writes.
-
-### What it does not have
-
-**No cumulative counters.** The meter reports instantaneous power only. Every sample taken
-between two polls is gone — poll at 10 s while the meter refreshes at 1 s and nine readings are
-discarded. A meter that counts loses nothing at any polling rate, because the difference between
-two readings still covers the whole interval.
-
-**No import and export registers.** The smart meter's own `1.8.1`, `1.8.2`, `2.8.1` and `2.8.2`
-are in every P1 telegram, and the reference reader exposes all four. This meter exposes none of
-them, not even their net sum.
-
-That matters more than it used to. Where import and export are settled separately — as they
-will be under some tariff regimes — the net figure hides what you are billed on. In one
-two-minute window the reference registers showed 5 Wh imported and 14 Wh exported: a net of
-−9 Wh concealing 19 Wh of actual exchange.
-
-**No second endpoint.** `/properties/report` is all there is. `/properties/list`,
-`/device/info`, `/meter/report` and `/properties/get` all return 404, and a port scan finds only
-80 open — no MQTT, no Modbus. There is no richer channel hiding behind another protocol.
-
-### Suggestions for the device firmware
-
-Each of these is something the hardware already has and the API does not expose. They are listed
-in the order they would help a control loop.
-
-**Expose a timestamp for the reading itself.** The payload carries `timestamp` and `messageId`,
-but nothing that says when the underlying measurement was taken. A consumer cannot tell a fresh
-value from one repeated for the third time, and so cannot correct for the delay or detect a
-stalled telegram feed.
-
-**Reduce the delay, or document it.** Up to a second of lag on a meter sold for closed-loop
-control is significant. If it is inherent to the design, saying so in the documentation would
-let integrators compensate rather than discover it by measurement.
-
-**Expose the four energy registers.** `1.8.1`, `1.8.2`, `2.8.1`, `2.8.2` arrive in every
-telegram. Publishing them costs nothing and gives consumers an exact energy balance over any
-interval, independent of polling rate, plus the import/export split that billing increasingly
-requires.
-
-**Report a serial number.** The device identifies itself only by `deviceId`. Home Assistant and
-comparable systems key device identity on a serial; without one, an integration must invent a
-fallback, and no writable entities can be offered safely.
-
-**Document the units and conventions.** `a_aprt_power` is labelled apparent power but tracks
-real power in practice. `protocolType` 51 and `meterType` 3 are undocumented. A short table of
-fields, units and sign conventions would remove a class of integration errors entirely.
 
 ---
 
@@ -997,46 +900,160 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 
 ---
 
-## Supported Entities
+## What the P1 meter does and does not give you
 
-| Group | Count | Entities |
-|---|---|---|
-| **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
-| **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
-| **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
-| **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
-| **Binary sensor** | 12 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
-| **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
-| **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
-| **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
-| **Price Control entry** | 23 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
-| **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
-| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
+The meter is the only feedback the control loop has, so it is worth being precise about what it
+can tell you. What follows was measured on a three-phase meter (`meterType` 3, `protocolType`
+51) against a second, independent P1 reader on the same connection point through a splitter —
+so both saw the same electricity at the same instant. Roughly 1,300 paired samples at 0.36 s
+and 1.1 s intervals, in two runs, one with the controller in `standby` so nothing was steering
+the grid.
 
-Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
+### What it gets right
 
-### SOC limit status
+**The reading is accurate.** Over 60 samples at rest, the two meters averaged −22.6 W and
+−18.6 W with a spread of 16.5 W on both. The 4 W gap is smaller than the sample-to-sample
+noise, so there is no measurable systematic error.
 
-`socLimit` maps to three values: `none`, `upper_limit` and `lower_limit`. All three occur in
-practice, and the sensor is early enough to act on.
+**The phase readings are consistent with the total.** `a_aprt_power + b_aprt_power +
+c_aprt_power` matches `total_power` to within 0.2 W on average. Single snapshots disagree by
+tens of watts because the fields are not sampled at the same instant, but there is no offset.
 
-| Transition | Behaviour |
+**The sign convention holds.** Positive is import, negative is export, confirmed against the
+reference meter across the full range from −1,700 W to +2,250 W.
+
+**Fast to query.** Round trips average 23 ms with a worst case of 31 ms and no failures over 30
+consecutive requests. The network is never the bottleneck.
+
+### The refresh rate
+
+**`total_power` updates roughly once per second**, in step with the meter's own P1 telegram.
+Sampled four times a second, each value repeats about three times before changing.
+
+Polling faster than 1 s therefore returns the same number again. Below that there is nothing to
+gain, and the same holds for the reference meter — this is a property of the telegram, not of
+the device.
+
+### The delay
+
+**The meter lags a second reader by 0.4 to 1.1 seconds.** This is the finding that matters most
+for control, and it is consistent rather than occasional.
+
+| Load step | Delay behind the reference |
 |---|---|
-| To `upper_limit` | one second before the device stopped accepting charge |
-| To `lower_limit` | in the same sample as the meter, ten seconds before `Battery power` followed |
+| 2,234 W, rise | 1,111 ms |
+| 1,414 W, rise | 740 ms |
+| 1,900 W, rise | 389 ms |
+| 2,250 W, rise | 0 ms |
 
-That ten-second lag is the battery poll interval, not the sensor: the meter and the flag change
-together, the cell readings catch up on the next payload.
+That last one is not a contradiction: the step happened to coincide with a refresh. A single
+observation would have concluded the meters were equally fast, which is exactly what the first
+run did conclude before the other three were measured.
 
-Over three days the sensor produced eight transitions — four to each limit, each with a return to
-`none` in between, no chattering and no intermediate states.
+Cross-correlating every sample rather than only the steps confirms it independently. The best
+agreement between the meter and the reference is at a shift of one to two samples — 0.4 to
+0.7 s — and it holds in both runs, so it is not an artefact of the controller acting on the
+grid.
 
-The smart modes act on it themselves; see [Safety](#safety).
+Visible in the raw samples, where the meter holds a stale value for three cycles after a load
+appears:
 
-**Treat `unavailable` separately from `none`.** The sensor spent ten seconds unavailable once in
-those three days. Anything keying off this entity should distinguish "no limit active" from "no
-value", or a brief gap will read as the limit having cleared.
+```
+T+0.000   reference 2234 W    meter  -69 W
+T+0.376   reference 2234 W    meter  -69 W
+T+0.742   reference 2234 W    meter  -69 W
+T+1.111   reference 2179 W    meter 2179 W
+```
+
+**What this means in practice.** A control loop reading this meter is acting on a picture of the
+grid that is up to a second old. At a 10 s control interval that is a fraction of the cycle and
+hardly matters; at a 1 s interval it is the dominant source of error. It also sets a floor on
+how tightly any loop can hold the grid at zero, no matter how fast it writes.
+
+### What it does not have
+
+**No cumulative counters.** The meter reports instantaneous power only. Every sample taken
+between two polls is gone — poll at 10 s while the meter refreshes at 1 s and nine readings are
+discarded. A meter that counts loses nothing at any polling rate, because the difference between
+two readings still covers the whole interval.
+
+**No import and export registers.** The smart meter's own `1.8.1`, `1.8.2`, `2.8.1` and `2.8.2`
+are in every P1 telegram, and the reference reader exposes all four. This meter exposes none of
+them, not even their net sum.
+
+That matters more than it used to. Where import and export are settled separately — as they
+will be under some tariff regimes — the net figure hides what you are billed on. In one
+two-minute window the reference registers showed 5 Wh imported and 14 Wh exported: a net of
+−9 Wh concealing 19 Wh of actual exchange.
+
+**No second endpoint.** `/properties/report` is all there is. `/properties/list`,
+`/device/info`, `/meter/report` and `/properties/get` all return 404, and a port scan finds only
+80 open — no MQTT, no Modbus. There is no richer channel hiding behind another protocol.
+
+### Suggestions for the device firmware
+
+Each of these is something the hardware already has and the API does not expose. They are listed
+in the order they would help a control loop.
+
+**Expose a timestamp for the reading itself.** The payload carries `timestamp` and `messageId`,
+but nothing that says when the underlying measurement was taken. A consumer cannot tell a fresh
+value from one repeated for the third time, and so cannot correct for the delay or detect a
+stalled telegram feed.
+
+**Reduce the delay, or document it.** Up to a second of lag on a meter sold for closed-loop
+control is significant. If it is inherent to the design, saying so in the documentation would
+let integrators compensate rather than discover it by measurement.
+
+**Expose the four energy registers.** `1.8.1`, `1.8.2`, `2.8.1`, `2.8.2` arrive in every
+telegram. Publishing them costs nothing and gives consumers an exact energy balance over any
+interval, independent of polling rate, plus the import/export split that billing increasingly
+requires.
+
+**Report a serial number.** The device identifies itself only by `deviceId`. Home Assistant and
+comparable systems key device identity on a serial; without one, an integration must invent a
+fallback, and no writable entities can be offered safely.
+
+**Document the units and conventions.** `a_aprt_power` is labelled apparent power but tracks
+real power in practice. `protocolType` 51 and `meterType` 3 are undocumented. A short table of
+fields, units and sign conventions would remove a class of integration errors entirely.
+
+---
+
+## zenSDK and this integration
+
+[Zendure/zenSDK](https://github.com/Zendure/zenSDK) is the protocol source: the local HTTP API and
+the property reference. Its property document was last changed on 17 February 2026, the
+repository on 27 March 2026. Its product list names eight devices; the SolarFlow 3000 Mix AC+ —
+the reference device here — and the 4000 Mix AC+, 800 Pro 2 and 4000 Mix Pro are not on it.
+This integration covers those models as well, and corrects the document where live hardware
+disagrees with it: see [Notes on correctness](#notes-on-correctness).
+
+---
+
+## Notes on correctness
+
+The zenSDK document is wrong or incomplete in several places. Each correction below was found by comparing it against live hardware.
+
+**Temperatures** are stored in tenths of a Kelvin: `(raw - 2731) / 10`.
+
+**Pack voltage** (`totalVol`) is in centivolts despite the document listing whole volts. A raw 2688 is 26.88 V.
+
+**SOC setpoints** (`socSet`, `minSoc`) are in tenths of a percent. The document's `minSoc` range of 0–50 is also wrong; a live sample read 800, meaning 80.0%.
+
+**Pack current** (`batcur`) is a 16-bit two's complement value in deciampere. Read unsigned, every discharge becomes roughly 6500 A.
+
+**`gridReverse`** value 2 forbids PV export and 1 allows it. The document offers no labels; reading 2 as `auto` would be permissive on a device that is actually blocking export.
+
+**The key is `oldMode`,** not `OldMode` as documented.
+
+Three independent checks confirm the voltage and current scales, across samples at very different power levels:
+
+| Check | Sample 1 | Sample 2 |
+|---|---|---|
+| `totalVol` × `batcur` vs reported pack power | 26.88 V × 22.8 A = 613 W vs 612 W | 26.80 V × 1.7 A = 45.6 W vs 46 W |
+| Cell voltage × 8 vs `totalVol` | 3.36 V × 8 = 26.88 V | 3.35 V × 8 = 26.80 V |
+
+The cell-count agreement also identifies the pack as 8S LFP.
 
 ---
 
@@ -1140,45 +1157,55 @@ Short windows are unreliable here: window 2 spans nine points, where rounding of
 
 ---
 
-## zenSDK and this integration
+## Supported Entities
 
-[Zendure/zenSDK](https://github.com/Zendure/zenSDK) is the protocol source: the local HTTP API and
-the property reference. Its property document was last changed on 17 February 2026, the
-repository on 27 March 2026. Its product list names eight devices; the SolarFlow 3000 Mix AC+ —
-the reference device here — and the 4000 Mix AC+, 800 Pro 2 and 4000 Mix Pro are not on it.
-This integration covers those models as well, and corrects the document where live hardware
-disagrees with it: see [Notes on correctness](#notes-on-correctness).
-
-## Notes on correctness
-
-The zenSDK document is wrong or incomplete in several places. Each correction below was found by comparing it against live hardware.
-
-**Temperatures** are stored in tenths of a Kelvin: `(raw - 2731) / 10`.
-
-**Pack voltage** (`totalVol`) is in centivolts despite the document listing whole volts. A raw 2688 is 26.88 V.
-
-**SOC setpoints** (`socSet`, `minSoc`) are in tenths of a percent. The document's `minSoc` range of 0–50 is also wrong; a live sample read 800, meaning 80.0%.
-
-**Pack current** (`batcur`) is a 16-bit two's complement value in deciampere. Read unsigned, every discharge becomes roughly 6500 A.
-
-**`gridReverse`** value 2 forbids PV export and 1 allows it. The document offers no labels; reading 2 as `auto` would be permissive on a device that is actually blocking export.
-
-**The key is `oldMode`,** not `OldMode` as documented.
-
-Three independent checks confirm the voltage and current scales, across samples at very different power levels:
-
-| Check | Sample 1 | Sample 2 |
+| Group | Count | Entities |
 |---|---|---|
-| `totalVol` × `batcur` vs reported pack power | 26.88 V × 22.8 A = 613 W vs 612 W | 26.80 V × 1.7 A = 45.6 W vs 46 W |
-| Cell voltage × 8 vs `totalVol` | 3.36 V × 8 = 26.88 V | 3.35 V × 8 = 26.80 V |
+| **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
+| **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
+| **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
+| **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
+| **Binary sensor** | 13 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow, Second controller · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
+| **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
+| **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
+| **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
+| **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Price Control entry** | 23 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
+| **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
+| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
-The cell-count agreement also identifies the pack as 8S LFP.
+Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
----
+**Battery state can read `Discharging` at 0 W.** In `standby`, and at a full or empty battery, the
+pack still supplies the device's own draw of about 5 W ([Standby draw](#known-limitations)), and
+reports that as discharging. *Battery power* rounds it to 0 W on the device and shows it on the
+pack sensor (5–7 W). Nothing is wrong.
 
-## Brand images
+**Fault level is a raw device value.** zenSDK does not say what the levels mean. On the reference
+installation it reads 2 while *Error* reads OK and nothing is amiss. Go by *Error*; treat a change
+in *Fault level* as something to report with diagnostics, not as an alarm.
 
-The integration ships its own icon and logo in `custom_components/zendure_restapi/brand/`. Home Assistant 2026.3 and later picks these up directly, taking priority over the brands CDN; older versions ignore the folder and fall back to the default placeholder. No submission to `home-assistant/brands` is needed.
+### SOC limit status
+
+`socLimit` maps to three values: `none`, `upper_limit` and `lower_limit`. All three occur in
+practice, and the sensor is early enough to act on.
+
+| Transition | Behaviour |
+|---|---|
+| To `upper_limit` | one second before the device stopped accepting charge |
+| To `lower_limit` | in the same sample as the meter, ten seconds before `Battery power` followed |
+
+That ten-second lag is the battery poll interval, not the sensor: the meter and the flag change
+together, the cell readings catch up on the next payload.
+
+Over three days the sensor produced eight transitions — four to each limit, each with a return to
+`none` in between, no chattering and no intermediate states.
+
+The smart modes act on it themselves; see [Safety](#safety).
+
+**Treat `unavailable` separately from `none`.** The sensor spent ten seconds unavailable once in
+those three days. Anything keying off this entity should distinguish "no limit active" from "no
+value", or a brief gap will read as the limit having cleared.
 
 ---
 
@@ -1281,11 +1308,19 @@ be undercounted — for a measurement run, poll the battery every second or two.
 At one sample a second a day of recording is roughly 86,000 rows and some 15 MB. Rows are
 buffered for half a minute at a time, so an abrupt restart loses that half minute.
 
+---
+
 ## Reporting an unsupported property
 
 The integration logs every reported key it has no entity for, once each, at `INFO` level. For a complete picture, download diagnostics from the device page: the file contains the device report plus the full list of unrecognised keys.
 
 Diagnostics files end up attached to public issues, so identifying values are stripped first. That covers both the plain keys and their flattened per-pack form — `pack1.sn` is redacted along with `sn`, which an exact-match filter would miss. The MQTT status is summarised rather than copied, because its contents are undocumented and may carry a broker address or device key.
+
+---
+
+## Brand images
+
+The integration ships its own icon and logo in `custom_components/zendure_restapi/brand/`. Home Assistant 2026.3 and later picks these up directly, taking priority over the brands CDN; older versions ignore the folder and fall back to the default placeholder. No submission to `home-assistant/brands` is needed.
 
 ---
 
@@ -1376,6 +1411,37 @@ to average out the sampling offset between the AC and cell readings.
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.2 — Price control after a reload or a slow restart, a second-controller warning, and the reference in reading order
+
+No change to the control loop. After updating, restart Home Assistant.
+
+- **Price control keeps working after a reload or a slow restart.** Updating from v1.6.0 to v1.6.1
+  could leave Price Control switched on but no longer writing the Operation mode, when it was set up
+  after Home Assistant counted as started: on a reload of the integration, or on a restart that waits
+  for a slow integration or a backup first: its *Status* stayed `off`, and the battery kept the last mode it had.
+  Switching Price Control off and on again cleared it. Fixed: the one-time carry-over from v1.6.0
+  and the presets no longer depend on a second pass that a reload does not make.
+- **Second controller warning.** When something else moves the battery limits while the
+  integration steers — the Zendure app still on an energy plan of its own, or an automation of your
+  own — the new binary sensor *Second controller* turns on and a repair appears under *Settings →
+  Repairs*, saying what to do: choose **Custom Mode** under **Energy plan** in the app, or stop the
+  other writer. Threshold five foreign writes in a quarter of an hour (the app's own control moves
+  the limit about every 20 seconds, some 45 times); not in `standby`, where something else steering
+  is your choice; a direction the device closes itself at its SOC bound does not count. Clears after
+  an hour without. *Foreign writes* in the controller status now count always, not only while the
+  trace records.
+- **Documented:** the device tapers the last percent of a charge (2.8 → 1.8 → 1.2 kW, then stop
+  at 100 %); seen three times, so now under [Device support](#device-support).
+- **Dashboard:** the battery serial number is no longer on it, so a screenshot shared on a forum
+  does not show it (the sensor stays, under diagnostics). With *Net metering* on, the export factor
+  and surcharge tiles are hidden, as they are not used then. *Export price* has its own icon.
+- **Cell voltages with two decimals** (3.51 V instead of 4 V), pack and DC bus voltage with one.
+- **Documented:** *Battery state* `Discharging` at 0 W, and what *Fault level* is
+  ([Supported entities](#supported-entities)).
+- **This reference** opens with a list of contents, and its chapters follow the order you read
+  them in: install, use, how it works, energy and measurements, reference. Every heading and link
+  stays the same.
 
 ### v1.6.1 — One set of modes for fixed prices and the day plan
 
@@ -1897,6 +1963,8 @@ unknowns were documented rather than suspected.
 This software is **not affiliated with or endorsed by Zendure** in any way. The Zendure name and product names are trademarks of Zendure.
 
 This integration writes directly to a grid-connected battery inverter. Provided **"as-is"** without warranty. The authors accept no liability for any damage, loss of data, or service disruption.
+
+---
 
 ## Licence
 

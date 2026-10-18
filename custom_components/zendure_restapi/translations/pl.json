@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "Kompensacja SOC"
+      },
+      "second_controller": {
+        "name": "Drugi regulator"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Cena spot bez VAT",
         "import_price": "Cena zakupu (cała taryfa)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Coś innego również steruje {device}",
+      "description": "Coś innego niż ta integracja zmienia limity baterii, gdy ona steruje — {count} razy lub częściej w ciągu kwadransa. Dwa regulatory znoszą się nawzajem. Zwykle aplikacja Zendure jest nadal ustawiona na własny plan energii: otwórz ją i wybierz **Custom Mode** w **Energy plan**. W przeciwnym razie zatrzymaj inną automatyzację lub integrację, która zapisuje do baterii. Ten komunikat znika sam po godzinie bez takich zapisów."
     }
   }
 }

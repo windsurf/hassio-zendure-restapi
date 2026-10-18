@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.1 | October 2026
+# ZENDURE RESTAPI DASHBOARD - v1.6.2 | October 2026
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in two views, read through
@@ -132,6 +132,8 @@ views:
         entity: select.zendure_solarflow_3000_mix_ac_operation_mode
       - type: entity
         entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+      - type: entity
+        entity: binary_sensor.zendure_solarflow_3000_mix_ac_second_controller
     - type: markdown
       content: |
         {% set s = states('sensor.zendure_solarflow_3000_mix_ac_controller_status') %}
@@ -525,8 +527,6 @@ views:
       entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version
-    - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_serial_number
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_model
   - type: grid
@@ -927,7 +927,7 @@ views:
         style: slider
     - type: tile
       entity: sensor.price_control_export_price
-      icon: mdi:transmission-tower-import
+      icon: mdi:transmission-tower-export
       vertical: false
       features_position: bottom
       features:
@@ -937,6 +937,10 @@ views:
         rows: 2
     - type: tile
       entity: number.price_control_export_factor
+      visibility:
+      - condition: state
+        entity: switch.price_control_net_metering
+        state: 'off'
       icon: mdi:multiplication
       features_position: bottom
       features:
@@ -944,6 +948,10 @@ views:
         style: slider
     - type: tile
       entity: number.price_control_export_surcharge
+      visibility:
+      - condition: state
+        entity: switch.price_control_net_metering
+        state: 'off'
       icon: mdi:cash-minus
       features_position: bottom
       features:

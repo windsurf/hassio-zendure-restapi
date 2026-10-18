@@ -241,15 +241,18 @@ class PriceControl:
             str(self._settings.get(OPT_PRICE_DECISION)),
             self._settings.get_bool(OPT_NET_METERING),
         )
-        if self._stand is None and self._migrate_net_metering_mode():
-            return  # the write calls this method again
+        if self._stand is None:
+            # Carries on with the migrated settings in the same call: when the
+            # integration is reloaded rather than Home Assistant restarted,
+            # this runs before the update listener exists, so no second call
+            # would follow (v1.6.2).
+            self._migrate_net_metering_mode()
         if self._stand is not None and stand != self._stand:
             # Decision or Net metering switched: the presets of the new
-            # stand, once. Writing them calls this method again, with the
-            # same stand, so it does not repeat.
-            self._stand = stand
+            # stand, once. The write calls this method again through the
+            # update listener, with the same stand, so it does not repeat;
+            # it carries on here regardless, so nothing depends on that call.
             self._settings.set_many(price_presets(*stand))
-            return
         self._stand = stand
         enabled = self._settings.get_bool(OPT_PRICE_CONTROL)
         switched_on = enabled and not self._enabled

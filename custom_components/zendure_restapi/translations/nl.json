@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "SOC-compensatie"
+      },
+      "second_controller": {
+        "name": "Tweede regelaar"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spotprijs excl. btw",
         "import_price": "Importprijs (heel tarief)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Iets anders stuurt {device} ook aan",
+      "description": "Iets anders dan deze integratie verandert de limieten van de accu terwijl deze integratie stuurt — {count} keer of vaker in een kwartier. Twee regelaars werken elkaar tegen. Meestal staat de Zendure-app nog op een eigen energieplan: open de app en kies onder **Energieplan** de **Aangepaste modus**. Anders: zet de andere automation of integratie uit die naar de accu schrijft. Deze melding verdwijnt vanzelf na een uur zonder zulke schrijfacties."
     }
   }
 }

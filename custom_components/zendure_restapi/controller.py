@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.core import callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
@@ -145,6 +146,16 @@ DEVICE_CAP_KEY = {True: "chargeMaxLimit", False: "inverseMaxPower"}
 # only that a value written long ago and later set by something else is
 # credited here, which is the mild direction to be wrong in.
 WRITE_HISTORY = 6
+
+# A second controller: something else moving the limits while this one steers
+# (v1.6.2). The on-device energy manager, left on in the Zendure app, moved
+# outputLimit about every 20 s — some 45 times a quarter of an hour; with the
+# app on Custom Mode the count stayed at zero for weeks. Five in a quarter of
+# an hour separates the two with room to spare. It clears after an hour
+# without any.
+SECOND_CONTROLLER_WINDOW = timedelta(minutes=15)
+SECOND_CONTROLLER_COUNT = 5
+SECOND_CONTROLLER_CLEAR = timedelta(hours=1)
 
 
 # Where the controller currently steering on the grid is registered, in
@@ -244,6 +255,12 @@ class ZendureController:
         self._last_written: dict[str, deque[tuple[int, str]]] = {}
         self._seen_limits: dict[str, int | None] = {}
         self._foreign_writes = 0
+        # Writer of the latest sample, and the foreign writes that count
+        # towards the second-controller warning.
+        self._writer = "none"
+        self._foreign_values: list[int] = []
+        self._foreign_times: deque[datetime] = deque()
+        self.second_controller = False
 
     # ── Wiring ───────────────────────────────────────────────────────────
 
@@ -320,6 +337,9 @@ class ZendureController:
             self._unsub_external()
             self._unsub_external = None
         self._trim_direction = None
+        # A repair left behind would outlive the entry; it comes back within a
+        # quarter of an hour if the second controller is still there.
+        self._issue(create=False)
         if self.trace.active:
             self.coordinator.hass.async_create_task(self.trace.async_close())
 
@@ -363,6 +383,10 @@ class ZendureController:
         mode = self.settings.get(OPT_OPERATION_MODE)
         if mode not in SMART_MODES:
             self._release_grid()
+
+        # Without a meter there are no meter samples to watch the limits on.
+        if self.meter is None:
+            self._watch_writers()
 
 
         # Refresh the readings on every cycle, in every mode. Updating them only
@@ -412,6 +436,7 @@ class ZendureController:
         trim step is about to act on, and the write it makes appears on the
         next row — cause before effect, which is what a trace is read for.
         """
+        self._watch_writers()
         await self._record()
         await self.async_trim()
 
@@ -1498,7 +1523,7 @@ class ZendureController:
             "inputLimit": _as_int(data.get("inputLimit")),
             "outputLimit": _as_int(data.get("outputLimit")),
         }
-        writer = self._classify_writer(limits)
+        writer = self._writer
 
         age = ""
         if self.coordinator.updated_at is not None:
@@ -1608,12 +1633,74 @@ class ZendureController:
             else:
                 sources.add("foreign")
                 self._foreign_writes += 1
+                self._foreign_values.append(value)
 
         if "foreign" in sources:
             return "foreign"
         if sources:
             return sorted(sources)[0]
         return "none"
+
+    def _watch_writers(self) -> None:
+        """Classify who moved the limits, and warn when a second controller does.
+
+        Runs on every sample whether or not the trace records, so the warning
+        does not depend on tracing. Foreign writes count only while this
+        controller steers: in standby it writes nothing and something else
+        steering is the user's choice. A direction the device closes itself at
+        its SOC bound (a limit going to 0 while it reports upper or lower
+        limit) is the device, not a second controller.
+        """
+        data = self.coordinator.data or {}
+        limits = {
+            "inputLimit": _as_int(data.get("inputLimit")),
+            "outputLimit": _as_int(data.get("outputLimit")),
+        }
+        self._foreign_values = []
+        self._writer = self._classify_writer(limits)
+        now = dt_util.utcnow()
+        if self._writer == "foreign" and self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY:
+            at_bound = _as_int(data.get("socLimit")) in (1, 2)
+            if not (at_bound and all(v == 0 for v in self._foreign_values)):
+                self._foreign_times.append(now)
+        self._update_second_controller(now)
+
+    def _update_second_controller(self, now: datetime) -> None:
+        times = self._foreign_times
+        while times and now - times[0] > SECOND_CONTROLLER_CLEAR:
+            times.popleft()
+        recent = sum(1 for t in times if now - t <= SECOND_CONTROLLER_WINDOW)
+        if not self.second_controller and recent >= SECOND_CONTROLLER_COUNT:
+            self.second_controller = True
+            _LOGGER.warning(
+                "Something else is writing the battery limits (%d times in 15 minutes); "
+                "set the Zendure app to Custom Mode under Energy plan, or stop the other automation",
+                recent,
+            )
+            self._issue(create=True)
+        elif self.second_controller and not times:
+            self.second_controller = False
+            self._issue(create=False)
+
+    def _issue(self, create: bool) -> None:
+        """A repair in Home Assistant while a second controller is active."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        hass = self.coordinator.hass
+        if entry is None or hass is None:
+            return
+        issue_id = f"second_controller_{entry.entry_id}"
+        if create:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="second_controller",
+                translation_placeholders={"device": entry.title, "count": str(SECOND_CONTROLLER_COUNT)},
+            )
+        else:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
 
     # ── Writes ───────────────────────────────────────────────────────────
 
@@ -1699,6 +1786,7 @@ class ZendureController:
             # normal operation; the count is what makes an on-device manager
             # visible while the operation mode sits in standby.
             "foreign_writes": self._foreign_writes,
+            "second_controller": self.second_controller,
             "meter_source": self.settings.get(OPT_METER_SOURCE),
             "meter_active": self._source_used,
             "trace_file": self.trace.path,

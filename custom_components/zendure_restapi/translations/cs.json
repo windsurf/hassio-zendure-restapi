@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "Kompenzace SOC"
+      },
+      "second_controller": {
+        "name": "Druhý regulátor"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spotová cena bez DPH",
         "import_price": "Nákupní cena (celý tarif)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "{device} řídí ještě něco jiného",
+      "description": "Něco jiného než tato integrace mění limity baterie, zatímco ji řídí — {count}krát nebo častěji za čtvrt hodiny. Dva regulátory se navzájem ruší. Obvykle je aplikace Zendure stále na vlastním energetickém plánu: otevřete ji a v **Energy plan** zvolte **Custom Mode**. Jinak zastavte jinou automatizaci nebo integraci, která do baterie zapisuje. Tato zpráva zmizí sama po hodině bez takových zápisů."
     }
   }
 }

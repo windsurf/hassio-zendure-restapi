@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "SOC-kompensering"
+      },
+      "second_controller": {
+        "name": "Andra regulator"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spotpris exkl. moms",
         "import_price": "Köppris (hela tariffen)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Något annat styr också {device}",
+      "description": "Något annat än denna integration ändrar batteriets gränser medan den styr — {count} gånger eller mer under en kvart. Två regulatorer tar ut varandra. Oftast står Zendure-appen fortfarande på en egen energiplan: öppna den och välj **Custom Mode** under **Energy plan**. Annars stoppa den andra automatiseringen eller integrationen som skriver till batteriet. Meddelandet försvinner av sig självt efter en timme utan sådana skrivningar."
     }
   }
 }

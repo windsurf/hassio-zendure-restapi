@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "SOC-kompensering"
+      },
+      "second_controller": {
+        "name": "Anden regulator"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spotpris ekskl. moms",
         "import_price": "Købspris (hele tariffen)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Noget andet styrer også {device}",
+      "description": "Noget andet end denne integration ændrer batteriets grænser, mens den styrer — {count} gange eller mere på et kvarter. To regulatorer ophæver hinanden. Som regel står Zendure-appen stadig på sin egen energiplan: åbn den og vælg **Custom Mode** under **Energy plan**. Ellers stop den anden automatisering eller integration, der skriver til batteriet. Beskeden forsvinder af sig selv efter en time uden sådanne skrivninger."
     }
   }
 }

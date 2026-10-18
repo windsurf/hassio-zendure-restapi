@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "SOC-Kompensation"
+      },
+      "second_controller": {
+        "name": "Zweiter Regler"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spotpreis ohne MwSt.",
         "import_price": "Bezugspreis (ganzer Tarif)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Etwas anderes steuert {device} ebenfalls",
+      "description": "Etwas anderes als diese Integration ändert die Grenzen der Batterie, während sie steuert – {count}-mal oder öfter in einer Viertelstunde. Zwei Regler heben sich gegenseitig auf. Meist steht die Zendure-App noch auf einem eigenen Energieplan: App öffnen und unter **Energieplan** den Modus **Benutzerdefinierter Modus** wählen. Sonst die andere Automation oder Integration stoppen, die an die Batterie schreibt. Diese Meldung verschwindet nach einer Stunde ohne solche Schreibzugriffe von selbst."
     }
   }
 }

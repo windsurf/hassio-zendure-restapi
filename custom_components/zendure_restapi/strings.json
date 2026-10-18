@@ -561,6 +561,9 @@
       },
       "soc_comp_switch": {
         "name": "SOC compensation"
+      },
+      "second_controller": {
+        "name": "Second controller"
       }
     },
     "number": {
@@ -683,6 +686,12 @@
         "spot": "Spot price excl. VAT",
         "import_price": "Import price (whole tariff)"
       }
+    }
+  },
+  "issues": {
+    "second_controller": {
+      "title": "Something else is also steering {device}",
+      "description": "Something other than this integration keeps changing the battery limits while it steers — {count} times or more in a quarter of an hour. Two controllers undo each other. Usually the Zendure app is still on an energy plan of its own: open it and choose **Custom Mode** under **Energy plan**. Otherwise stop the other automation or integration that writes to the battery. This message disappears by itself after an hour without such writes."
     }
   }
 }

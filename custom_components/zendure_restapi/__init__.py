@@ -170,6 +170,13 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = price
     await hass.config_entries.async_forward_entry_setups(entry, PRICE_PLATFORMS)
 
+    # The listener first: on a reload Home Assistant is already running, so
+    # _start runs at once, and a setting it writes must reach the listener.
+    async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        price.async_update()
+
+    entry.async_on_unload(entry.add_update_listener(_changed))
+
     # The price comes from another integration: start once everything is up,
     # so a price that is not there yet is not mistaken for none.
     @callback
@@ -178,11 +185,6 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(async_at_started(hass, _start))
     entry.async_on_unload(price.async_stop)
-
-    async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
-        price.async_update()
-
-    entry.async_on_unload(entry.add_update_listener(_changed))
     return True
 
 

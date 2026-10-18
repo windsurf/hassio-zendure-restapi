@@ -85,7 +85,7 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 **1. Enable the local API and switch Zendure's own control off** — under EN 18031 the API is off by default.
 In the Zendure app, two settings:
 - add **HEMS** — this switches the local API on;
-- under **Energy plan**, choose **Custom mode** — otherwise Zendure's own control keeps writing to the battery alongside this integration.
+- under **Energy plan**, choose **Custom Mode** — otherwise Zendure's own control keeps writing to the battery alongside this integration (forget it, and a repair under *Settings → Repairs* reminds you).
 
 Then exit the app. Check it from any browser:
 `http://<battery-ip>/properties/report` should show JSON.
@@ -172,7 +172,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.1:** the three **modes per band** now drive the **day plan** as well, and it plans with them; **presets** that follow *Decision* and *Net metering* — with net metering the day plan lets the battery rest between its blocks; setting up the app names both steps, HEMS and Custom mode. **v1.6.0:** **price control for dynamic tariffs**, with a **day plan** over the Nord Pool prices — separate import and export prices, conversion losses and a margin per kWh; entity names in eleven languages, with entity IDs that stay English; the dashboard **Zendure RestAPI** created for you on request.
+**Latest release – v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart (in v1.6.1 its status could stay `off` until it was switched off and on); the technical reference opens with a list of contents, its chapters in reading order. **v1.6.1:** the three **modes per band** now drive the **day plan** as well, and it plans with them; **presets** that follow *Decision* and *Net metering* — with net metering the day plan lets the battery rest between its blocks; setting up the app names both steps, HEMS and Custom Mode. **v1.6.0:** **price control for dynamic tariffs**, with a **day plan** over the Nord Pool prices — separate import and export prices, conversion losses and a margin per kWh; entity names in eleven languages, with entity IDs that stay English; the dashboard **Zendure RestAPI** created for you on request.
 
 ## More
 

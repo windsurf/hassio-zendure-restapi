@@ -132,6 +132,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         converter="centi",
     ),
     ZendureSensorDescription(
@@ -342,6 +343,7 @@ PACK_SENSORS: tuple[ZendureSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         converter="centi",
     ),
     ZendureSensorDescription(
@@ -357,6 +359,7 @@ PACK_SENSORS: tuple[ZendureSensorDescription, ...] = (
         name="Max cell voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=2,
         converter="centi",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -365,6 +368,7 @@ PACK_SENSORS: tuple[ZendureSensorDescription, ...] = (
         name="Min cell voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=2,
         converter="centi",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),

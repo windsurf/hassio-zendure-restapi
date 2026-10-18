@@ -85,7 +85,7 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 **1. Lokale API einschalten und Zendures eigene Steuerung aus** – unter EN 18031 ist die API standardmäßig aus.
 In der Zendure-App, zwei Einstellungen:
 - **HEMS** hinzufügen – das schaltet die lokale API ein;
-- unter **Energieplan** den **benutzerdefinierten Modus** wählen (englische App: *Custom mode*) – sonst schreibt die eigene Steuerung von Zendure neben dieser Integration weiter an die Batterie.
+- unter **Energieplan** den Modus **Benutzerdefinierter Modus** wählen (englische App: *Custom Mode*) – sonst schreibt die eigene Steuerung von Zendure neben dieser Integration weiter an die Batterie (vergessen? Eine Meldung unter *Einstellungen → Reparaturen* erinnert daran).
 
 Die App danach schließen. Im Browser prüfen:
 `http://<IP-der-Batterie>/properties/report` muss JSON zeigen.
@@ -172,7 +172,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.6.1:** die drei **Modi je Band** steuern jetzt auch den **Tagesplan**, und er plant mit ihnen; **Voreinstellungen**, die *Entscheidung* und *Net metering* folgen; die App-Einrichtung nennt beide Schritte, HEMS und benutzerdefinierter Modus. **v1.6.0:** **Preissteuerung für dynamische Tarife**, mit einem **Tagesplan** über die Nord-Pool-Preise – getrennte Bezugs- und Einspeisepreise, Umwandlungsverluste und eine Marge pro kWh; Entitätsnamen in elf Sprachen, mit Entity-IDs, die englisch bleiben; das Dashboard **Zendure RestAPI** auf Wunsch angelegt.
+**Neueste Version – v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter (in v1.6.1 konnte ihr Status auf `off` stehen bleiben, bis sie aus- und wieder eingeschaltet wurde); die technische Referenz beginnt mit einem Inhaltsverzeichnis, die Kapitel in Lesereihenfolge. **v1.6.1:** die drei **Modi je Band** steuern jetzt auch den **Tagesplan**, und er plant mit ihnen; **Voreinstellungen**, die *Entscheidung* und *Net metering* folgen; die App-Einrichtung nennt beide Schritte, HEMS und Benutzerdefinierter Modus. **v1.6.0:** **Preissteuerung für dynamische Tarife**, mit einem **Tagesplan** über die Nord-Pool-Preise – getrennte Bezugs- und Einspeisepreise, Umwandlungsverluste und eine Marge pro kWh; Entitätsnamen in elf Sprachen, mit Entity-IDs, die englisch bleiben; das Dashboard **Zendure RestAPI** auf Wunsch angelegt.
 
 ## Mehr
 
