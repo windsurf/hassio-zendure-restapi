@@ -175,7 +175,7 @@ The confidence per model is listed under [Supported products](#-supported-produc
 **The device tapers the last percent when charging, not when discharging.** Charging at 3 kW, the
 3000 Mix AC+ holds full power to about 98–99 %, then steps down by itself — roughly 2.8, 1.8 and
 1.2 kW, each held for about a minute — and stops at 100 %, the charge limit still at 3000 W. Seen
-three times in the same pattern (13, 14 and 18 October 2026). Discharging runs at full power down to
+three times in the same pattern. Discharging runs at full power down to
 the lower limit and stops there; no taper. The last percent of a charge therefore takes three to
 four minutes instead of under two; nothing in the integration causes or needs to correct it.
 
@@ -388,7 +388,7 @@ each time from the actual state of charge, and runs outside the event loop.
 
 ### Replays
 
-**Strategies.** 30 days, 16 September to 15 October 2026: a SolarFlow 3000 Mix AC+ on a Dutch
+**Strategies.** 30 consecutive days: a SolarFlow 3000 Mix AC+ on a Dutch
 dynamic contract, quarter prices, the measured house load and solar, net metering. Every strategy on
 the same simulated battery:
 
@@ -647,7 +647,7 @@ it cuts the time between a telegram arriving and being seen from 0–1 s to 0–
 telegram — a moved `tm` — counts as a sample, so the trim loop and the trace still run once a
 second.
 
-**Measured again with both meters read by this integration** (14 October 2026, one hour, one
+**Measured again with both meters read by this integration** (one hour, one
 sample per second, battery in `standby` so the controller did not move the grid; the grid ranged
 from −860 to +1,757 W):
 
@@ -1226,7 +1226,7 @@ energy is valued, so a day that ends fuller is not counted as a loss. Wear is no
 an attribute, as are the energy flows and yesterday's result. The sensor resets at midnight. It
 measures the battery whatever steers it, so another planner can be judged on the same yardstick.
 
-**First measurements**, reference installation, one night on the day plan at 3 kW (17/18 October):
+**First measurements**, reference installation, one night on the day plan at 3 kW:
 
 | | Measured |
 |---|---|

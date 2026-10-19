@@ -1161,9 +1161,9 @@ class ZendureController:
 
         This used to come from a constant of its own and was armed on every
         start, which is why `holding` followed `starting` in 28 of 28
-        observations on 22 August — 17 of them from standstill, where no
-        direction had changed and there was nothing to settle from. Measured on
-        23 August in `manual`, this inverter reverses without a pause: three
+        observations — 17 of them from standstill, where no
+        direction had changed and there was nothing to settle from. Measured in
+        `manual`, this inverter reverses without a pause: three
         reversals against eight same-direction steps of equal amplitude, dead
         time 1 to 5 s against 1 to 6 s, and not one sample resting near zero on
         the way through. The largest, 2000 W charge to 2000 W discharge in one
@@ -1391,7 +1391,7 @@ class ZendureController:
         # second reduction on top of the one already in flight, and drove the
         # limit to zero. The battery then stopped, and the mode loop needed a
         # start plus a settling hold — some thirty seconds of doing nothing,
-        # observed three times on 22 August with an identical signature:
+        # observed three times with an identical signature:
         # 3000 W running, target 167 W, outstanding booked as nought.
         actual = own if not charging else -own
         outstanding = target - actual
@@ -1482,7 +1482,7 @@ class ZendureController:
         direction wound down, or the mode loop's own write settling at a
         target of zero) and nowhere else, and three other branches in this
         same loop already rely on it to decide whether a direction is still
-        theirs to continue. Confirmed on 24 August: a mode switch away from
+        theirs to continue. Confirmed on the device: a mode switch away from
         an active discharge wound it down through the forbidden-direction
         path, `smartMode` stayed at 1 for the following 745 seconds with
         both limits at zero, and no rest was ever entered.

@@ -30,7 +30,7 @@ the energy still stored at the end worth the median import price ahead. The
 first step of the best path is what price control does now; every quarter
 of an hour it plans again with the actual state of charge.
 
-Replayed on 30 days of a real installation (16 Sep - 15 Oct 2026, quarter
+Replayed on 30 consecutive days of a real installation (quarter
 prices, measured house load, net metering), selling at full power earned
 EUR 1.58 a day, the same as the home-energy planner that ran there; the two
 fixed prices earned EUR 0.21. Under the 2027 rules it earned EUR 0.83 a day.

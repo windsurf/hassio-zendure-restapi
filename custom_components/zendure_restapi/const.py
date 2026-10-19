@@ -286,7 +286,7 @@ PLAN_ACTIONS = ("charge", "discharge", "idle")
 # plan trades at full power. With the day plan and net metering the battery
 # rests in between: the plan already moves the energy where the spread is,
 # and holding the grid at zero would spend what it set aside. Replayed on 30
-# days (16 Sep - 15 Oct 2026), EUR per day, net metering / 2027 rules:
+# consecutive days, EUR per day, net metering / 2027 rules:
 #   fixed, in between smart_matching   0.22 / 0.45
 #   fixed, in between standby          0.04 / 0.05
 #   plan,  in between smart_matching   1.67 / 1.02
@@ -479,8 +479,8 @@ TRACE_FLUSH_ROWS = 30
 # with the file length would otherwise fall in the same place in every file.
 # ── Rest state ───────────────────────────────────────────────────────────
 # With both of its own limits at zero, this controller hands the flash-write
-# flag back so the inverter can drop to its low-power state. Measured 23 August
-# on a 3000 Mix AC+ with Backup mode closed: the cells give 30 W with the flag
+# flag back so the inverter can drop to its low-power state. Measured on a
+# 3000 Mix AC+ with Backup mode closed: the cells give 30 W with the flag
 # set and 5 W with it clear. While actually converting the flag changes nothing
 # — 453 W from the cells at 500 W of charging either way — so the saving exists
 # only at a zero limit. Waking costs nothing measurable: the same 500 W order

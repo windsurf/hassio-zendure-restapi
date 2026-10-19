@@ -262,9 +262,9 @@ class ExternalMeter:
 
         # The first telegram after a start proves only that the reader answers,
         # not that its data is current: its stamp has nothing to move away
-        # from yet. Seen on this installation on 13 October 2026 — a YouLess
-        # whose P1 cable had been out since 22 August kept answering with that
-        # morning's `tm` and a fixed `pwr`. Accepted as new, that reading would
+        # from yet. Seen on this installation — a YouLess whose P1 cable had
+        # been out for weeks kept answering with the `tm` of the moment it was
+        # unplugged and a fixed `pwr`. Accepted as new, that reading would
         # have steered the battery for the first seconds after every restart.
         # So a stamped reader counts as live from the first stamp that moves.
         # It is kept for the diagnostics, without an age and without listeners.
