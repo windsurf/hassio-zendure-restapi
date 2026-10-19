@@ -5,8 +5,8 @@
         "title": "Zendure RestAPI",
         "description": "Que voulez-vous ajouter ?",
         "menu_options": {
-          "zendure": "Appareil Zendure (batterie ou compteur P1)",
-          "external_meter": "Compteur P1 externe (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "zendure": "Batterie Zendure — commencez ici (aussi un compteur P1 Zendure)",
+          "external_meter": "Compteur réseau externe (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)",
           "price_control": "Pilotage par le prix (tarifs dynamiques)"
         }
@@ -28,7 +28,7 @@
         }
       },
       "external_meter": {
-        "title": "Compteur P1 externe",
+        "title": "Compteur réseau externe",
         "description": "Un second compteur réseau pour la régulation de la batterie. Le compteur utilisé se choisit avec Meter source sur la batterie (par défaut : auto). HomeWizard : activez d'abord l'API locale dans l'application HomeWizard Energy.",
         "data": {
           "external_meter_type": "Type de compteur",
@@ -88,7 +88,7 @@
         }
       },
       "external": {
-        "title": "Compteur P1 externe",
+        "title": "Compteur réseau externe",
         "data": {
           "host": "Adresse IP",
           "external_meter_interval_ms": "Millisecondes entre les interrogations (100-1000 ; sous 1000 uniquement pour YouLess)"
@@ -550,6 +550,9 @@
       },
       "realized_margin": {
         "name": "Marge réalisée"
+      },
+      "lost_writes": {
+        "name": "Écritures perdues"
       }
     },
     "binary_sensor": {

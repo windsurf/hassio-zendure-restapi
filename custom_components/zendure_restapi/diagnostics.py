@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_EXTERNAL_HOST, CONF_HOST, DOMAIN, INTEGRATION_VERSION
 from .coordinator import ZendureCoordinator
 from .p1meter import ExternalMeter
+from .registry import pack_model
 
 REDACT = {
     "sn", "deviceId", "deviceKey", "productKey", "password", "username",
@@ -92,6 +93,7 @@ async def async_get_config_entry_diagnostics(
         "product": coordinator.product,
         "firmware": coordinator.firmware,
         "pack_count": coordinator.pack_count,
+        "packs": _packs(coordinator.data or {}, coordinator.pack_count),
         "unknown_keys": sorted(coordinator.unknown_keys),
         "flat_data": _redact_flat(coordinator.data or {}),
         "raw_report": async_redact_data(dict(coordinator.raw or {}), REDACT),
@@ -99,6 +101,32 @@ async def async_get_config_entry_diagnostics(
         "external_meter": _external(hass, entry),
         "measured": _measured(hass, entry),
     }
+
+
+def _packs(data: dict[str, Any], count: int) -> list[dict[str, Any]]:
+    """Per pack what the model is read from, without the serial (v1.6.4).
+
+    The pack model follows from the first and fourth character of the serial
+    and from packType. Those two characters name a product line, not a unit,
+    so they go in the report while the serial itself stays redacted.
+    """
+    packs = []
+    for index in range(1, count + 1):
+        serial = data.get(f"pack{index}.sn")
+        pack_type = data.get(f"pack{index}.packType")
+        chars = (
+            f"{serial[0]}..{serial[3]}"
+            if isinstance(serial, str) and len(serial) >= 4 else None
+        )
+        model, kwh = pack_model(serial, pack_type)
+        packs.append({
+            "pack": index,
+            "serial_chars_1_and_4": chars,
+            "packType": pack_type,
+            "model": model,
+            "nominal_kwh": kwh,
+        })
+    return packs
 
 
 def _measured(hass: HomeAssistant, entry: ConfigEntry) -> Any:

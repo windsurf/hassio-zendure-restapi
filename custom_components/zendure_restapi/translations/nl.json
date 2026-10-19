@@ -5,8 +5,8 @@
         "title": "Zendure RestAPI",
         "description": "Wat wil je toevoegen?",
         "menu_options": {
-          "zendure": "Zendure-apparaat (accu of P1-meter)",
-          "external_meter": "Externe P1-meter (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "zendure": "Zendure-accu — begin hier (ook een Zendure P1-meter)",
+          "external_meter": "Externe netmeter (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)",
           "price_control": "Prijssturing (dynamische tarieven)"
         }
@@ -28,7 +28,7 @@
         }
       },
       "external_meter": {
-        "title": "Externe P1-meter",
+        "title": "Externe netmeter",
         "description": "Een tweede netmeter voor de accuregeling. Welke meter gebruikt wordt kies je met Meter source op de accu (standaard: auto). HomeWizard: zet eerst Lokale API aan in de HomeWizard Energy-app.",
         "data": {
           "external_meter_type": "Metertype",
@@ -88,7 +88,7 @@
         }
       },
       "external": {
-        "title": "Externe P1-meter",
+        "title": "Externe netmeter",
         "data": {
           "host": "IP-adres",
           "external_meter_interval_ms": "Milliseconden tussen bevragingen (100-1000; onder 1000 alleen voor YouLess)"
@@ -550,6 +550,9 @@
       },
       "realized_margin": {
         "name": "Gerealiseerde marge"
+      },
+      "lost_writes": {
+        "name": "Verloren schrijfacties"
       }
     },
     "binary_sensor": {

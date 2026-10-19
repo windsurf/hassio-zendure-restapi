@@ -994,6 +994,21 @@ MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
         },
     ),
     ZendureMeasureDescription(
+        key="lost_writes",
+        name="Lost writes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:email-remove-outline",
+        value=lambda m: m.lost_writes,
+        attributes=lambda m: {
+            "checked": m.checked_writes,
+            # A copy: Home Assistant sends the frontend only the attributes that
+            # changed, and a dict changed in place compares equal to itself.
+            "by_gap": {gap: dict(counts) for gap, counts in m.writes.items()},
+            "recent": list(m.lost_recent),
+            "basis": "a limit write the device's next report does not show, by the time since the command before it",
+        },
+    ),
+    ZendureMeasureDescription(
         key="grid_tracking_error",
         name="Grid tracking error",
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -1025,7 +1040,7 @@ class ZendureMeasureSensor(ZendureEntity, SensorEntity):
 
     entity_description: ZendureMeasureDescription
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _unrecorded_attributes = frozenset({"blocks", "cycles", "measurements", "basis"})
+    _unrecorded_attributes = frozenset({"blocks", "cycles", "measurements", "basis", "recent"})
 
     def __init__(self, coordinator, description, device_id, model, controller) -> None:
         super().__init__(coordinator, description, device_id, model)

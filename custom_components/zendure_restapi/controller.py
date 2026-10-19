@@ -278,6 +278,9 @@ class ZendureController:
         # Fed from every battery poll, every meter sample and every limit
         # write; never read by the loops. See measure.py.
         self.measure = BatteryMeasure()
+        # Several properties in one request (v1.6.4); off for good once the
+        # device refuses one.
+        self._multi_write = True
         self.measure.price_source = self._prices
         self._measure_store: Store | None = None
         self._measure_saved_at: datetime | None = None
@@ -400,6 +403,11 @@ class ZendureController:
         if not data:
             return
         try:
+            self.measure.check_echo(
+                self.coordinator.fetch_started_at,
+                {key: data.get(key) for key in ("inputLimit", "outputLimit")},
+                _as_int(data.get("socLimit")),
+            )
             self.measure.battery_sample(self._measure_sample(data))
         except Exception:  # noqa: BLE001 - measuring must never stop the poll
             _LOGGER.exception("Measured diagnostics: sample failed")
@@ -839,9 +847,7 @@ class ZendureController:
         # the polling period. After this command the controller is passive
         # again and whatever the manager does next is its own business.
         if not self._standby_sent:
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
-            await self._write("smartMode", 0, data)
+            await self._write_many([("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)], data)
             self._standby_sent = True
             self._owns_limits = False
             self._last_direction = "none"
@@ -856,8 +862,7 @@ class ZendureController:
         """Follow the manual power setpoint; its sign picks the direction."""
         power = self.settings.get_int(OPT_MANUAL_POWER)
         if power == 0:
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
+            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
             # Both limits are zero, so no direction is running. Leaving the
             # record on the old one kept the rest state from ever firing here.
             self._last_direction = "none"
@@ -1007,8 +1012,7 @@ class ZendureController:
             or (self._last_direction == "charge" and not allow_charge)
         )
         if forbidden:
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
+            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
             self._owns_limits = False
             released = self._last_direction
             self._last_direction = "none"
@@ -1125,8 +1129,7 @@ class ZendureController:
 
     async def _stand_aside(self, data: dict[str, Any], other: "ZendureController") -> None:
         """Stop this battery while another one steers on the grid."""
-        await self._write("inputLimit", 0, data)
-        await self._write("outputLimit", 0, data)
+        await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
         self._owns_limits = False
         self._last_direction = "none"
         self._pending = 0.0
@@ -1205,8 +1208,7 @@ class ZendureController:
             if current in ("none", wanted):
                 return False
 
-            await self._write("inputLimit", 0, data)
-            await self._write("outputLimit", 0, data)
+            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
             self._owns_limits = False
             self._last_direction = "none"
             self._reverse_until = now + timedelta(seconds=delay)
@@ -1871,37 +1873,72 @@ class ZendureController:
         limit: int,
         key: str | None = None,
     ) -> None:
-        """Ensure RAM storage, the right direction, and the limit."""
-        # Frequent limit writes must not hit flash.
-        if data.get("smartMode") != 1:
-            await self._write("smartMode", 1, data)
+        """Ensure RAM storage, the right direction, and the limit, in one request.
 
+        Frequent limit writes must not hit flash, so the flag goes first. The
+        opposite limit is cleared in the same request, so the device never
+        holds a limit that belongs to the direction it just left. Until v1.6.3
+        these were up to four requests in a row (v1.6.4).
+        """
         target_key = key or ("inputLimit" if ac_mode == AC_MODE_CHARGE else "outputLimit")
         other_key = "outputLimit" if target_key == "inputLimit" else "inputLimit"
-
-        # Clear the opposite limit before switching direction, so the device is
-        # never briefly holding a limit that belongs to the direction it just
-        # left.
-        if data.get(other_key) not in (0, "0"):
-            await self._write(other_key, 0, data)
-
-        if data.get("acMode") != ac_mode:
-            await self._write("acMode", ac_mode, data)
-
-        await self._write(target_key, limit, data)
+        await self._write_many(
+            [("smartMode", 1), (other_key, 0), ("acMode", ac_mode), (target_key, limit)], data
+        )
         self._owns_limits = limit > 0
+
+    @staticmethod
+    def _holds(data: dict[str, Any], key: str, value: Any) -> bool:
+        current = data.get(key)
+        try:
+            return current is not None and int(current) == int(value)
+        except (TypeError, ValueError):
+            return False
 
     async def _write(self, key: str, value: Any, data: dict[str, Any]) -> None:
         """Write one property, skipping no-ops."""
-        current = data.get(key)
-        try:
-            if current is not None and int(current) == int(value):
-                _LOGGER.debug("skip %s=%s, device already holds it", key, value)
-                return
-        except (TypeError, ValueError):
-            pass
-        _LOGGER.debug("write %s: %s -> %s", key, current, value)
+        if self._holds(data, key, value):
+            _LOGGER.debug("skip %s=%s, device already holds it", key, value)
+            return
+        _LOGGER.debug("write %s: %s -> %s", key, data.get(key), value)
         await self.coordinator.api.async_write_property(key, value)
+        self.measure.on_command(dt_util.utcnow(), key, _as_int(value))
+        self._written(key, value, data)
+
+    async def _write_many(self, items: list[tuple[str, Any]], data: dict[str, Any]) -> None:
+        """Write properties that belong together in one request, skipping no-ops.
+
+        One left over goes the single way. Should the device refuse a request
+        with several properties, they go one at a time from then on, as they
+        did until v1.6.3.
+        """
+        changes = {key: value for key, value in items if not self._holds(data, key, value)}
+        if not changes:
+            return
+        if len(changes) == 1 or not self._multi_write:
+            for key, value in changes.items():
+                await self._write(key, value, data)
+            return
+        _LOGGER.debug("write %s", changes)
+        try:
+            await self.coordinator.api.async_write_properties(changes)
+        except ZendureApiError as err:
+            if "connection failed" in str(err) or "timeout" in str(err):
+                raise
+            _LOGGER.warning(
+                "The device refused several properties in one write (%s); writing them one at a time from now on",
+                err,
+            )
+            self._multi_write = False
+            for key, value in changes.items():
+                await self._write(key, value, data)
+            return
+        self.measure.on_request(dt_util.utcnow(), {k: _as_int(v) for k, v in changes.items()})
+        for key, value in changes.items():
+            self._written(key, value, data)
+
+    def _written(self, key: str, value: Any, data: dict[str, Any]) -> None:
+        """Bookkeeping after a write the device accepted."""
         data[key] = value
         try:
             written = int(value)

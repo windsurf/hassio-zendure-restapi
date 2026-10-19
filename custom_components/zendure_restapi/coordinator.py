@@ -29,6 +29,11 @@ _PROPERTY_CONTAINERS = ("properties", "data", "payload")
 # Envelope keys that may hold the list of battery packs.
 _PACK_CONTAINERS = ("packData", "packInfo", "batteryList", "packs")
 
+# Keys whose spelling differs per model, mapped to the spelling the entities
+# use (v1.6.4). The 3000 Mix AC+ reports `oldMode`, the 2400 AC `OldMode`.
+# The raw report in the diagnostics keeps the device's own spelling.
+_KEY_ALIASES = {"OldMode": "oldMode"}
+
 
 class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Polls one device and exposes a flat key/value map.
@@ -147,6 +152,10 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         flat[key] = value
 
         flat.update(self._flatten_packs(payload))
+        for alias, key in _KEY_ALIASES.items():
+            if alias in flat:
+                value = flat.pop(alias)
+                flat.setdefault(key, value)
         return flat
 
     def _flatten_packs(self, payload: dict[str, Any]) -> dict[str, Any]:

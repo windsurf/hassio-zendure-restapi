@@ -256,9 +256,9 @@
               "unit": "%",
               "visibility": [
                 {
-                  "condition": "state",
+                  "condition": "numeric_state",
                   "entity": "sensor.zendure_solarflow_3000_mix_ac_charge_efficiency",
-                  "state_not": "unknown"
+                  "above": 0
                 }
               ],
               "grid_options": {
@@ -280,9 +280,9 @@
               "unit": "%",
               "visibility": [
                 {
-                  "condition": "state",
+                  "condition": "numeric_state",
                   "entity": "sensor.zendure_solarflow_3000_mix_ac_discharge_efficiency",
-                  "state_not": "unknown"
+                  "above": 0
                 }
               ],
               "grid_options": {
@@ -1691,6 +1691,21 @@
                 {
                   "type": "trend-graph",
                   "hours_to_show": 24
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_lost_writes",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "trend-graph",
+                  "hours_to_show": 168
                 }
               ],
               "grid_options": {

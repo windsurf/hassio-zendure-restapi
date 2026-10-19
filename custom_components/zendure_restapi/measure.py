@@ -77,6 +77,18 @@ RESPONSE_TIMEOUT = 60
 RESPONSE_KEEP = 20
 
 TRACKING_MAX_WEIGHT = 10    # seconds one meter sample may stand for
+
+# Lost writes (v1.6.4). Zendure's own integration measured that a SolarFlow takes one command
+# per ~1.3 s and drops one that follows sooner: 25 % lost at 1 Hz, none at 2 s.
+# A limit write is checked against the device's own report once that report
+# was requested at least ECHO_SETTLE after the write and no newer write to the
+# same limit came in between. A write the controller repeats with the same
+# value counts as lost too: it only repeats one when a report showed something
+# else, and that repeat usually comes before the check could. Each is filed by
+# the time since the command before it, of any property.
+ECHO_SETTLE = 2.0
+GAP_BINS = ((1.3, "under_1_3_s"), (2.0, "1_3_to_2_s"), (float("inf"), "2_s_or_more"))
+LOST_KEEP = 20
 HISTOGRAM_HOURS = 24
 HISTOGRAM_TOP = 2000        # W; larger values go in the top bin
 
@@ -306,6 +318,10 @@ class BatteryMeasure:
     tracking: TimeHistogram = field(default_factory=TimeHistogram)
     responses: deque = field(default_factory=lambda: deque(maxlen=RESPONSE_KEEP))
     response_timeouts: int = 0
+    writes: dict[str, dict[str, int]] = field(
+        default_factory=lambda: {name: {"checked": 0, "lost": 0} for _, name in GAP_BINS}
+    )
+    lost_recent: deque = field(default_factory=lambda: deque(maxlen=LOST_KEEP))
 
     margin: MarginDay | None = None
     margin_yesterday: dict[str, Any] | None = None
@@ -318,6 +334,8 @@ class BatteryMeasure:
     _rest_since: datetime | None = None
     _pending: dict[str, Any] | None = None
     _last_grid_at: datetime | None = None
+    _last_command_at: datetime | None = None
+    _echo: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # ── Battery polls ────────────────────────────────────────────────
 
@@ -612,6 +630,73 @@ class BatteryMeasure:
     def tracking_error(self) -> int | None:
         return self.tracking.quantile(0.5)
 
+    # ── Lost writes ──────────────────────────────────────────────────
+
+    def on_command(self, now: datetime, key: str, value: Any) -> None:
+        """One property the controller wrote in a request of its own."""
+        self.on_request(now, {key: value})
+
+    def on_request(self, now: datetime, written: dict[str, Any]) -> None:
+        """One request, with every property in it; a limit is kept to check
+        against the report. The gap runs from the request before it."""
+        previous, self._last_command_at = self._last_command_at, now
+        gap = (now - previous).total_seconds() if previous is not None else None
+        for key, value in written.items():
+            if key in ("inputLimit", "outputLimit"):
+                self._pending_limit(now, key, value, gap)
+
+    def _pending_limit(self, now: datetime, key: str, value: Any, gap: float | None) -> None:
+        pending = self._echo.get(key)
+        if pending is not None and pending["value"] == value:
+            # The same limit again: the controller only repeats a value when a
+            # fresh report showed something else, so the device did not keep
+            # it. Unless the device closed that direction at its SOC bound.
+            soc_limit = self._last.soc_limit if self._last is not None else None
+            closed = (key == "inputLimit" and soc_limit == 1) or (key == "outputLimit" and soc_limit == 2)
+            if not closed:
+                self._file(key, pending, reported=None, lost=True)
+        self._echo[key] = {"at": now, "value": value, "gap": gap}
+
+    def _file(self, key: str, pending: dict[str, Any], reported: Any, lost: bool) -> None:
+        gap = pending["gap"]
+        name = GAP_BINS[-1][1] if gap is None else next(n for limit, n in GAP_BINS if gap < limit)
+        counts = self.writes.setdefault(name, {"checked": 0, "lost": 0})
+        counts["checked"] += 1
+        if lost:
+            counts["lost"] += 1
+            self.lost_recent.append({
+                "at": _iso(pending["at"]), "key": key, "written": pending["value"],
+                "reported": reported, "gap_s": None if gap is None else round(gap, 2),
+            })
+
+    def check_echo(self, fetched_at: datetime | None, reported: dict[str, Any], soc_limit: int | None) -> None:
+        """A fresh report: did the device keep the last limit written before it?"""
+        if fetched_at is None:
+            return
+        for key, pending in list(self._echo.items()):
+            if (fetched_at - pending["at"]).total_seconds() < ECHO_SETTLE:
+                continue
+            del self._echo[key]
+            got = reported.get(key)
+            try:
+                got = int(float(got))
+            except (TypeError, ValueError):
+                continue
+            closed = got == 0 and (
+                (key == "inputLimit" and soc_limit == 1) or (key == "outputLimit" and soc_limit == 2)
+            )
+            if closed:
+                continue  # the device closed that direction at its SOC bound itself
+            self._file(key, pending, reported=got, lost=got != pending["value"])
+
+    @property
+    def lost_writes(self) -> int:
+        return sum(c["lost"] for c in self.writes.values())
+
+    @property
+    def checked_writes(self) -> int:
+        return sum(c["checked"] for c in self.writes.values())
+
     # ── Realized margin ──────────────────────────────────────────────
 
     def _margin(self, a: Sample, b: Sample, seconds, ac_in, ac_out, dc_in, dc_out) -> None:
@@ -675,6 +760,8 @@ class BatteryMeasure:
             "tracking": self.tracking.to_dict(),
             "responses": list(self.responses),
             "response_timeouts": self.response_timeouts,
+            "writes": self.writes,
+            "lost_recent": list(self.lost_recent),
             "margin": self.margin.to_dict() if self.margin else None,
             "margin_yesterday": self.margin_yesterday,
         }
@@ -711,6 +798,15 @@ class BatteryMeasure:
             self.response_timeouts = int(data.get("response_timeouts") or 0)
         except (TypeError, ValueError):
             self.response_timeouts = 0
+        writes = data.get("writes")
+        if isinstance(writes, dict):
+            for _, name in GAP_BINS:
+                counts = writes.get(name)
+                if isinstance(counts, dict):
+                    self.writes[name] = {
+                        "checked": int(counts.get("checked") or 0), "lost": int(counts.get("lost") or 0)
+                    }
+        self.lost_recent = deque(_dicts(data.get("lost_recent")), maxlen=LOST_KEEP)
         self.margin = MarginDay.from_dict(data.get("margin"))
         yesterday = data.get("margin_yesterday")
         self.margin_yesterday = yesterday if isinstance(yesterday, dict) else None
@@ -733,6 +829,9 @@ class BatteryMeasure:
             "grid_tracking_error_w": self.tracking_error,
             "grid_tracking_p90_w": self.tracking.quantile(0.9),
             "grid_tracking_hours": round(self.tracking.seconds() / 3600, 1),
+            "lost_writes": self.lost_writes,
+            "writes_by_gap": self.writes,
+            "lost_recent": list(self.lost_recent),
             "realized_margin": self.margin.summary() if self.margin else None,
             "realized_margin_yesterday": self.margin_yesterday,
             "totals_kwh": {

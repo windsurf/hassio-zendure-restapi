@@ -139,7 +139,7 @@ Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custo
 
 Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
-Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. A HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM is an entry of its own too — **Add integration → Zendure RestAPI → External P1 meter** — and is linked the same way; see [An external P1 meter](#an-external-p1-meter).
+Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. A HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM is an entry of its own too — **Add integration → Zendure RestAPI → External grid meter** — and is linked the same way; see [An external P1 meter](#an-external-p1-meter).
 
 The polling interval is configurable from 1 to 60 seconds under **Configure**. The default is 10 seconds, and it doubles as the control interval.
 
@@ -561,7 +561,7 @@ configured and the meter source on `auto` (the default), the smart modes run on 
 
 ### Adding it
 
-**Settings → Devices & Services → Add integration → Zendure RestAPI → External P1 meter**: choose
+**Settings → Devices & Services → Add integration → Zendure RestAPI → External grid meter**: choose
 the type, enter the IP address and, for a YouLess, the poll interval. The address is tried once
 before the entry is saved, so a wrong address or a wrong type is caught on the form. A HomeWizard
 P1 meter is **discovered** by itself: it is offered under *Discovered* as soon as its local API is
@@ -1211,6 +1211,7 @@ diagnostics download carries them with the blocks and cycles they rest on.
 | Standby draw | median DC draw at rest (both limits zero, AC below 10 W, after 30 s), last 24 hours, by time | at rest | Backup mode: a repair appears above 15 W over at least an hour of rest |
 | Response time | from a limit write of 200 W or more until the grid has moved 90 % of that step, median of the last 20; start and stop separately as attributes | every step; without a meter on the battery poll, which is only as fine as the poll interval | *Direction change delay*, buffers |
 | Grid tracking error | median distance between the grid and the buffer while a smart mode balances, last 24 hours, by time | only while the battery can still follow: not at its ceiling, not with the limit at zero | *Trim strength*, thresholds |
+| Lost writes | limit writes the device did not keep, with the checked and lost counts by the time since the command before it: under 1.3 s, 1.3 to 2 s, 2 s or more | every limit write the next report can confirm; a direction the device closes at its SOC bound does not count | how fast the controller may write (see below) |
 | Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
 
 **Blocks and cycles.** A block is a stretch of charging or discharging; a pause of up to two
@@ -1247,6 +1248,32 @@ a few.
 The two older sensors *Charge efficiency* and *Discharge efficiency* stay: they show the converter
 at one moment, and read unknown at rest.
 
+### How fast the device follows
+
+Measured on the grid meter (1 s), not on the battery report: that one is polled every ten seconds
+and measures the poll.
+
+| From a limit write | 3000 Mix AC+, zenSDK, this integration | SolarFlow fleet, Zendure's own integration (2400, 1600, 800) |
+|---|---|---|
+| Power starts from standstill | 7–9 s, median **8 s** | 6–15 s, median **8.4 s** |
+| A stop lands | 2–5 s, median **3 s** | **2.3 s** |
+| Setpoint in the device | — | 1.8 s (1.1–2.4) |
+| Ramp | — | ~200 W/s |
+
+Two independent measurements on different models that agree. Zendure's own integration also reports that a
+device takes one command per ~1.3 s and drops one that follows sooner: 25 % lost at one command a
+second, none at one every two seconds. The trim loop here can write once a second, so
+**Lost writes** checks it on this installation: every limit write is compared with the device's
+next report and filed by the time since the request before it. A write the controller has to
+repeat with the same value counts as lost too, because it only repeats one when a report showed
+something else. Run a smart mode for a few hours, where the trim loop writes most, and the
+*under 1.3 s* counts answer the question for your model.
+
+Until v1.6.3 a direction change went out as up to four requests a few milliseconds apart, so its
+limit always followed another command within 1.3 s. Since v1.6.4 it is one request. Measured
+against a simulated device that drops such a follower: four lost limits in one charge and one
+discharge with v1.6.3's writes, none with one request.
+
 ---
 
 ## Supported Entities
@@ -1257,7 +1284,7 @@ at one moment, and read unknown at rest.
 | **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
-| **Measured** | 9 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error |
+| **Measured** | 10 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes |
 | **Binary sensor** | 13 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow, Second controller · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
@@ -1504,6 +1531,53 @@ to average out the sampling offset between the AC and cell readings.
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.4 — A direction change in one write, lost writes, and how fast the device follows
+
+The control loop decides as before; it writes a direction change in one request instead of up to
+four. After updating, restart Home Assistant.
+
+- **A direction change in one write.** Starting, reversing or stopping the battery set the
+  flash flag, the other limit, `acMode` and the limit in up to four requests in a row, a few
+  milliseconds apart; a stop wrote both limits in two. They now go in one request, the way
+  Zendure's own integration drives every SolarFlow. A device that drops a command following the
+  previous one within ~1.3 s can no longer lose the limit of a direction change that way. Should
+  a device refuse several properties in one request, the integration writes them one at a time
+  from then on, as before, and says so in the log. Trim steps were always one property and stay so.
+- **Lost writes.** A new measured diagnostic checks every limit write against the device's next
+  report and counts the ones it did not keep, by the time since the command before it (under
+  1.3 s, 1.3 to 2 s, 2 s or more). Zendure's own integration measured that a SolarFlow drops a command that
+  follows the previous one within ~1.3 s; this tells whether that holds for your model and how
+  often the trim loop runs into it. In the dashboard under *Measured → Control*.
+- **Documented:** how fast the device follows a limit write, measured on the grid meter: power
+  starts after about 8 s from standstill and stops after about 3 s, in line with the figures of Zendure's own
+  integration (8.4 s and 2.3 s). See [How fast the device follows](#how-fast-the-device-follows).
+- **Clearer setup menu.** The first option read *Zendure device (battery or P1 meter)*, and a
+  user with a Shelly took the second one, *External P1 meter*, and never added the battery. It
+  now reads *Zendure battery — start here (also a Zendure P1 meter)*, and the second one
+  *External grid meter (HomeWizard, YouLess, EcoTracker, Shelly)*, in all eleven languages. The
+  device keeps its name *External P1 meter* and its entity IDs.
+- **Tile and gauge names without the device name.** The dashboard's tiles and gauges now carry
+  `name: type: entity`, so they read *Battery 1 State of charge* instead of *Zendure SolarFlow 2400
+  AC Battery 1 State of charge*, cut off after a few words. The label still comes from the
+  integration, in your language. Needs Home Assistant 2025.11 or later; on an older release the
+  automatic dashboard leaves the names as they were. An existing dashboard is not changed: delete
+  it and tick *Create the Zendure RestAPI dashboard* under **Configure** to get the new one.
+- **A section per battery pack.** The dashboard had one section, *Battery 1*, which is all the
+  3000 Mix AC+ has. A device with more packs, like a 2400 AC with two, now gets *Battery 2* and
+  further sections, and a *Battery n Power* tile next to *Battery 1 Power*, for every pack with
+  entities. An existing dashboard is not changed: delete it and tick *Create the Zendure RestAPI
+  dashboard* under **Configure**.
+- **The dashboard fits other models better.** Tested on a 2400 AC: the automatic dashboard now
+  leaves out entities that are disabled (such as the pack firmware), finds the external meter
+  under its real entity ids (another language or a renamed device gives other ids than
+  `sensor.external_p1_meter_*`), and hides the charge and discharge efficiency gauges until they
+  hold a number instead of showing *not numeric*.
+- **2400 AC: Legacy mode.** The 2400 AC reports `OldMode` where the 3000 Mix AC+ reports
+  `oldMode`, so *Legacy mode* stayed empty on it. Both spellings now fill the same sensor.
+- **Diagnostics name the pack model.** The download lists per pack the first and fourth character
+  of the serial, `packType`, and the model and capacity read from them. The serial itself stays
+  redacted; those two characters name a product line, not a unit.
 
 ### v1.6.3 — Measured diagnostics
 

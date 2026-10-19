@@ -56,7 +56,7 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Shelly Pro 3EM** (klemmen op de netaansluiting) | ✅ Getest door een gebruiker als netmeter voor de regeling, één meting per seconde |
 | **Elke vermogenssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Nieuw in v1.5.3 — voor dashboard en vergelijking; regelt alleen als hij elke seconde ververst |
 
-In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
+In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
 HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 *Niet gelieerd aan HomeWizard, YouLess, everHome of Shelly; dit zijn compatibiliteitsnotities.*
@@ -100,9 +100,9 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 [![Integratie toevoegen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Voeg je apparaten toe**
-Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
+Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-accu** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
-**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
+**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
 ---
 
@@ -177,7 +177,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart. **v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen.
+**Pre-release – v1.6.4** (zet in HACS *Pre-release* aan voor deze repository): een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
 
 ## Meer
 

@@ -5,8 +5,8 @@
         "title": "Zendure RestAPI",
         "description": "Hvad vil du tilføje?",
         "menu_options": {
-          "zendure": "Zendure-enhed (batteri eller P1-måler)",
-          "external_meter": "Ekstern P1-måler (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "zendure": "Zendure-batteri — start her (også en Zendure P1-måler)",
+          "external_meter": "Ekstern netmåler (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant-sensor som ekstern måler (Zonneplan, DSMR, …)",
           "price_control": "Prisstyring (dynamiske tariffer)"
         }
@@ -28,7 +28,7 @@
         }
       },
       "external_meter": {
-        "title": "Ekstern P1-måler",
+        "title": "Ekstern netmåler",
         "description": "En anden netmåler til batteristyringen. Hvilken måler der bruges, vælges med Meter source på batteriet (standard: auto). HomeWizard: slå først Lokal API til i HomeWizard Energy-appen.",
         "data": {
           "external_meter_type": "Målertype",
@@ -88,7 +88,7 @@
         }
       },
       "external": {
-        "title": "Ekstern P1-måler",
+        "title": "Ekstern netmåler",
         "data": {
           "host": "IP-adresse",
           "external_meter_interval_ms": "Millisekunder mellem aflæsninger (100-1000; under 1000 kun for YouLess)"
@@ -550,6 +550,9 @@
       },
       "realized_margin": {
         "name": "Realiseret margin"
+      },
+      "lost_writes": {
+        "name": "Tabte skrivninger"
       }
     },
     "binary_sensor": {

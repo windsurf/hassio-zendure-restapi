@@ -123,13 +123,13 @@ class ZendureEntity(TranslatedName, CoordinatorEntity[ZendureCoordinator]):
 # example then miss them. A new entity is therefore given the prefix its
 # device's existing entities have; on a fresh installation there are none yet
 # and Home Assistant chooses as usual. Existing entity ids are never changed,
-# except the ones v1.6.2 and v1.6.3 created with such an area prefix.
+# except the ones v1.6.2 to v1.6.4 created with such an area prefix.
 
 ALIGN_KEYS = (
     "second_controller",
     "measured_charge_efficiency", "measured_discharge_efficiency",
     "round_trip_ac", "round_trip_dc", "usable_capacity", "full_cycles",
-    "standby_draw", "response_time", "grid_tracking_error",
+    "standby_draw", "response_time", "grid_tracking_error", "lost_writes",
 )
 
 

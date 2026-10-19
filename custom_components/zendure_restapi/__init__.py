@@ -435,9 +435,26 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
             ceiling = int((coordinator.data or {}).get("inverseMaxPower") or 3000)
         except (TypeError, ValueError):
             ceiling = 3000
+        # The external meter's real entity ids, read off their unique ids: the
+        # template's sensor.external_p1_meter_* is only right for an English
+        # installation that kept the default device name (v1.6.4).
+        external_ids: dict[str, str] = {}
+        ext_ids = [k for k, m in hass.data.get(DOMAIN, {}).items() if isinstance(m, ExternalMeter)]
+        if ext_ids:
+            ext_id = ext_ids[0]
+            if ext_id:
+                for key in ("power", "status", "telegram_age", "energy_imported", "energy_exported"):
+                    found = registry.async_get_entity_id("sensor", DOMAIN, f"{ext_id}_{key}")
+                    if found:
+                        external_ids[key] = found
         result = await async_create_dashboard(
             hass,
-            known={e.entity_id for e in registry.entities.values() if e.platform == DOMAIN},
+            # Disabled entities have no state; a card for one says "not found".
+            known={
+                e.entity_id for e in registry.entities.values()
+                if e.platform == DOMAIN and e.disabled_by is None
+            },
+            external_ids=external_ids,
             battery=battery,
             meter=meter,
             external=bool(external_meters(hass)),

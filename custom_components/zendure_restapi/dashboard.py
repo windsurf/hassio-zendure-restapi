@@ -17,13 +17,16 @@ up the battery never depends on it.
 
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 from homeassistant.components import persistent_notification
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +57,18 @@ P1_TO_EXTERNAL = {
     "energy_exported": "energy_exported",
 }
 
+# Tiles and gauges show the entity name only, not "<device> <entity>" (v1.6.4).
+# Card naming objects arrived in Home Assistant 2025.11; on an older release
+# the cards keep the friendly name, as before.
+NAME_ENTITY = {"type": "entity"}
+NAMED_CARDS = ("tile", "gauge")
+CARD_NAMING = (MAJOR_VERSION, MINOR_VERSION) >= (2025, 11)
+
+# The template has one battery pack; a device with more gets a section per pack
+# (v1.6.4). Pack entities are `<battery>battery_<n>_<name>`.
+PACK_HEADING = "Battery 1"
+PACK_TEMPLATE = "battery_1_"
+
 CREATED = "created"
 EXISTS = "exists"
 FAILED = "failed"
@@ -69,6 +84,8 @@ def build_config(
     ceiling: int,
     price: str | None = None,
     custom_cards: set[str] | None = None,
+    card_naming: bool = True,
+    external_ids: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """The template, fitted to the devices of this installation.
 
@@ -77,7 +94,12 @@ def build_config(
     the battery's Price Control (None when there is none), `external` whether
     an external meter is set up. `custom_cards` holds the custom card types
     installed as dashboard resources; a custom card that is not installed is
-    left out. None keeps them all.
+    left out. None keeps them all. `card_naming` gives every tile and gauge
+    without a name of its own the entity name only; off for releases before
+    2025.11, which do not know the naming object. `external_ids` maps the
+    external meter's sensor keys (power, status, ...) to its real entity ids;
+    a user's language or a renamed device can give it other ids than the
+    template's `sensor.external_p1_meter_*` (v1.6.4).
     """
     text = json.dumps(template)
     if price and price != TEMPLATE_PRICE:
@@ -91,12 +113,16 @@ def build_config(
     elif external:
         for old, new in P1_TO_EXTERNAL.items():
             text = text.replace(f"sensor.{TEMPLATE_P1}{old}", f"sensor.{EXTERNAL}{new}")
+    external_ids = external_ids or {}
+    for key, entity_id in external_ids.items():
+        text = text.replace(f'"sensor.{EXTERNAL}{key}"', f'"{entity_id}"')
     config = json.loads(text)
+    _add_packs(config, battery, known)
 
     # The external meter's own section is hidden by its visibility condition
     # and is left alone; only the grid figures swapped in above must exist.
     swapped = (
-        {f"sensor.{EXTERNAL}{new}" for new in P1_TO_EXTERNAL.values()}
+        {external_ids.get(new, f"sensor.{EXTERNAL}{new}") for new in P1_TO_EXTERNAL.values()}
         if not meter and external
         else set()
     )
@@ -150,6 +176,8 @@ def build_config(
                     ]
                     if not card["entities"]:
                         continue
+                if card_naming and card.get("type") in NAMED_CARDS and "name" not in card:
+                    card["name"] = dict(NAME_ENTITY)
                 if card.get("type") == "gauge":
                     if card.get("max") == TEMPLATE_CEILING:
                         card["max"] = ceiling
@@ -163,6 +191,46 @@ def build_config(
                 sections.append(section)
         view["sections"] = sections
     return config
+
+
+def _pack_numbers(battery: str, known: set[str]) -> list[int]:
+    """Pack numbers above 1 that have entities in the registry."""
+    pattern = re.compile(rf"^[a-z_]+\.{re.escape(battery)}battery_(\d+)_")
+    found = {int(m.group(1)) for e in known if (m := pattern.match(e))}
+    return sorted(n for n in found if n > 1)
+
+
+def _for_pack(card: dict[str, Any], number: int) -> dict[str, Any]:
+    text = json.dumps(card).replace(PACK_TEMPLATE, f"battery_{number}_")
+    return json.loads(text.replace(f'"{PACK_HEADING}"', f'"Battery {number}"'))
+
+
+def _add_packs(config: dict[str, Any], battery: str, known: set[str]) -> None:
+    """A section per extra battery pack, and its tile next to pack 1's elsewhere.
+
+    The section *Battery 1* is copied once per further pack, right after the
+    last one; a pack-1 tile in another section (Power flow) gets its siblings
+    right after it. The usual pass that drops missing entities runs after this.
+    """
+    numbers = _pack_numbers(battery, known)
+    if not numbers:
+        return
+    for view in config.get("views", []):
+        sections = []
+        for section in view.get("sections", []):
+            headings = {c.get("heading") for c in section.get("cards", [])}
+            if PACK_HEADING in headings:
+                sections.append(section)
+                sections.extend(_for_pack(copy.deepcopy(section), n) for n in numbers)
+                continue
+            cards = []
+            for card in section.get("cards", []):
+                cards.append(card)
+                if PACK_TEMPLATE in str(card.get("entity", "")):
+                    cards.extend(_for_pack(copy.deepcopy(card), n) for n in numbers)
+            section["cards"] = cards
+            sections.append(section)
+        view["sections"] = sections
 
 
 def _has_entity(card: dict[str, Any]) -> bool:
@@ -220,6 +288,7 @@ async def async_create_dashboard(
     external: bool,
     ceiling: int,
     price: str | None = None,
+    external_ids: dict[str, str] | None = None,
 ) -> str:
     """Create the dashboard unless one exists at its address."""
     try:
@@ -236,6 +305,8 @@ async def async_create_dashboard(
             template, known=known, battery=battery, meter=meter,
             external=external, ceiling=ceiling, price=price,
             custom_cards=await _custom_cards(hass),
+            card_naming=CARD_NAMING,
+            external_ids=external_ids,
         )
         await collection.async_create_item(
             {

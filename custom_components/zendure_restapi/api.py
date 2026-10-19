@@ -100,9 +100,10 @@ class ZendureLocalApi:
     async def async_write_property(self, key: str, value: Any) -> dict[str, Any]:
         """Write exactly one property.
 
-        One property per request is deliberate: a body that silently truncates
-        at the 512 byte receive limit is effectively undebuggable, and a
-        partially applied multi-property write is worse than a failed one.
+        One property per request for a write that stands on its own: a body
+        that silently truncates at the 512 byte receive limit is effectively
+        undebuggable. Writes that belong together go through
+        async_write_properties.
         """
         if not self._sn:
             raise ZendureApiError("serial number unknown, cannot write")
@@ -115,6 +116,30 @@ class ZendureLocalApi:
             )
 
         _LOGGER.debug("Write %s=%s to %s", key, value, self.base_url)
+        return await self._request("POST", PATH_WRITE, payload)
+
+    async def async_write_properties(self, properties: dict[str, Any]) -> dict[str, Any]:
+        """Write several properties that belong together in one request (v1.6.4).
+
+        Used only for writes that make one change together: a direction
+        change (flash flag, the other limit, acMode, the limit) or a stop
+        (both limits). zenSDK takes several properties in one body; Zendure's
+        own integration drives every SolarFlow that way. The body is checked
+        against the 512 byte receive limit like a single write, so it can
+        never be truncated, and the caller falls back to one property per
+        request if the device refuses it.
+        """
+        if not self._sn:
+            raise ZendureApiError("serial number unknown, cannot write")
+
+        payload = {"sn": self._sn, "properties": dict(properties)}
+        encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        if len(encoded) > MAX_WRITE_BODY_BYTES:
+            raise ZendureBodyTooLarge(
+                f"write body is {len(encoded)} bytes, limit is {MAX_WRITE_BODY_BYTES}"
+            )
+
+        _LOGGER.debug("Write %s to %s", properties, self.base_url)
         return await self._request("POST", PATH_WRITE, payload)
 
     async def async_rpc(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:

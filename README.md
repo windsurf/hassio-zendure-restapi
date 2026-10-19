@@ -56,7 +56,7 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 | **Shelly Pro 3EM** (clamps on the grid connection) | ✅ Tested by a user as grid meter for the control loop, one reading per second |
 | **Any power sensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 New in v1.5.3 — for the dashboard and comparison; steers only if it updates every second |
 
-Set it up in one go: **Add integration → Zendure RestAPI → External P1 meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
+Set it up in one go: **Add integration → Zendure RestAPI → External grid meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
 HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 
 *Not affiliated with HomeWizard, YouLess, everHome or Shelly; these are compatibility notes.*
@@ -100,9 +100,9 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 [![Add integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Add your devices**
-Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure device** and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
+Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure battery** (the first option) and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
-**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External P1 meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
+**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
@@ -177,7 +177,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart. **v1.6.1:** the three **modes per band** now drive the **day plan** as well, and it plans with them; **presets** that follow *Decision* and *Net metering*.
+**Pre-release – v1.6.4** (switch on *Pre-release* for this repository in HACS to get it): a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
 
 ## More
 

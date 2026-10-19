@@ -56,7 +56,7 @@ Die Batterie muss wissen, was dein Haus aus dem Netz bezieht oder einspeist. Nut
 | **Shelly Pro 3EM** (Klemmen am Netzanschluss) | ✅ Von einem Nutzer als Netzzähler für die Regelung getestet, ein Messwert pro Sekunde |
 | **Jeder Leistungssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Neu in v1.5.3 – für Dashboard und Vergleich; regelt nur, wenn er jede Sekunde aktualisiert |
 
-In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer P1-Zähler**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort.
+In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort.
 HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 
 *Keine Verbindung zu HomeWizard, YouLess, everHome oder Shelly; dies sind Kompatibilitätshinweise.*
@@ -100,9 +100,9 @@ Oder: HACS → Drei-Punkte-Menü → Benutzerdefinierte Repositories → `https:
 [![Integration hinzufügen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Geräte hinzufügen**
-Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Gerät** wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
+Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Batterie** (die erste Option) wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
 
-**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer P1-Zähler**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
+**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
 
 ---
 
@@ -177,7 +177,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter. **v1.6.1:** die drei **Modi je Band** steuern jetzt auch den **Tagesplan**, und er plant mit ihnen; **Voreinstellungen**, die *Entscheidung* und *Net metering* folgen.
+**Vorabversion – v1.6.4** (in HACS *Pre-release* für dieses Repository einschalten): ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
 
 ## Mehr
 

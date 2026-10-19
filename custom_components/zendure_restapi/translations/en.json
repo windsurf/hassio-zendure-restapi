@@ -5,8 +5,8 @@
         "title": "Zendure RestAPI",
         "description": "What would you like to add?",
         "menu_options": {
-          "zendure": "Zendure device (battery or P1 meter)",
-          "external_meter": "External P1 meter (HomeWizard, YouLess, EcoTracker, Shelly)",
+          "zendure": "Zendure battery — start here (also a Zendure P1 meter)",
+          "external_meter": "External grid meter (HomeWizard, YouLess, EcoTracker, Shelly)",
           "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)",
           "price_control": "Price control (dynamic tariffs)"
         }
@@ -28,7 +28,7 @@
         }
       },
       "external_meter": {
-        "title": "External P1 meter",
+        "title": "External grid meter",
         "description": "A second grid meter for the battery controller. Which meter is used is chosen with the Meter source select on the battery (default: auto). HomeWizard: switch on Local API in the HomeWizard Energy app first.",
         "data": {
           "external_meter_type": "Meter type",
@@ -88,7 +88,7 @@
         }
       },
       "external": {
-        "title": "External P1 meter",
+        "title": "External grid meter",
         "data": {
           "host": "IP address",
           "external_meter_interval_ms": "Milliseconds between polls (100-1000; below 1000 only for YouLess)"
@@ -550,6 +550,9 @@
       },
       "realized_margin": {
         "name": "Realized margin"
+      },
+      "lost_writes": {
+        "name": "Lost writes"
       }
     },
     "binary_sensor": {
