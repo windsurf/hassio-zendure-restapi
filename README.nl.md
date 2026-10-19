@@ -89,7 +89,7 @@ In de Zendure-app:
 - zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
 Sluit de app daarna af. Controleer het vanuit een browser:
-`http://<ip-accu>/properties/report` moet JSON tonen.
+`http://<ip-accu>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
 
 **2. Installeer via HACS**
 

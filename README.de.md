@@ -89,7 +89,7 @@ In der Zendure-App:
 - auf der Geräteseite **Add to HEMS** ausschalten – dann hält sich Zendures eigene Steuerung heraus. Andere Wege und die Leistungseinstellungen der App: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
 Die App danach schließen. Im Browser prüfen:
-`http://<IP-der-Batterie>/properties/report` muss JSON zeigen.
+`http://<IP-der-Batterie>/properties/report` muss ein Ergebnis im JSON-Format zeigen: Text in geschweiften Klammern `{ … }` mit `"properties"` darin.
 
 **2. Über HACS installieren**
 

@@ -89,7 +89,7 @@ In the Zendure app:
 - on the device page, switch **Add to HEMS** off — so Zendure's own control stays out of the way. Other ways and the app's power settings: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
 Then exit the app. Check it from any browser:
-`http://<battery-ip>/properties/report` should show JSON.
+`http://<battery-ip>/properties/report` should show a result in JSON format: text in braces `{ … }` with `"properties"` in it.
 
 **2. Install via HACS**
 
