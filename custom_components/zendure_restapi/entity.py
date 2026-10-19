@@ -5,7 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.util import slugify
 from homeassistant.helpers.entity import Entity, EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -110,3 +113,56 @@ class ZendureEntity(TranslatedName, CoordinatorEntity[ZendureCoordinator]):
     def available(self) -> bool:
         """Available only while the key is actually being reported."""
         return super().available and self._data_key in (self.coordinator.data or {})
+
+
+# ── Entity ids that follow the device (v1.6.3) ───────────────────────────
+# Newer Home Assistant releases put the area name in front of the entity id
+# of an entity that is new, so after an update the new entities of a device in
+# an area ("Storage room") read sensor.storage_room_zendure_solarflow_..., next
+# to the existing sensor.zendure_solarflow_... ones. The dashboard and every
+# example then miss them. A new entity is therefore given the prefix its
+# device's existing entities have; on a fresh installation there are none yet
+# and Home Assistant chooses as usual. Existing entity ids are never changed,
+# except the ones v1.6.2 and v1.6.3 created with such an area prefix.
+
+ALIGN_KEYS = (
+    "second_controller",
+    "measured_charge_efficiency", "measured_discharge_efficiency",
+    "round_trip_ac", "round_trip_dc", "usable_capacity", "full_cycles",
+    "standby_draw", "response_time", "grid_tracking_error",
+)
+
+
+def device_prefix(hass: HomeAssistant, device_id: str) -> str | None:
+    """The entity id prefix of a battery, read off its controller status."""
+    entity_id = er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{device_id}_controller_status")
+    if entity_id is None:
+        return None
+    object_id = entity_id.split(".", 1)[1]
+    return object_id[: -len("controller_status")] if object_id.endswith("controller_status") else None
+
+
+def align_entity_ids(hass: HomeAssistant, domain: str, entities: list[Any], prefix: str | None) -> None:
+    """Give new entities the device's prefix; repair the ones v1.6.2/v1.6.3 got wrong."""
+    if not prefix:
+        return
+    registry = er.async_get(hass)
+    for entity in entities:
+        name = getattr(entity, "_object_id_name", None)
+        unique_id = getattr(entity, "unique_id", None)
+        if not name or not unique_id:
+            continue
+        wanted = f"{domain}.{prefix}{slugify(name)}"
+        current = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+        free = not registry.async_is_registered(wanted) and hass.states.get(wanted) is None
+        if current is None:
+            if free:
+                entity.entity_id = wanted
+        elif (
+            current != wanted
+            and free
+            and unique_id.endswith(ALIGN_KEYS)
+            and current.endswith("_" + wanted.split(".", 1)[1])
+        ):
+            registry.async_update_entity(current, new_entity_id=wanted)
+

@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Odpověď na zápis"
+      },
+      "measured_charge_efficiency": {
+        "name": "Naměřená účinnost nabíjení"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Naměřená účinnost vybíjení"
+      },
+      "round_trip_ac": {
+        "name": "Účinnost cyklu AC"
+      },
+      "round_trip_dc": {
+        "name": "Účinnost cyklu DC"
+      },
+      "usable_capacity": {
+        "name": "Využitelná kapacita"
+      },
+      "full_cycles": {
+        "name": "Plné cykly"
+      },
+      "standby_draw": {
+        "name": "Spotřeba v pohotovosti"
+      },
+      "response_time": {
+        "name": "Doba odezvy"
+      },
+      "grid_tracking_error": {
+        "name": "Odchylka regulace sítě"
+      },
+      "realized_margin": {
+        "name": "Realizovaná marže"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "{device} řídí ještě něco jiného",
       "description": "Něco jiného než tato integrace mění limity baterie, zatímco ji řídí — {count}krát nebo častěji za čtvrt hodiny. Dva regulátory se navzájem ruší. Obvykle je aplikace Zendure stále na vlastním energetickém plánu: otevřete ji a v **Energy plan** zvolte **Custom Mode**. Jinak zastavte jinou automatizaci nebo integraci, která do baterie zapisuje. Tato zpráva zmizí sama po hodině bez takových zápisů."
+    },
+    "standby_draw": {
+      "title": "{device} odebírá v klidu {watts} W",
+      "description": "Při obou limitech na nule odebírala baterie za poslední den v klidu {watts} W, přičemž normální je asi 5 W. Obvyklou příčinou je Backup mode: nastavte jej na **closed**. Při economic nebo open zůstává měnič aktivní a odebírá asi 35 W. Tato zpráva sama zmizí, jakmile odběr klesne pod 12 W."
     }
   }
 }

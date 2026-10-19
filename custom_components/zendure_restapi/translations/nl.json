@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Schrijfantwoord"
+      },
+      "measured_charge_efficiency": {
+        "name": "Gemeten laadrendement"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Gemeten ontlaadrendement"
+      },
+      "round_trip_ac": {
+        "name": "Rondritrendement AC"
+      },
+      "round_trip_dc": {
+        "name": "Rondritrendement DC"
+      },
+      "usable_capacity": {
+        "name": "Bruikbare capaciteit"
+      },
+      "full_cycles": {
+        "name": "Volle cycli"
+      },
+      "standby_draw": {
+        "name": "Standby-verbruik"
+      },
+      "response_time": {
+        "name": "Reactietijd"
+      },
+      "grid_tracking_error": {
+        "name": "Regelafwijking net"
+      },
+      "realized_margin": {
+        "name": "Gerealiseerde marge"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Iets anders stuurt {device} ook aan",
       "description": "Iets anders dan deze integratie verandert de limieten van de accu terwijl deze integratie stuurt — {count} keer of vaker in een kwartier. Twee regelaars werken elkaar tegen. Meestal staat de Zendure-app nog op een eigen energieplan: open de app en kies onder **Energieplan** de **Aangepaste modus**. Anders: zet de andere automation of integratie uit die naar de accu schrijft. Deze melding verdwijnt vanzelf na een uur zonder zulke schrijfacties."
+    },
+    "standby_draw": {
+      "title": "{device} verbruikt {watts} W in rust",
+      "description": "Met beide limieten op nul heeft de accu het afgelopen etmaal in rust {watts} W verbruikt, waar ongeveer 5 W normaal is. Meestal ligt het aan Backup mode: zet die op **closed**. Met economic of open blijft de omvormer wakker en verbruikt hij ongeveer 35 W. Deze melding verdwijnt vanzelf zodra het verbruik weer onder 12 W is."
     }
   }
 }

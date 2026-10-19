@@ -15,9 +15,9 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 ![Zendure dashboard](images/dashboard.png)
 
-*The example dashboard, showing `smart_matching` holding the grid at zero: the house draws
-175 W, the battery supplies it, and the meter reads 0 W. A ready-made view is included — see
-[Dashboard](#dashboard).*
+*The example dashboard, showing `smart_matching` holding the grid at zero: the house draws 79 W,
+the battery supplies it, and the controller keeps the meter within 10 W of zero. Three views are
+included — the battery, Price Control and Measured — see [Dashboard](#dashboard).*
 
 ---
 
@@ -26,7 +26,7 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 - **Install:** [Supported products](#-supported-products) · [Before you start](#before-you-start) · [Installation via HACS](#installation-via-hacs) · [Manual Installation](#manual-installation) · [Setup](#setup)
 - **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter)
 - **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
-- **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard)
+- **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard) · [Measured diagnostics](#measured-diagnostics)
 - **Reference:** [Supported Entities](#supported-entities) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
 - **History:** [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
@@ -40,13 +40,15 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 |---|---|---|---|
 | SolarFlow 3000 Mix AC+ | no | **reference** | developed and measured on it |
 | SolarFlow 4000 Mix AC+ | no | **high** | same platform and internal 8 kWh pack (`packType` 70); driven locally by Zendure's integration |
-| SolarFlow 2400 AC, 2400 AC+, 1600 AC+ | no | **high** | listed by zenSDK; same AC-coupled layout as the reference |
+| SolarFlow 2400 AC | no | **tested** | user report: read-out complete, `smart_matching` with a Shelly Pro 3EM, follows limit writes within ~2 s |
+| SolarFlow 2400 AC+, 1600 AC+ | no | **high** | listed by zenSDK; same AC-coupled layout as the 2400 AC |
 | SolarFlow 800, 800 Plus, 800 Pro, 800 Pro 2, 2400 Pro | yes | **experimental** | same protocol, but the control loop has only run on a device without PV of its own — see [Device support](#device-support) |
 | SolarFlow 4000 Mix Pro | yes | **experimental** | as above, and not yet in Zendure's own integration either |
 | Zendure P1 meter | – | **reference** | the grid meter this integration was built on |
 | YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster |
 | HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second |
-| EcoTracker, Shelly Pro 3EM (external grid meter) | – | **experimental** | documented local APIs |
+| Shelly Pro 3EM (external grid meter) | – | **tested** | user report: grid meter for the control loop, 11,350 readings, 3 failures |
+| EcoTracker (external grid meter) | – | **experimental** | documented local API |
 | Smart Meter 3CT | – | **experimental** | same `/properties/report` and `total_power` as the P1 meter; read it as external meter type *Zendure* |
 | Hyper 2000, Hub 1200/2000, AIO 2400, Ace 1500 | – | **not possible** | no local HTTP API; MQTT or Bluetooth only |
 
@@ -60,6 +62,7 @@ Details on what differs per model are under [Device support](#device-support).
 | Device | Firmware (local API) | Meter | Home Assistant | Reported by |
 |---|---|---|---|---|
 | SolarFlow 3000 Mix AC+ | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
+| SolarFlow 2400 AC, two packs | 2.0.3 (local API 3), pack 4109 | Shelly Pro 3EM | 2026.10 | user report |
 
 Running it on another setup? Add yours in the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) or with a model report.
 
@@ -67,18 +70,41 @@ Running it on another setup? Add yours in the [forum topic](https://community.ho
 
 ## Before you start
 
-Under EN 18031 the local HTTP API is **disabled by default**. Enable it first:
+Under EN 18031 the local HTTP API is **disabled by default**. In the Zendure app, add **HEMS**
+and exit the app: that switches the API on. Check it from a terminal, see the end of this section.
 
-> Zendure app → add **HEMS** → under **Energy plan** choose **Custom Mode** → exit the app to apply.
+**Then keep Zendure's own control out**, or two controllers steer one battery. Two ways, both keep
+the API on:
 
-HEMS switches the local API on. Custom Mode switches Zendure's own control off. Leave any other
-energy plan on (Auto, ZENKI, self-consumption, TOU) and the device keeps adjusting `outputLimit`
-itself, about every 20 seconds, alongside this integration: two controllers on one battery. The
-integration notices: the binary sensor *Second controller* turns on and a repair appears under
-*Settings → Repairs* once something else has moved the limits five times in a quarter of an hour
-while the integration steers. Both clear by themselves after an hour without such writes.
+1. **Add to HEMS off.** On the device page, switch **Add to HEMS** off: the device is then "no
+   longer automatically controlled by the system". The simplest way; tested on a 3000 Mix AC+ and
+   a 2400 AC.
+2. **Custom Mode.** Leave the device in HEMS, choose **Energy plan → Custom Mode** and **delete its
+   default rule**. Handy if you hand control back to Zendure now and then: going back to ZENKI is
+   one tap.
 
-Verify from a terminal before configuring anything.
+<img src="images/app_add_to_hems.png" width="400" alt="Add to HEMS switch on the device page"> <img src="images/app_add_to_hems_info.png" width="400" alt="Add to HEMS explained in the app">
+
+Forget it, and the integration notices: the binary sensor *Second controller* turns on and a
+repair appears under *Settings → Repairs* once something else has moved the limits five times in a
+quarter of an hour while the integration steers. Both clear by themselves after an hour without
+such writes.
+
+**The Safe power setting is the ceiling.** On the HEMS main page, the hexagon icon at the top right
+→ *Home settings* → *Safe power setting* holds the maximum discharge and charge power, set for
+regulations and breaker capacity. The battery reports them as `inverseMaxPower` and
+`chargeMaxLimit`, shown in Home Assistant as *Inverter power limit* and *Charge power limit*, and
+*Max discharge power* and *Max charge power* of the controller cannot go above them.
+
+**800 W is the default on purpose.** *Max discharge power* and *Max charge power* start at
+800 W: in most countries, for safety reasons, that is what you may feed back through an ordinary
+wall socket. Above that the battery needs its own circuit: a fixed connection or a dedicated cable
+with its own fuse. Raise them only when your installation allows it, up to *Inverter power limit*
+and *Charge power limit*; for more than that, raise the Safe power setting in the app first.
+
+<img src="images/app_hems_settings_icon.png" width="400" alt="HEMS main page, settings icon"> <img src="images/app_safe_power_setting.png" width="400" alt="Safe power setting">
+
+**Verify** from a terminal before configuring anything.
 
 ```bash
 curl "http://<device-ip>/properties/report"
@@ -167,7 +193,7 @@ a serial. It is read-only by nature.
 
 ## Dashboard
 
-`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in two views, built from
+`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from
 standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the
 switch, its status and decision, the day plan with its charge and discharge periods and the
 expected margin, a chart of the plan (with [apexcharts-card](https://github.com/RomRider/apexcharts-card)
@@ -175,12 +201,12 @@ installed), the fixed prices and the three modes per band (used by both the fixe
 day plan), and the tariff, losses and margin — every
 setting a tile with a slider, a select or a toggle (see
 [Price control](#price-control)); without one it explains how to add it.
-The view **Zendure RestAPI** has thirteen sections:
+The view **Measured** holds the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, control and the realized margin. The view **Zendure RestAPI** has thirteen sections:
 
 | Section | Content |
 |---|---|
 | Zendure Home Battery | state of charge, battery power, state, SOC limit, remaining time, error |
-| Operation mode | what the controller does and why, the mode select, controller status, trace recording, trim strength, direction change delay |
+| Operation mode | what the controller does and why, the meter it steers on, foreign and trim writes, the mode select, controller status, trace recording, trim strength, direction change delay |
 | Overview | gauges for grid, state of charge, AC input and output, both limits, and the conversion efficiencies once measured |
 | Device control | converter mode, SOC limits and protection, charge and discharge limit, Meter source, manual power |
 | Controller settings | the ten controller settings |
@@ -188,9 +214,10 @@ The view **Zendure RestAPI** has thirteen sections:
 | Zendure P1 Meter | grid power, the three phases, energy imported and exported |
 | External P1 Meter | the External meter select, power, status and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
 
-**Created for you.** Tick *Create the Zendure RestAPI dashboard* when adding the battery — or
-later under the battery's **Configure** — and the dashboard **Zendure RestAPI** appears in the
-sidebar: an ordinary dashboard, editable like any other. Before saving it, the integration fits
+**Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the
+battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since
+v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the
+battery's **Configure**, the same option makes it again. It is an ordinary dashboard, editable like any other. Before saving it, the integration fits
 the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges
 up to the battery's own AC limit, and no cards for entities your model does not report; a section
 whose entities are all missing goes with its text. Without
@@ -217,6 +244,11 @@ verify under **Developer tools → States** filtered on `zendure` if cards come 
 ---
 
 ## Price control
+
+![Price Control view of the dashboard](images/dashboard_price.png)
+
+*The Price Control view: the day plan for today and tomorrow, which quarters charge and which
+discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Steering on dynamic tariffs, built in, in two ways:
 
@@ -525,7 +557,7 @@ configured and the meter source on `auto` (the default), the smart modes run on 
 | YouLess LS120 | `/e?f=j` | `pwr` | yes, `tm` | 250 ms (100–1000) | measured by the author |
 | Zendure P1 meter / Smart Meter 3CT | `/properties/report` | `total_power` | no | 1 s | P1 measured by the author; 3CT same API, unseen |
 | EcoTracker (everHome) | `/v1/json` | `power` | no | 1 s | experimental |
-| Shelly Pro 3EM | `/rpc/EM.GetStatus?id=0` | `total_act_power` | no | 1 s | experimental; the clamps must sit on the grid connection |
+| Shelly Pro 3EM | `/rpc/EM.GetStatus?id=0` | `total_act_power` | no | 1 s | tested by a user; the clamps must sit on the grid connection |
 
 ### Adding it
 
@@ -1157,6 +1189,66 @@ Short windows are unreliable here: window 2 spans nine points, where rounding of
 
 ---
 
+## Measured diagnostics
+
+The settings of price control are figures you type in once: a charge and a discharge efficiency, a
+wear cost. Since v1.6.3 the integration measures what the battery actually does while it runs, so
+those figures can be checked against the battery itself. Nothing here steers: compare, and adjust
+the settings yourself.
+
+The sensors sit on the battery device as diagnostics; *Realized margin* sits on the Price Control
+device. The dashboard shows them in a view of their own, *Measured*, each with its trend. They survive a restart, and the
+diagnostics download carries them with the blocks and cycles they rest on.
+
+| Sensor | What it measures | Counts | Use it for |
+|---|---|---|---|
+| Measured charge efficiency | DC into the cells against AC from the grid, weighted by energy over the last five blocks | a block of charging of at least 1 kWh AC | *Charge efficiency* |
+| Measured discharge efficiency | AC to the house against DC from the cells, the same way | a block of discharging of at least 1 kWh AC | *Discharge efficiency* |
+| Round trip efficiency AC | AC out against AC in over a whole cycle | from a SOC bound back to the same bound (full to full, or empty to empty) with at least 2 kWh each way, within 72 hours | what a cycle really returns |
+| Round trip efficiency DC | DC out against DC in over the same cycles | the same | the cells and the battery management; the gap to the AC figure is the converter |
+| Usable capacity | DC out from the upper to the lower SOC limit in one discharge | a full discharge with at most 10 % charging in between | against nominal capacity × SOC range |
+| Full cycles | DC discharged divided by the nominal capacity of the packs, counted from v1.6.3 | always | the wear cost |
+| Standby draw | median DC draw at rest (both limits zero, AC below 10 W, after 30 s), last 24 hours, by time | at rest | Backup mode: a repair appears above 15 W over at least an hour of rest |
+| Response time | from a limit write of 200 W or more until the grid has moved 90 % of that step, median of the last 20; start and stop separately as attributes | every step; without a meter on the battery poll, which is only as fine as the poll interval | *Direction change delay*, buffers |
+| Grid tracking error | median distance between the grid and the buffer while a smart mode balances, last 24 hours, by time | only while the battery can still follow: not at its ceiling, not with the limit at zero | *Trim strength*, thresholds |
+| Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
+
+**Blocks and cycles.** A block is a stretch of charging or discharging; a pause of up to two
+minutes does not end it. A SOC bound counts when the device flags it (*SOC limit status*) or when
+the battery stands still at its lower or upper SOC limit. The day plan stops at the lower limit
+itself, so the device never flags it there.
+
+**Realized margin**, in detail. Charging costs the import price for the part the grid supplied and
+the export price for the part that was surplus. Discharging earns the import price for the part
+the house used and the export price for the part that went to the grid. The change in stored
+energy is valued, so a day that ends fuller is not counted as a loss. Wear is not deducted: it is
+an attribute, as are the energy flows and yesterday's result. The sensor resets at midnight. It
+measures the battery whatever steers it, so another planner can be judged on the same yardstick.
+
+**First measurements**, reference installation, one night on the day plan at 3 kW (17/18 October):
+
+| | Measured |
+|---|---|
+| Charge efficiency | **95.2 %** (one block, 7.95 kWh AC) |
+| Discharge efficiency | **95.0 %** (one block, 5.25 kWh AC) |
+| Round trip AC | **86.2 %** (8.70 kWh in, 7.50 kWh out, full to full) |
+| Round trip DC | **95.9 %** |
+| Usable capacity | **7.92 kWh** from 100 to 5 % |
+| Standby draw | **5 W** |
+| Response time | **8 s** to start, **3 s** to stop, on the meter |
+
+**What it means for the settings.** The day plan counts a cycle as charge efficiency × discharge
+efficiency. Set from the block figures that is 90.4 %, while the whole cycle returned 86.2 %. The
+difference is the cells, the battery management and the idle draw between charging and
+discharging. To have the plan count what a cycle really returns, set both efficiencies to the
+square root of the AC round trip: here about 93 %. One cycle is one measurement; look again after
+a few.
+
+The two older sensors *Charge efficiency* and *Discharge efficiency* stay: they show the converter
+at one moment, and read unknown at rest.
+
+---
+
 ## Supported Entities
 
 | Group | Count | Entities |
@@ -1165,12 +1257,13 @@ Short windows are unreliable here: window 2 spans nine points, where rounding of
 | **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
+| **Measured** | 9 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error |
 | **Binary sensor** | 13 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow, Second controller · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
-| **Price Control entry** | 23 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
+| **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
 
@@ -1411,6 +1504,38 @@ to average out the sampling offset between the AC and cell readings.
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.3 — Measured diagnostics
+
+No change to the control loop. After updating, restart Home Assistant.
+
+- **Ten measured diagnostics.** The battery now measures what its settings assume: charge and
+  discharge efficiency per block, round trip efficiency AC and DC per cycle, usable capacity,
+  full cycles, standby draw, response time and grid tracking error. Price control adds the
+  realized margin per day, next to the expected margin. They keep across restarts, appear in the
+  dashboard in a view of their own, *Measured*, and come with their basis in the diagnostics download. See
+  [Measured diagnostics](#measured-diagnostics).
+- **Dashboard:** the measured diagnostics have a view of their own, *Measured*, each with its
+  trend; the text under *Operation mode* adds the meter in use, foreign writes and trim writes.
+- **The dashboard is made by default.** Adding a battery creates the dashboard *Zendure RestAPI*
+  unless you untick the option; an installation updated to v1.6.3 gets it once at the next start.
+  An existing dashboard is left alone, and one you deleted is not made again unless you ask for it
+  under **Configure**.
+- **Standby draw warning.** A repair appears when the battery draws more than 15 W at rest over at
+  least an hour; usually Backup mode is not set to `closed`.
+- **New entities keep the device's entity id prefix.** Recent Home Assistant releases put the area
+  name in front of the entity id of a new entity, so a battery in an area got
+  `sensor.<area>_zendure_…` for its new entities next to `sensor.zendure_…` for the rest, and the
+  dashboard left them out. New entities now take the prefix of the device's existing ones. The
+  entities v1.6.2 and v1.6.3 added with an area prefix are renamed once.
+- **First measurements** on the reference installation: a cycle returned 86.2 % AC, where the two
+  block efficiencies multiplied give 90.4 %. Price control's efficiencies at about 93 % each make
+  the day plan count the real cycle.
+- **Docs: a second model and meter tested.** A user report confirms the SolarFlow 2400 AC (read-out
+  complete, `smart_matching` follows limit writes within about two seconds) and the Shelly Pro 3EM as
+  grid meter for the control loop. *Before you start* now also covers the two ways to keep Zendure's own control out
+  (Custom Mode without its default rule, or *Add to HEMS* off), the app's Safe power setting, the ceiling for both directions, and why
+  *Max discharge power* and *Max charge power* start at 800 W.
 
 ### v1.6.2 — Price control after a reload or a slow restart, a second-controller warning, and the reference in reading order
 

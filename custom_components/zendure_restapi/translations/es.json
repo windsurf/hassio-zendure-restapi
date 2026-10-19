@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Respuesta de escritura"
+      },
+      "measured_charge_efficiency": {
+        "name": "Eficiencia de carga medida"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Eficiencia de descarga medida"
+      },
+      "round_trip_ac": {
+        "name": "Eficiencia de ciclo AC"
+      },
+      "round_trip_dc": {
+        "name": "Eficiencia de ciclo DC"
+      },
+      "usable_capacity": {
+        "name": "Capacidad útil"
+      },
+      "full_cycles": {
+        "name": "Ciclos completos"
+      },
+      "standby_draw": {
+        "name": "Consumo en espera"
+      },
+      "response_time": {
+        "name": "Tiempo de respuesta"
+      },
+      "grid_tracking_error": {
+        "name": "Error de seguimiento de red"
+      },
+      "realized_margin": {
+        "name": "Margen realizado"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Otra cosa también controla {device}",
       "description": "Algo distinto de esta integración cambia los límites de la batería mientras ella controla: {count} veces o más en un cuarto de hora. Dos controladores se anulan entre sí. Normalmente la app de Zendure sigue en un plan de energía propio: ábrela y elige **Custom Mode** en **Energy plan**. Si no, detén la otra automatización o integración que escribe en la batería. Este mensaje desaparece solo tras una hora sin tales escrituras."
+    },
+    "standby_draw": {
+      "title": "{device} consume {watts} W en reposo",
+      "description": "Con ambos límites a cero, la batería ha consumido {watts} W en reposo durante el último día, cuando lo normal son unos 5 W. La causa habitual es el Backup mode: póngalo en **closed**. Con economic u open el convertidor sigue despierto y consume unos 35 W. Este mensaje desaparece solo cuando el consumo vuelve a estar por debajo de 12 W."
     }
   }
 }

@@ -88,7 +88,7 @@ SOC_LIMIT_MAP = {0: "none", 1: "upper_limit", 2: "lower_limit"}
 # 1 while a calibration runs, 0 otherwise (v1.6.1). Read as uncalibrated /
 # calibrated until v1.6.0, which was wrong: the reference device reported 0 for
 # weeks, through several charges to 100%, and Zendure's own integration
-# (Zendure-HA) treats 1 as calibrating and 0 as the normal state.
+# treats 1 as calibrating and 0 as the normal state.
 SOC_STATUS_MAP = {0: "normal", 1: "calibrating"}
 
 AC_MODE_MAP = {1: "charge", 2: "discharge"}

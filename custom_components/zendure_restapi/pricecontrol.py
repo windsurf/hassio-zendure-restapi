@@ -100,6 +100,7 @@ from .dayplan import (
     price_scale,
     read_prices,
 )
+from .measure import BatteryMeasure, Prices
 from .registry import pack_model
 from .settings import ZendureSettings
 
@@ -223,6 +224,38 @@ class PriceControl:
             if unsub is not None:
                 unsub()
         self._unsub_price = self._unsub_timer = None
+
+    @property
+    def battery_controller(self) -> Any:
+        """The battery's controller as it is now: a reload of the battery
+        replaces it, without reloading price control."""
+        runtime = self.hass.data.get(DOMAIN, {}).get(f"{self._battery_entry_id}_runtime")
+        return runtime["controller"] if runtime else None
+
+    @property
+    def measure(self) -> BatteryMeasure | None:
+        controller = self.battery_controller
+        return controller.measure if controller is not None else None
+
+    @property
+    def battery_entry_id(self) -> str:
+        return self._battery_entry_id
+
+    def prices(self) -> Prices | None:
+        """The prices of this moment, for the realized margin; None without.
+
+        Whether or not price control steers: the margin measures the battery,
+        whoever drives it.
+        """
+        if self.import_price is None or self.export_value is None:
+            return None
+        s = self._settings
+        return Prices(
+            import_price=self.import_price,
+            export_value=self.export_value,
+            eta_discharge=s.get_float(OPT_DISCHARGE_EFFICIENCY) / 100,
+            wear=s.get_float(OPT_WEAR_COST),
+        )
 
     @callback
     def async_update(self) -> None:

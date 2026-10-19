@@ -1,7 +1,7 @@
 """Diagnostics support for the Zendure RestAPI integration.
 
 The download contains the device report alongside the list of keys this version
-has no entity for. That list is the fastest route from "my model is not fully
+has no entity for, and the measured diagnostics with what they rest on. That list is the fastest route from "my model is not fully
 supported" to a precise issue report.
 
 Diagnostics files get attached to public issues, so everything that identifies a
@@ -97,7 +97,15 @@ async def async_get_config_entry_diagnostics(
         "raw_report": async_redact_data(dict(coordinator.raw or {}), REDACT),
         "mqtt_status": _summarise_mqtt(mqtt_status),
         "external_meter": _external(hass, entry),
+        "measured": _measured(hass, entry),
     }
+
+
+def _measured(hass: HomeAssistant, entry: ConfigEntry) -> Any:
+    """Measured diagnostics with their basis: the last blocks, cycles and
+    capacities (v1.6.3). Energy and timings only, nothing that identifies."""
+    runtime = hass.data.get(DOMAIN, {}).get(f"{entry.entry_id}_runtime")
+    return runtime["controller"].measure.diagnostics() if runtime else None
 
 
 def _external(hass: HomeAssistant, entry: ConfigEntry) -> Any:

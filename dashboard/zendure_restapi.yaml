@@ -1,8 +1,8 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.2 | October 2026
+# ZENDURE RESTAPI DASHBOARD - v1.6.3 | October 2026
 # ============================================================
 #
-# The dashboard "Zendure RestAPI" in two views, read through
+# The dashboard "Zendure RestAPI" in three views, read through
 # the zendure_restapi integration. Every card uses an entity of
 # the integration; nothing else is needed.
 #
@@ -14,6 +14,9 @@
 #                     fixed prices and the mode per band, the
 #                     tariff, losses and margin as sliders
 #                     (entity ids price_control_*)
+#   Measured        - the measured diagnostics (v1.6.3) with a
+#                     trend under each: efficiency, battery,
+#                     control and the realized margin
 #
 # INSTALL:
 #   Automatic: tick "Create the Zendure RestAPI dashboard" when
@@ -144,6 +147,8 @@ views:
         **Direction** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'direction') }} | **Target** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'target_power') }} W
 
         **Grid** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_power') }} W | **Battery** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'battery_power') }} W
+
+        **Meter** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_active') }} | **Foreign writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'foreign_writes') }} | **Trim writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'trim_writes') }}
       grid_options:
         rows: auto
         columns: full
@@ -1028,3 +1033,141 @@ views:
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
       icon: mdi:cog-sync-outline
+- title: Measured
+  path: measured
+  icon: mdi:clipboard-pulse-outline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: markdown
+      content: >-
+        Measured while the battery runs, whoever steers it, to check the settings
+        against the battery itself. A value stays *unknown* until there is something
+        to measure: standby draw and response time within the hour, the efficiencies
+        after a block of 1 kWh, round trip and usable capacity after a full cycle from
+        one SOC bound back to the same one. Trends show the last 7 days, standby draw,
+        response time and grid tracking the last 24 hours. Set the efficiencies of
+        Price Control from the round trip AC: both at its square root.
+      grid_options:
+        columns: full
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Efficiency
+      heading_style: title
+      icon: mdi:battery-sync-outline
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_measured_charge_efficiency
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_measured_discharge_efficiency
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_round_trip_efficiency_ac
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_round_trip_efficiency_dc
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Battery
+      heading_style: title
+      icon: mdi:battery-heart-variant
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_usable_capacity
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_full_cycles
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_standby_draw
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Control
+      heading_style: title
+      icon: mdi:target
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_response_time
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_grid_tracking_error
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Margin
+      heading_style: title
+      icon: mdi:cash-check
+    - type: tile
+      entity: sensor.price_control_realized_margin
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2

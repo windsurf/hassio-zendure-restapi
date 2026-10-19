@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.2"
+INTEGRATION_VERSION = "1.6.3"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -218,6 +218,9 @@ EXTERNAL_NONE = "none"
 # A one-off request to create the Zendure RestAPI dashboard (v1.6.0). Set by
 # the config flow or the options, cleared once the request has been handled.
 OPT_CREATE_DASHBOARD = "create_dashboard"
+# Set once the dashboard was created, found, or tried without being asked
+# (v1.6.3): it is made by default, once, and never again after a user deleted it.
+OPT_DASHBOARD_OFFERED = "dashboard_offered"
 
 # ── Price control (v1.6.0) ───────────────────────────────────────────────
 # The Operation mode of one battery set from the electricity price: an entry

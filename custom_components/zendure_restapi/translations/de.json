@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Schreibantwort"
+      },
+      "measured_charge_efficiency": {
+        "name": "Gemessener Ladewirkungsgrad"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Gemessener Entladewirkungsgrad"
+      },
+      "round_trip_ac": {
+        "name": "Zyklenwirkungsgrad AC"
+      },
+      "round_trip_dc": {
+        "name": "Zyklenwirkungsgrad DC"
+      },
+      "usable_capacity": {
+        "name": "Nutzbare Kapazität"
+      },
+      "full_cycles": {
+        "name": "Vollzyklen"
+      },
+      "standby_draw": {
+        "name": "Standby-Verbrauch"
+      },
+      "response_time": {
+        "name": "Reaktionszeit"
+      },
+      "grid_tracking_error": {
+        "name": "Regelabweichung Netz"
+      },
+      "realized_margin": {
+        "name": "Realisierte Marge"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Etwas anderes steuert {device} ebenfalls",
       "description": "Etwas anderes als diese Integration ändert die Grenzen der Batterie, während sie steuert – {count}-mal oder öfter in einer Viertelstunde. Zwei Regler heben sich gegenseitig auf. Meist steht die Zendure-App noch auf einem eigenen Energieplan: App öffnen und unter **Energieplan** den Modus **Benutzerdefinierter Modus** wählen. Sonst die andere Automation oder Integration stoppen, die an die Batterie schreibt. Diese Meldung verschwindet nach einer Stunde ohne solche Schreibzugriffe von selbst."
+    },
+    "standby_draw": {
+      "title": "{device} verbraucht {watts} W im Ruhezustand",
+      "description": "Mit beiden Limits auf null hat der Speicher am letzten Tag im Ruhezustand {watts} W verbraucht, normal sind etwa 5 W. Meist liegt es am Backup mode: auf **closed** stellen. Mit economic oder open bleibt der Wechselrichter wach und verbraucht etwa 35 W. Diese Meldung verschwindet von selbst, sobald der Verbrauch wieder unter 12 W liegt."
     }
   }
 }

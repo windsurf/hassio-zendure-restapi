@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Odpowiedź zapisu"
+      },
+      "measured_charge_efficiency": {
+        "name": "Zmierzona sprawność ładowania"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Zmierzona sprawność rozładowania"
+      },
+      "round_trip_ac": {
+        "name": "Sprawność cyklu AC"
+      },
+      "round_trip_dc": {
+        "name": "Sprawność cyklu DC"
+      },
+      "usable_capacity": {
+        "name": "Pojemność użytkowa"
+      },
+      "full_cycles": {
+        "name": "Pełne cykle"
+      },
+      "standby_draw": {
+        "name": "Pobór w czuwaniu"
+      },
+      "response_time": {
+        "name": "Czas reakcji"
+      },
+      "grid_tracking_error": {
+        "name": "Błąd regulacji sieci"
+      },
+      "realized_margin": {
+        "name": "Zrealizowana marża"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Coś innego również steruje {device}",
       "description": "Coś innego niż ta integracja zmienia limity baterii, gdy ona steruje — {count} razy lub częściej w ciągu kwadransa. Dwa regulatory znoszą się nawzajem. Zwykle aplikacja Zendure jest nadal ustawiona na własny plan energii: otwórz ją i wybierz **Custom Mode** w **Energy plan**. W przeciwnym razie zatrzymaj inną automatyzację lub integrację, która zapisuje do baterii. Ten komunikat znika sam po godzinie bez takich zapisów."
+    },
+    "standby_draw": {
+      "title": "{device} pobiera {watts} W w spoczynku",
+      "description": "Przy obu limitach na zero bateria pobierała w spoczynku {watts} W w ciągu ostatniej doby, podczas gdy normalne jest około 5 W. Zwykle przyczyną jest Backup mode: ustaw go na **closed**. Przy economic lub open falownik pozostaje aktywny i pobiera około 35 W. Ten komunikat zniknie sam, gdy pobór spadnie poniżej 12 W."
     }
   }
 }

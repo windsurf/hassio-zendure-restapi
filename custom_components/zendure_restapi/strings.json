@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Write response"
+      },
+      "measured_charge_efficiency": {
+        "name": "Measured charge efficiency"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Measured discharge efficiency"
+      },
+      "round_trip_ac": {
+        "name": "Round trip efficiency AC"
+      },
+      "round_trip_dc": {
+        "name": "Round trip efficiency DC"
+      },
+      "usable_capacity": {
+        "name": "Usable capacity"
+      },
+      "full_cycles": {
+        "name": "Full cycles"
+      },
+      "standby_draw": {
+        "name": "Standby draw"
+      },
+      "response_time": {
+        "name": "Response time"
+      },
+      "grid_tracking_error": {
+        "name": "Grid tracking error"
+      },
+      "realized_margin": {
+        "name": "Realized margin"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Something else is also steering {device}",
       "description": "Something other than this integration keeps changing the battery limits while it steers — {count} times or more in a quarter of an hour. Two controllers undo each other. Usually the Zendure app is still on an energy plan of its own: open it and choose **Custom Mode** under **Energy plan**. Otherwise stop the other automation or integration that writes to the battery. This message disappears by itself after an hour without such writes."
+    },
+    "standby_draw": {
+      "title": "{device} draws {watts} W at rest",
+      "description": "With both limits at zero the battery has drawn {watts} W at rest over the last day, where about 5 W is normal. The usual cause is Backup mode: set it to **closed**. With economic or open the converter stays awake and draws around 35 W. This message disappears by itself once the draw is back below 12 W."
     }
   }
 }

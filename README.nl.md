@@ -17,7 +17,7 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 
 ![Zendure-dashboard](images/dashboard.png)
 
-*`smart_matching` houdt het net op nul: het huis vraagt 175 W, de accu levert het, de meter staat op 0 W. De integratie maakt dit dashboard op verzoek voor je aan.*
+*`smart_matching` houdt het net op nul: het huis vraagt 79 W, de accu levert het, en de regeling houdt de meter binnen 10 W van nul. De integratie maakt dit dashboard voor je aan, met nog twee tabbladen: Price Control en Measured.*
 
 **Snel aan de slag hieronder** · alle details in de [Technische referentie](#-technische-referentie) (Engels)
 
@@ -29,7 +29,8 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 |---|---|
 | **SolarFlow 3000 Mix AC+** | ✅ Dagelijks getest door de maker |
 | **SolarFlow 4000 Mix AC+** | ✅ Ondersteund — zelfde platform en accu als de 3000 Mix |
-| **SolarFlow 2400 AC · 2400 AC+ · 1600 AC+** | ✅ Ondersteund — zelfde AC-gekoppelde opbouw |
+| **SolarFlow 2400 AC** | ✅ Getest door een gebruiker — uitlezen en `smart_matching` bevestigd |
+| **SolarFlow 2400 AC+ · 1600 AC+** | ✅ Ondersteund — zelfde AC-gekoppelde opbouw als de 2400 AC |
 | **SolarFlow 800 · 800 Plus · 800 Pro · 800 Pro 2 · 2400 Pro** | 🧪 Werkt, slimme modi experimenteel (zonnepanelen op het apparaat) |
 | **SolarFlow 4000 Mix Pro** | 🧪 Werkt, slimme modi experimenteel (zonnepanelen op het apparaat) |
 | Hyper 2000 · Hub 1200/2000 · AIO 2400 · Ace 1500 | ❌ Geen lokale API op deze modellen |
@@ -52,7 +53,7 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Zendure P1-meter** | ✅ Dagelijks getest door de maker |
 | **Zendure Smart Meter 3CT** | 🧪 Zelfde API als de Zendure P1-meter |
 | **EcoTracker** (everHome) | 🧪 Gedocumenteerde lokale API, één meting per seconde |
-| **Shelly Pro 3EM** (klemmen op de netaansluiting) | 🧪 Gedocumenteerde lokale API, één meting per seconde |
+| **Shelly Pro 3EM** (klemmen op de netaansluiting) | ✅ Getest door een gebruiker als netmeter voor de regeling, één meting per seconde |
 | **Elke vermogenssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Nieuw in v1.5.3 — voor dashboard en vergelijking; regelt alleen als hij elke seconde ververst |
 
 In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
@@ -83,9 +84,9 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 ## 🚀 Aan de slag
 
 **1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit.
-In de Zendure-app, twee instellingen:
+In de Zendure-app:
 - voeg **HEMS** toe — dat zet de lokale API aan;
-- kies onder **Energieplan** de **Aangepaste modus** — anders blijft de eigen sturing van Zendure naast deze integratie naar de accu schrijven (vergeet je het, dan herinnert een melding onder *Instellingen → Reparaties* je eraan).
+- zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
 Sluit de app daarna af. Controleer het vanuit een browser:
 `http://<ip-accu>/properties/report` moet JSON tonen.
@@ -99,7 +100,7 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 [![Integratie toevoegen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Voeg je apparaten toe**
-Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Vink **Zendure RestAPI-dashboard aanmaken** aan, dan staat het dashboard in je zijbalk. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
+Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-apparaat** en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
 **Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe P1-meter**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
@@ -121,6 +122,10 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 ---
 
 ## 💶 Prijssturing
+
+![Price Control-tabblad van het dashboard](images/dashboard_price.png)
+
+*Het tabblad Price Control: het dagplan voor vandaag en morgen, welke kwartieren laden en welke ontladen, en de verwachte marge. Met salderen aan volgt de terugleverprijs de afnameprijs.*
 
 Twee manieren om de accu te sturen op een dynamisch tarief, in een eigen apparaat:
 
@@ -172,7 +177,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart (in v1.6.1 kon de status op `off` blijven staan tot je hem uit en aan zette); de technische naslag begint met een inhoudsopgave, de hoofdstukken in leesvolgorde. **v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen — met saldering laat het dagplan de accu tussen de blokken rusten; de app-instelling noemt beide stappen, HEMS en Aangepaste modus. **v1.6.0:** **prijssturing voor dynamische tarieven**, met een **dagplan** over de Nord Pool-prijzen — aparte import- en exportprijzen, omzetverlies en een marge per kWh; entiteitsnamen in elf talen, met entity-id's die Engels blijven; het dashboard **Zendure RestAPI** op verzoek voor je aangemaakt.
+**Laatste release – v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart. **v1.6.1:** de drie **modi per band** sturen nu ook het **dagplan**, en het plant ermee; **standaardwaarden** die *Beslissing* en *Salderen* volgen.
 
 ## Meer
 

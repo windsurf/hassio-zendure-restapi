@@ -9,6 +9,7 @@ sensor.price_control_status, number.price_control_cheap_price and so on.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription, NumberMode
@@ -22,9 +23,11 @@ from homeassistant.components.sensor import (
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
 from homeassistant.const import PERCENTAGE, UnitOfPower
 
@@ -211,6 +214,7 @@ def price_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry) 
             PriceFormulaSensor(entry, price, exp, "export_value"),
             PlanSensor(entry, price, plan),
             MarginSensor(entry, price, margin),
+            RealizedMarginSensor(entry, price, REALIZED_MARGIN_DESCRIPTION),
         ]
     if platform == Platform.NUMBER:
         return [PriceNumber(entry, price, d, settings, key) for d, key in PRICE_NUMBERS]
@@ -396,3 +400,60 @@ class MarginSensor(PriceEntity, SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         return _currency(self.hass)
+
+
+# What the battery earned today, measured (v1.6.3): see measure.py. Measured
+# whether or not price control steers, so another planner can be judged on the
+# same yardstick.
+REALIZED_MARGIN_DESCRIPTION = SensorEntityDescription(
+    key="realized_margin",
+    name="Realized margin",
+    device_class=SensorDeviceClass.MONETARY,
+    state_class=SensorStateClass.TOTAL,
+    suggested_display_precision=2,
+    icon="mdi:cash-check",
+)
+
+REFRESH = timedelta(minutes=1)
+
+
+class RealizedMarginSensor(PriceEntity, SensorEntity):
+    """Today's result of the battery at the prices of each moment."""
+
+    _unrecorded_attributes = frozenset({"yesterday"})
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._refresh, REFRESH)
+        )
+
+    @callback
+    def _refresh(self, _now: datetime) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        return self._price.measure is not None
+
+    @property
+    def native_value(self) -> float | None:
+        measure = self._price.measure
+        return measure.realized_margin if measure is not None else None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return _currency(self.hass)
+
+    @property
+    def last_reset(self) -> datetime:
+        return dt_util.start_of_local_day()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        measure = self._price.measure
+        if measure is None:
+            return None
+        today = measure.margin.summary() if measure.margin is not None else {}
+        today.pop("day", None)
+        return {**today, "yesterday": measure.margin_yesterday}

@@ -55,8 +55,10 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import callback
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
@@ -102,7 +104,9 @@ from .const import (
     SMART_MODES,
 )
 from .coordinator import ZendureCoordinator
+from .measure import BatteryMeasure, Sample
 from .p1meter import ExternalMeter
+from .registry import pack_model
 from .settings import ZendureSettings
 from .trace import ZendureTrace
 
@@ -156,6 +160,14 @@ WRITE_HISTORY = 6
 SECOND_CONTROLLER_WINDOW = timedelta(minutes=15)
 SECOND_CONTROLLER_COUNT = 5
 SECOND_CONTROLLER_CLEAR = timedelta(hours=1)
+
+
+# Measured diagnostics are kept in .storage: saved every five minutes while
+# the battery polls, on unload and when Home Assistant stops (v1.6.3). Not
+# with a delay re-armed on every poll: Store postpones a delayed save each
+# time it is asked again, so at a poll of seconds it would never write.
+MEASURE_STORE_VERSION = 1
+MEASURE_SAVE_EVERY = timedelta(minutes=5)
 
 
 # Where the controller currently steering on the grid is registered, in
@@ -262,6 +274,15 @@ class ZendureController:
         self._foreign_times: deque[datetime] = deque()
         self.second_controller = False
 
+        # ── Measured diagnostics (v1.6.3) ────────────────────────────
+        # Fed from every battery poll, every meter sample and every limit
+        # write; never read by the loops. See measure.py.
+        self.measure = BatteryMeasure()
+        self.measure.price_source = self._prices
+        self._measure_store: Store | None = None
+        self._measure_saved_at: datetime | None = None
+        self._standby_alert = False
+
     # ── Wiring ───────────────────────────────────────────────────────────
 
     def attach_meter(self, meter: ZendureCoordinator | None) -> None:
@@ -340,8 +361,143 @@ class ZendureController:
         # A repair left behind would outlive the entry; it comes back within a
         # quarter of an hour if the second controller is still there.
         self._issue(create=False)
+        self._standby_issue(False)
         if self.trace.active:
             self.coordinator.hass.async_create_task(self.trace.async_close())
+
+    # ── Measured diagnostics ─────────────────────────────────────────────
+
+    async def async_load_measure(self) -> None:
+        """Pick up what was measured before the restart."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        if entry is None:
+            return
+        self._measure_store = Store(
+            self.coordinator.hass, MEASURE_STORE_VERSION, f"{DOMAIN}.measure_{entry.entry_id}"
+        )
+
+        async def _on_stop(_event: Any) -> None:
+            await self.async_save_measure()
+
+        entry.async_on_unload(
+            self.coordinator.hass.bus.async_listen(EVENT_HOMEASSISTANT_STOP, _on_stop)
+        )
+        try:
+            self.measure.load(await self._measure_store.async_load())
+        except Exception:  # noqa: BLE001 - a broken file must not stop the battery
+            _LOGGER.warning("Measured diagnostics could not be read; starting afresh")
+        self._standby_alert = self.measure.standby_alert
+
+    async def async_save_measure(self) -> None:
+        if self._measure_store is not None:
+            self._measure_saved_at = dt_util.utcnow()
+            await self._measure_store.async_save(self.measure.to_dict())
+
+    @callback
+    def observe(self) -> None:
+        """One battery poll for the measured diagnostics. Records, never steers."""
+        data = self.coordinator.data or {}
+        if not data:
+            return
+        try:
+            self.measure.battery_sample(self._measure_sample(data))
+        except Exception:  # noqa: BLE001 - measuring must never stop the poll
+            _LOGGER.exception("Measured diagnostics: sample failed")
+            return
+        if self.measure.standby_alert != self._standby_alert:
+            self._standby_alert = self.measure.standby_alert
+            self._standby_issue(self._standby_alert)
+        now = dt_util.utcnow()
+        if self._measure_store is not None and (
+            self._measure_saved_at is None or now - self._measure_saved_at >= MEASURE_SAVE_EVERY
+        ):
+            self._measure_saved_at = now
+            self.coordinator.hass.async_create_task(self.async_save_measure())
+
+    def _prices(self) -> Any:
+        """Prices from the price control entry of this battery, if there is one."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        if entry is None:
+            return None
+        for item in self.coordinator.hass.data.get(DOMAIN, {}).values():
+            if getattr(item, "battery_entry_id", None) == entry.entry_id and hasattr(item, "prices"):
+                return item.prices()
+        return None
+
+    def _measure_sample(self, data: dict[str, Any]) -> Sample:
+        pack, _ = self._pack_power(data)
+        capacity = 0.0
+        for index in range(1, self.coordinator.pack_count + 1):
+            prefix = f"{PACK_PREFIX}{index}."
+            _, kwh = pack_model(data.get(f"{prefix}sn"), data.get(f"{prefix}packType"))
+            capacity += kwh or 0.0
+
+        def percent(key: str) -> float | None:
+            value = _as_int(data.get(key))
+            return None if value is None else value / 10
+
+        return Sample(
+            now=dt_util.utcnow(),
+            today=dt_util.now().date().isoformat(),
+            ac_w=self._battery_power(data),
+            dc_w=None if pack == "" else float(pack),
+            soc=_as_int(data.get("electricLevel")),
+            soc_limit=_as_int(data.get("socLimit")),
+            input_limit=_as_int(data.get("inputLimit")),
+            output_limit=_as_int(data.get("outputLimit")),
+            grid_w=self._meter_reading()[0],
+            capacity_kwh=capacity or None,
+            soc_floor=percent("minSoc"),
+            soc_ceiling=percent("socSet"),
+        )
+
+    def _tracking(self, grid: float | None) -> None:
+        """One meter sample for response time and grid tracking.
+
+        The tracking error counts only while a smart mode balances and the
+        battery can still follow: at its ceiling, or with the limit at zero
+        and the grid asking for less, the distance is the house outrunning
+        the battery, not the loop.
+        """
+        now = dt_util.utcnow()
+        error: float | None = None
+        direction = self._trim_direction
+        data = self.coordinator.data or {}
+        if grid is not None and direction is not None and data:
+            charging = direction == "charge"
+            buffer = self.settings.get_int(
+                OPT_CHARGE_BUFFER if charging else OPT_DISCHARGE_BUFFER
+            )
+            want = grid - buffer   # positive: the battery should give more
+            limit = _as_int(data.get("inputLimit" if charging else "outputLimit")) or 0
+            cap = self._cap(data, charging)
+            more = want < 0 if charging else want > 0
+            if not ((more and limit >= cap) or (not more and limit <= 0)):
+                error = want
+        self.measure.grid_sample(now, grid, error)
+
+    def _standby_issue(self, create: bool) -> None:
+        """A repair while the battery draws far more at rest than it should."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        hass = self.coordinator.hass
+        if entry is None or hass is None:
+            return
+        issue_id = f"standby_draw_{entry.entry_id}"
+        if create:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="standby_draw",
+                translation_placeholders={
+                    "device": entry.title,
+                    "watts": str(self.measure.standby_draw),
+                },
+            )
+        else:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
 
     # ── Main entry point ─────────────────────────────────────────────────
 
@@ -439,6 +595,10 @@ class ZendureController:
         self._watch_writers()
         await self._record()
         await self.async_trim()
+        try:
+            self._tracking(self._meter_reading()[0])
+        except Exception:  # noqa: BLE001 - measuring must never stop the loop
+            _LOGGER.exception("Measured diagnostics: meter sample failed")
 
     async def async_trim(self) -> None:
         """Execute one trim step, once per meter sample. Never raises."""
@@ -1750,6 +1910,10 @@ class ZendureController:
         else:
             history = self._last_written.setdefault(key, deque(maxlen=WRITE_HISTORY))
             history.appendleft((written, self._write_source))
+            if key in ("inputLimit", "outputLimit"):
+                self.measure.on_write(
+                    dt_util.utcnow(), key, written, self._meter_reading()[0]
+                )
 
     # ── State ────────────────────────────────────────────────────────────
 

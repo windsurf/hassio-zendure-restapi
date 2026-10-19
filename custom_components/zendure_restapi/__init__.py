@@ -70,13 +70,14 @@ from .const import (
     CONF_BATTERY_ENTRY,
     DEVICE_TYPE_PRICE,
     OPT_CREATE_DASHBOARD,
+    OPT_DASHBOARD_OFFERED,
     OPT_EXTERNAL_METER,
     SIGNAL_EXTERNALS_CHANGED,
     CONF_EXPORT_ENTITY,
     CONF_SOURCE_ENTITY,
 )
 from .controller import ZendureController
-from .dashboard import async_create_dashboard, notify
+from .dashboard import EXISTS, async_create_dashboard, notify
 from .pricecontrol import PriceControl
 from .coordinator import ZendureCoordinator
 from .p1meter import ADAPTERS, ExternalMeter
@@ -135,8 +136,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "controller": controller,
         }
 
+        await controller.async_load_measure()
+
         @callback
         def _on_update() -> None:
+            # Measured before the loop acts, on the same poll (v1.6.3).
+            controller.observe()
             hass.async_create_task(controller.async_run())
 
         entry.async_on_unload(coordinator.async_add_listener(_on_update))
@@ -147,8 +152,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     # The dashboard needs the entities registered and the frontend up, hence
-    # after the platforms and once Home Assistant has started.
-    if coordinator.device_type != DEVICE_TYPE_METER and entry.options.get(OPT_CREATE_DASHBOARD):
+    # after the platforms and once Home Assistant has started. It is made by
+    # default, once (v1.6.3); after that only when asked in the options.
+    if coordinator.device_type != DEVICE_TYPE_METER and _dashboard_wanted(entry):
 
         async def _create(_hass: HomeAssistant) -> None:
             await _async_dashboard(hass, entry)
@@ -339,7 +345,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coordinator: ZendureCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if not isinstance(coordinator, ZendureCoordinator):
         return
-    if coordinator.device_type != DEVICE_TYPE_METER and entry.options.get(OPT_CREATE_DASHBOARD):
+    if coordinator.device_type != DEVICE_TYPE_METER and _dashboard_wanted(entry):
         hass.async_create_task(_async_dashboard(hass, entry))
     interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator.set_scan_interval(interval)
@@ -366,6 +372,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         runtime = store.pop(f"{entry.entry_id}{RUNTIME_SUFFIX}", None)
         if runtime is not None:
             runtime["controller"].detach_meter()
+            # Written before a reload sets the entry up again and reads it.
+            await runtime["controller"].async_save_measure()
         _link_meters(hass)
     return unloaded
 
@@ -373,6 +381,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # ── Dashboard ────────────────────────────────────────────────────────────
 
 DASHBOARD_BUSY = f"{DOMAIN}_dashboard_busy"
+
+
+def _dashboard_wanted(entry: ConfigEntry) -> bool:
+    """Asked for in the options, or never made yet on this installation."""
+    return bool(entry.options.get(OPT_CREATE_DASHBOARD)) or not entry.options.get(OPT_DASHBOARD_OFFERED)
 
 
 def _prefix(registry: er.EntityRegistry, unique_id: str, suffix: str) -> str | None:
@@ -390,11 +403,12 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coordinator = store.get(entry.entry_id)
     if (
         hass.data.get(DASHBOARD_BUSY)
-        or not entry.options.get(OPT_CREATE_DASHBOARD)
+        or not _dashboard_wanted(entry)
         or not isinstance(coordinator, ZendureCoordinator)
     ):
         return
     hass.data[DASHBOARD_BUSY] = True
+    requested = bool(entry.options.get(OPT_CREATE_DASHBOARD))
     try:
         registry = er.async_get(hass)
         device_id = coordinator.device_id or entry.unique_id or entry.entry_id
@@ -430,9 +444,12 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
             ceiling=min(max(ceiling, 800), 5000),
             price=price,
         )
-        notify(hass, result, battery)
+        # Unasked, a dashboard that is already there needs no message.
+        if requested or result != EXISTS:
+            notify(hass, result, battery)
     finally:
         hass.data.pop(DASHBOARD_BUSY, None)
         hass.config_entries.async_update_entry(
-            entry, options={**entry.options, OPT_CREATE_DASHBOARD: False}
+            entry,
+            options={**entry.options, OPT_CREATE_DASHBOARD: False, OPT_DASHBOARD_OFFERED: True},
         )

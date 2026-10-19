@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Skrivsvar"
+      },
+      "measured_charge_efficiency": {
+        "name": "Uppmätt laddningsverkningsgrad"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Uppmätt urladdningsverkningsgrad"
+      },
+      "round_trip_ac": {
+        "name": "Cykelverkningsgrad AC"
+      },
+      "round_trip_dc": {
+        "name": "Cykelverkningsgrad DC"
+      },
+      "usable_capacity": {
+        "name": "Användbar kapacitet"
+      },
+      "full_cycles": {
+        "name": "Fulla cykler"
+      },
+      "standby_draw": {
+        "name": "Standbyförbrukning"
+      },
+      "response_time": {
+        "name": "Svarstid"
+      },
+      "grid_tracking_error": {
+        "name": "Nätregleringsfel"
+      },
+      "realized_margin": {
+        "name": "Realiserad marginal"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Något annat styr också {device}",
       "description": "Något annat än denna integration ändrar batteriets gränser medan den styr — {count} gånger eller mer under en kvart. Två regulatorer tar ut varandra. Oftast står Zendure-appen fortfarande på en egen energiplan: öppna den och välj **Custom Mode** under **Energy plan**. Annars stoppa den andra automatiseringen eller integrationen som skriver till batteriet. Meddelandet försvinner av sig självt efter en timme utan sådana skrivningar."
+    },
+    "standby_draw": {
+      "title": "{device} förbrukar {watts} W i vila",
+      "description": "Med båda gränserna på noll har batteriet under det senaste dygnet förbrukat {watts} W i vila, där ungefär 5 W är normalt. Den vanliga orsaken är Backup mode: ställ in den på **closed**. Med economic eller open förblir växelriktaren vaken och förbrukar ungefär 35 W. Detta meddelande försvinner av sig självt när förbrukningen åter är under 12 W."
     }
   }
 }

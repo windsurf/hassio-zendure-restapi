@@ -520,6 +520,36 @@
       },
       "write_rsp": {
         "name": "Skrivesvar"
+      },
+      "measured_charge_efficiency": {
+        "name": "Målt ladeeffektivitet"
+      },
+      "measured_discharge_efficiency": {
+        "name": "Målt afladningseffektivitet"
+      },
+      "round_trip_ac": {
+        "name": "Cykluseffektivitet AC"
+      },
+      "round_trip_dc": {
+        "name": "Cykluseffektivitet DC"
+      },
+      "usable_capacity": {
+        "name": "Brugbar kapacitet"
+      },
+      "full_cycles": {
+        "name": "Fulde cyklusser"
+      },
+      "standby_draw": {
+        "name": "Standbyforbrug"
+      },
+      "response_time": {
+        "name": "Responstid"
+      },
+      "grid_tracking_error": {
+        "name": "Netreguleringsafvigelse"
+      },
+      "realized_margin": {
+        "name": "Realiseret margin"
       }
     },
     "binary_sensor": {
@@ -692,6 +722,10 @@
     "second_controller": {
       "title": "Noget andet styrer også {device}",
       "description": "Noget andet end denne integration ændrer batteriets grænser, mens den styrer — {count} gange eller mere på et kvarter. To regulatorer ophæver hinanden. Som regel står Zendure-appen stadig på sin egen energiplan: åbn den og vælg **Custom Mode** under **Energy plan**. Ellers stop den anden automatisering eller integration, der skriver til batteriet. Beskeden forsvinder af sig selv efter en time uden sådanne skrivninger."
+    },
+    "standby_draw": {
+      "title": "{device} bruger {watts} W i hvile",
+      "description": "Med begge grænser på nul har batteriet det seneste døgn brugt {watts} W i hvile, hvor omkring 5 W er normalt. Den sædvanlige årsag er Backup mode: sæt den til **closed**. Med economic eller open forbliver omformeren vågen og bruger omkring 35 W. Denne meddelelse forsvinder af sig selv, når forbruget igen er under 12 W."
     }
   }
 }

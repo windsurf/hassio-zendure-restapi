@@ -48,7 +48,7 @@ from .p1meter import ExternalMeter
 from .registry import pack_model
 from .energy import EnergyAccumulator, split_signed
 from .coordinator import ZendureCoordinator
-from .entity import TranslatedName, ZendureEntity
+from .entity import align_entity_ids, device_prefix, TranslatedName, ZendureEntity
 from .properties import (
     AC_STATUS_MAP,
     DC_STATUS_MAP,
@@ -440,8 +440,11 @@ async def async_setup_entry(
 
     entities += _energy_sensors(coordinator, device_id, model)
     entities += _efficiency_sensors(coordinator, device_id, model)
+    if runtime is not None:
+        entities += _measure_sensors(coordinator, device_id, model, runtime["controller"])
 
     _LOGGER.debug("Adding %d sensors (%d packs)", len(entities), coordinator.pack_count)
+    align_entity_ids(hass, "sensor", entities, device_prefix(hass, device_id))
     async_add_entities(entities)
 
 
@@ -869,6 +872,177 @@ class ZendureEfficiencySensor(ZendureEntity, SensorEntity):
         ratio = (dc / ac) if description.pack_state == 1 else (ac / dc)
         return round(min(100.0, max(0.0, ratio * 100.0)), 1)
 
+
+
+# ── Measured diagnostics (v1.6.3) ────────────────────────────────────────
+# What the battery actually does, measured while it runs: see measure.py. The
+# two sensors above are a single moment of the converter; these are whole
+# blocks, cycles and days, to check the settings of price control against.
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZendureMeasureDescription(SensorEntityDescription):
+    """A figure of the battery's BatteryMeasure, and its basis."""
+
+    value: Any = None
+    attributes: Any = None
+
+
+def _blocks(direction: str):
+    return lambda m: {"blocks": list(m.blocks[direction]), "basis": "AC/DC per block of at least 1 kWh, last 5"}
+
+
+MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
+    ZendureMeasureDescription(
+        key="measured_charge_efficiency",
+        name="Measured charge efficiency",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-arrow-up-outline",
+        value=lambda m: m.block_efficiency("charge"),
+        attributes=_blocks("charge"),
+    ),
+    ZendureMeasureDescription(
+        key="measured_discharge_efficiency",
+        name="Measured discharge efficiency",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-arrow-down-outline",
+        value=lambda m: m.block_efficiency("discharge"),
+        attributes=_blocks("discharge"),
+    ),
+    ZendureMeasureDescription(
+        key="round_trip_ac",
+        name="Round trip efficiency AC",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-sync-outline",
+        value=lambda m: m.round_trip("ac"),
+        attributes=lambda m: {"cycles": list(m.cycles), "basis": "AC out / AC in between two moments at the same SOC bound, last 5"},
+    ),
+    ZendureMeasureDescription(
+        key="round_trip_dc",
+        name="Round trip efficiency DC",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-sync",
+        value=lambda m: m.round_trip("dc"),
+        attributes=lambda m: {"cycles": len(m.cycles), "basis": "DC out / DC in over the same cycles: cells and battery management"},
+    ),
+    ZendureMeasureDescription(
+        key="usable_capacity",
+        name="Usable capacity",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:battery-high",
+        value=lambda m: m.usable_capacity,
+        attributes=lambda m: {
+            "measurements": list(m.capacities),
+            "nominal_kwh": m.capacity_kwh,
+            "basis": "DC out from the upper to the lower SOC bound in one discharge",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="full_cycles",
+        name="Full cycles",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:counter",
+        value=lambda m: m.full_cycles,
+        attributes=lambda m: {
+            "dc_out_kwh": round(m.dc_out, 2),
+            "nominal_kwh": m.capacity_kwh,
+            "since": m.since,
+        },
+    ),
+    ZendureMeasureDescription(
+        key="standby_draw",
+        name="Standby draw",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:sleep",
+        value=lambda m: m.standby_draw,
+        attributes=lambda m: {
+            "rest_hours": round(m.standby.seconds() / 3600, 1),
+            "p90_w": m.standby.quantile(0.9),
+            "too_high": m.standby_alert,
+            "basis": "median DC draw at rest (both limits 0), last 24 h, by time",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="response_time",
+        name="Response time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:timer-outline",
+        value=lambda m: m.response_time,
+        attributes=lambda m: {
+            "start_s": m.response_median("start"),
+            "stop_s": m.response_median("stop"),
+            "steps": len(m.responses),
+            "timeouts": m.response_timeouts,
+            "basis": "limit write of 200 W or more until the grid has moved 90 % of it, median of the last 20",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="grid_tracking_error",
+        name="Grid tracking error",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:target",
+        value=lambda m: m.tracking_error,
+        attributes=lambda m: {
+            "p90_w": m.tracking.quantile(0.9),
+            "hours": round(m.tracking.seconds() / 3600, 1),
+            "basis": "median |grid - buffer| while a smart mode balances and the battery can follow, last 24 h, by time",
+        },
+    ),
+)
+
+
+def _measure_sensors(
+    coordinator: ZendureCoordinator, device_id: str, model: str, controller
+) -> list[SensorEntity]:
+    """Measured diagnostics need pack data, like the efficiency sensors."""
+    data = coordinator.data or {}
+    if coordinator.device_type == DEVICE_TYPE_METER or "pack1.power" not in data:
+        return []
+    return [ZendureMeasureSensor(coordinator, d, device_id, model, controller) for d in MEASURE_SENSORS]
+
+
+class ZendureMeasureSensor(ZendureEntity, SensorEntity):
+    """One measured diagnostic: unknown until there is something to measure."""
+
+    entity_description: ZendureMeasureDescription
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _unrecorded_attributes = frozenset({"blocks", "cycles", "measurements", "basis"})
+
+    def __init__(self, coordinator, description, device_id, model, controller) -> None:
+        super().__init__(coordinator, description, device_id, model)
+        self._controller = controller
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> Any:
+        return self.entity_description.value(self._controller.measure)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attributes = self.entity_description.attributes
+        return attributes(self._controller.measure) if attributes else None
 
 
 # ── External P1 meter ────────────────────────────────────────────────────

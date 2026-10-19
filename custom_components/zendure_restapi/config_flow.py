@@ -52,6 +52,7 @@ from .const import (
     MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
     OPT_CREATE_DASHBOARD,
+    OPT_DASHBOARD_OFFERED,
     OPT_PRICE_CONTAINS,
     OPT_PRICE_ENTITY,
     PRICE_CONTAINS_OPTIONS,
@@ -131,6 +132,9 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         options: dict[str, Any] = {CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL}
         if dashboard and not result.is_meter:
             options[OPT_CREATE_DASHBOARD] = True
+        elif not result.is_meter:
+            # Unticked while adding: the default dashboard is not made either.
+            options[OPT_DASHBOARD_OFFERED] = True
         return options
 
     def _entry_data(self) -> dict[str, Any]:

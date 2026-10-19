@@ -17,7 +17,7 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 
 ![Zendure dashboard](images/dashboard.png)
 
-*`smart_matching` holding the grid at zero: the house draws 175 W, the battery supplies it, the meter reads 0 W. The integration creates this dashboard for you on request.*
+*`smart_matching` holding the grid at zero: the house draws 79 W, the battery supplies it, and the controller keeps the meter within 10 W of zero. The integration creates this dashboard for you, with two more views: Price Control and Measured.*
 
 **Quick start below** · full details in the [Technical reference](#-technical-reference)
 
@@ -29,7 +29,8 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 |---|---|
 | **SolarFlow 3000 Mix AC+** | ✅ Tested daily by the author |
 | **SolarFlow 4000 Mix AC+** | ✅ Supported — same platform and battery as the 3000 Mix |
-| **SolarFlow 2400 AC · 2400 AC+ · 1600 AC+** | ✅ Supported — same AC-coupled design |
+| **SolarFlow 2400 AC** | ✅ Tested by a user — read-out and `smart_matching` confirmed |
+| **SolarFlow 2400 AC+ · 1600 AC+** | ✅ Supported — same AC-coupled design as the 2400 AC |
 | **SolarFlow 800 · 800 Plus · 800 Pro · 800 Pro 2 · 2400 Pro** | 🧪 Works, smart modes experimental (solar panels on the device) |
 | **SolarFlow 4000 Mix Pro** | 🧪 Works, smart modes experimental (solar panels on the device) |
 | Hyper 2000 · Hub 1200/2000 · AIO 2400 · Ace 1500 | ❌ No local API on these models |
@@ -52,7 +53,7 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 | **Zendure P1 meter** | ✅ Tested daily by the author |
 | **Zendure Smart Meter 3CT** | 🧪 Same API as the Zendure P1 meter |
 | **EcoTracker** (everHome) | 🧪 Documented local API, one reading per second |
-| **Shelly Pro 3EM** (clamps on the grid connection) | 🧪 Documented local API, one reading per second |
+| **Shelly Pro 3EM** (clamps on the grid connection) | ✅ Tested by a user as grid meter for the control loop, one reading per second |
 | **Any power sensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 New in v1.5.3 — for the dashboard and comparison; steers only if it updates every second |
 
 Set it up in one go: **Add integration → Zendure RestAPI → External P1 meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
@@ -83,9 +84,9 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 ## 🚀 Get started
 
 **1. Enable the local API and switch Zendure's own control off** — under EN 18031 the API is off by default.
-In the Zendure app, two settings:
+In the Zendure app:
 - add **HEMS** — this switches the local API on;
-- under **Energy plan**, choose **Custom Mode** — otherwise Zendure's own control keeps writing to the battery alongside this integration (forget it, and a repair under *Settings → Repairs* reminds you).
+- on the device page, switch **Add to HEMS** off — so Zendure's own control stays out of the way. Other ways and the app's power settings: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
 Then exit the app. Check it from any browser:
 `http://<battery-ip>/properties/report` should show JSON.
@@ -99,7 +100,7 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 [![Add integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
 **3. Add your devices**
-Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure device** and enter the IP address. Tick **Create the Zendure RestAPI dashboard** and the dashboard appears in your sidebar. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
+Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure device** and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
 **Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External P1 meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
@@ -121,6 +122,10 @@ The mode names stay the same in every language, so automations and documentation
 ---
 
 ## 💶 Price control
+
+![Price Control view of the dashboard](images/dashboard_price.png)
+
+*The Price Control view: the day plan for today and tomorrow, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Two ways to steer the battery on a dynamic tariff, in a device of its own:
 
@@ -172,7 +177,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart (in v1.6.1 its status could stay `off` until it was switched off and on); the technical reference opens with a list of contents, its chapters in reading order. **v1.6.1:** the three **modes per band** now drive the **day plan** as well, and it plans with them; **presets** that follow *Decision* and *Net metering* — with net metering the day plan lets the battery rest between its blocks; setting up the app names both steps, HEMS and Custom Mode. **v1.6.0:** **price control for dynamic tariffs**, with a **day plan** over the Nord Pool prices — separate import and export prices, conversion losses and a margin per kWh; entity names in eleven languages, with entity IDs that stay English; the dashboard **Zendure RestAPI** created for you on request.
+**Latest release – v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart. **v1.6.1:** the three **modes per band** now drive the **day plan** as well, and it plans with them; **presets** that follow *Decision* and *Net metering*.
 
 ## More
 

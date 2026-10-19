@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_MODEL, DOMAIN, PACK_PREFIX
 from .coordinator import ZendureCoordinator
-from .entity import ZendureEntity
+from .entity import align_entity_ids, device_prefix, ZendureEntity
 
 DEVICE_BINARY_SENSORS: tuple[BinarySensorEntityDescription, ...] = (
     BinarySensorEntityDescription(
@@ -135,6 +135,7 @@ async def async_setup_entry(
             )
         )
 
+    align_entity_ids(hass, "binary_sensor", entities, device_prefix(hass, device_id))
     async_add_entities(entities)
 
 
