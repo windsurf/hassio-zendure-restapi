@@ -13,7 +13,7 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 
 **🔌 Works with HomeWizard.** Heb je al een HomeWizard P1-meter? Meer heb je niet nodig — een Zendure-meter is niet vereist. YouLess, EcoTracker, Shelly Pro 3EM en de Zendure-meters werken ook.
 
-**💶 Dynamische tarieven, ingebouwd.** Heb je een dynamisch contract, zoals Zonneplan, Tibber, Frank Energie of ANWB Energie? Price Control plant laden en ontladen per kwartier over de Nord Pool-prijzen van vandaag en morgen — import- en exportprijs, omzetverlies en slijtage meegerekend. Salderen zit erin: zolang het geldt één schakelaar aan, vanaf 2027 uit. Geen automation te schrijven: zet hem aan.
+**💶 Dynamische tarieven, ingebouwd.** Heb je een dynamisch contract, zoals Zonneplan, Tibber, Frank Energie of ANWB Energie? Price Control plant laden en ontladen per kwartier over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan) — import- en exportprijs, omzetverlies en slijtage meegerekend. Salderen zit erin: zolang het geldt één schakelaar aan, vanaf 2027 uit. Geen automation te schrijven: zet hem aan.
 
 ![Zendure-dashboard](images/dashboard.png)
 
@@ -54,9 +54,9 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Zendure Smart Meter 3CT** | 🧪 Zelfde API als de Zendure P1-meter |
 | **EcoTracker** (everHome) | 🧪 Gedocumenteerde lokale API, één meting per seconde |
 | **Shelly Pro 3EM** (klemmen op de netaansluiting) | ✅ Getest door een gebruiker als netmeter voor de regeling, één meting per seconde |
-| **Elke vermogenssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Nieuw in v1.5.3 — voor dashboard en vergelijking; regelt alleen als hij elke seconde ververst |
+| **Elke meter in Home Assistant** (Shelly, DSMR, SMA, Huawei, Zonneplan, …) | 🧪 Kies het apparaat, de sensoren worden herkend (v1.6.5); regelt alleen als hij elke seconde of twee ververst |
 
-In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
+In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
 HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 *Niet gelieerd aan HomeWizard, YouLess, everHome of Shelly; dit zijn compatibiliteitsnotities.*
@@ -68,7 +68,7 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 - **100% lokaal.** Praat rechtstreeks met de eigen HTTP-server van de accu op je netwerk. Blijft werken als internet of de Zendure-cloud dat niet doet.
 - **Nul-teruglevering, elke seconde.** Een snelle lus volgt je meter elke seconde; een tragere regelt de richting en de veiligheid. Gebouwd en afgesteld op metingen, niet op aannames.
 - **Zeven werkmodi** — van rustig `standby` tot `smart_matching`, alleen laden, alleen ontladen, snel laden/ontladen en handmatig. Stuur ze met de hand, met Price Control of met je eigen automation.
-- **Dynamische tarieven, ingebouwd.** Price Control stuurt de accu op twee vaste prijzen of op een dagplan over de Nord Pool-prijzen — zie [Prijssturing](#-prijssturing).
+- **Dynamische tarieven, ingebouwd.** Price Control stuurt de accu op twee vaste prijzen of op een dagplan over de prijzen van vandaag en morgen — zie [Prijssturing](#-prijssturing).
 - **Instellingen zijn entiteiten.** Elke instelling overleeft een herstart en is live aan te passen vanaf het dashboard of vanuit een automation. Updates via HACS laten je eigen configuratie met rust.
 - **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — gevonden op je netwerk of toegevoegd op IP-adres, rechtstreeks gelezen, elke seconde, niet via een tragere Home Assistant-sensor. Of elke vermogenssensor die Home Assistant al heeft.
 - **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de accu stopt. Twee accu's vechten nooit om dezelfde meter; elke accu heeft zijn eigen regelaar, meterkeuze en prijssturing.
@@ -102,7 +102,7 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 **3. Voeg je apparaten toe**
 Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-accu** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
-**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
+**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Een meter die al in Home Assistant zit: **Externe netmeter uit Home Assistant**. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
 ---
 
@@ -130,7 +130,7 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 Twee manieren om de accu te sturen op een dynamisch tarief, in een eigen apparaat:
 
 - **Vaste prijzen** — op of onder een **goedkope prijs** laadt de accu (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen.
-- **Dagplan** (nieuw in v1.6.0) — over de [Nord Pool](https://github.com/custom-components/nordpool)-prijzen van vandaag en morgen bepaalt het per kwartier of de accu laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de accu; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
+- **Dagplan** (nieuw in v1.6.0) — over de prijzen van vandaag en morgen van [Nord Pool](https://github.com/custom-components/nordpool), EPEX Spot of Zonneplan bepaalt het per kwartier of de accu laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de accu; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
 
 Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,58 per dag** op — evenveel als een volledige energieplanner op dezelfde dagen; de vaste prijzen € 0,21.
 
@@ -140,6 +140,8 @@ Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,
 2. **Integratie toevoegen → Nord Pool**: *Region* je prijsgebied (`NL` voor Nederland), *Currency* `EUR`, *Include VAT* aan, *Price in cents* uit, *Energy scale* `kWh`, *Template for additional costs* laten staan.
 3. Voeg Prijssturing toe (hieronder) met die sensor, `sensor.nordpool_kwh_…`, en zet *De prijssensor bevat* op **Spotprijs incl. btw**.
 4. Zet **Beslissing** op **Dagplan** en zet tot 1 januari 2027 **Salderen** aan. Vergelijk **Importprijs** met de prijs van je leverancier voor dit kwartier; wijkt hij af, pas dan *Importopslag* aan.
+
+Heb je al **EPEX Spot** of **Zonneplan**? Sla stap 1–2 voor Nord Pool over en kies die sensor in stap 3: [welke sensor, welke instelling](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more) (Engels).
 
 Volledige uitleg, tariefinstellingen voor andere contracten en landen: [Setting up Nord Pool](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-nord-pool-for-the-day-plan) (Engels).
 
@@ -177,7 +179,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
+**Pre-release – v1.6.5** (zet in HACS *Pre-release* aan voor deze repository): het dashboard toont de netmeting waarop echt gestuurd wordt, **Netvermogen (in regeling)**, van welke meter ook; het dagplan leest ook **EPEX Spot**- en **Zonneplan**-prijzen; elke meter die al in Home Assistant zit is als heel apparaat te kiezen. **v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
 
 ## Meer
 

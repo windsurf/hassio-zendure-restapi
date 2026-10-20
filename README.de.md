@@ -13,7 +13,7 @@ Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS i
 
 **🔌 Works with HomeWizard.** Du hast schon einen HomeWizard-P1-Zähler? Mehr brauchst du nicht – ein Zendure-Zähler ist nicht nötig. YouLess, EcoTracker, Shelly Pro 3EM und die Zendure-Zähler funktionieren ebenfalls.
 
-**💶 Dynamische Tarife, eingebaut.** Du hast einen dynamischen Stromtarif, etwa von Tibber, Ostrom oder Rabot? Price Control plant Laden und Entladen je Viertelstunde über die Nord-Pool-Preise von heute und morgen – Bezugs- und Einspeisepreis, Umwandlungsverluste und Verschleiß eingerechnet; der Einspeisepreis folgt deiner Einspeisevergütung oder dem Marktwert. Keine Automation zu schreiben: einschalten.
+**💶 Dynamische Tarife, eingebaut.** Du hast einen dynamischen Stromtarif, etwa von Tibber, Ostrom oder Rabot? Price Control plant Laden und Entladen je Viertelstunde über die Preise von heute und morgen (Nord Pool, EPEX Spot) – Bezugs- und Einspeisepreis, Umwandlungsverluste und Verschleiß eingerechnet; der Einspeisepreis folgt deiner Einspeisevergütung oder dem Marktwert. Keine Automation zu schreiben: einschalten.
 
 ![Zendure-Dashboard](images/dashboard.png)
 
@@ -54,9 +54,9 @@ Die Batterie muss wissen, was dein Haus aus dem Netz bezieht oder einspeist. Nut
 | **Zendure Smart Meter 3CT** | 🧪 Gleiche API wie der Zendure-P1-Zähler |
 | **EcoTracker** (everHome) | 🧪 Dokumentierte lokale API, ein Messwert pro Sekunde |
 | **Shelly Pro 3EM** (Klemmen am Netzanschluss) | ✅ Von einem Nutzer als Netzzähler für die Regelung getestet, ein Messwert pro Sekunde |
-| **Jeder Leistungssensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 Neu in v1.5.3 – für Dashboard und Vergleich; regelt nur, wenn er jede Sekunde aktualisiert |
+| **Jeder Zähler in Home Assistant** (Shelly, DSMR, SMA, Huawei, …) | 🧪 Gerät wählen, die Sensoren werden erkannt (v1.6.5); regelt nur, wenn er jede oder jede zweite Sekunde aktualisiert |
 
-In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort.
+In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort.
 HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 
 *Keine Verbindung zu HomeWizard, YouLess, everHome oder Shelly; dies sind Kompatibilitätshinweise.*
@@ -68,7 +68,7 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 - **100 % lokal.** Spricht direkt mit dem eigenen HTTP-Server der Batterie in deinem Netzwerk. Funktioniert weiter, wenn Internet oder Zendure-Cloud ausfallen.
 - **Nulleinspeisung, einmal pro Sekunde.** Eine schnelle Schleife folgt deinem Zähler jede Sekunde; eine langsamere regelt Richtung und Sicherheit. Gebaut und abgestimmt auf Messungen, nicht auf Annahmen.
 - **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar von Hand, über Price Control oder über deine eigene Automation.
-- **Dynamische Tarife, eingebaut.** Price Control steuert die Batterie über zwei feste Preise oder über einen Tagesplan auf den Nord-Pool-Preisen – siehe [Preissteuerung](#-preissteuerung).
+- **Dynamische Tarife, eingebaut.** Price Control steuert die Batterie über zwei feste Preise oder über einen Tagesplan auf den Preisen von heute und morgen – siehe [Preissteuerung](#-preissteuerung).
 - **Einstellungen sind Entitäten.** Jede Einstellung übersteht einen Neustart und lässt sich live im Dashboard oder per Automation ändern. Updates über HACS lassen deine eigene Konfiguration in Ruhe.
 - **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – im Netzwerk gefunden oder per IP hinzugefügt, direkt gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor. Oder jeder Leistungssensor, den Home Assistant schon hat.
 - **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler; jede hat ihren eigenen Regler, ihre Zählerwahl und ihre Preissteuerung.
@@ -102,7 +102,7 @@ Oder: HACS → Drei-Punkte-Menü → Benutzerdefinierte Repositories → `https:
 **3. Geräte hinzufügen**
 Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Batterie** (die erste Option) wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
 
-**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
+**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Ein Zähler, der schon in Home Assistant ist: **Externer Netzzähler aus Home Assistant**. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
 
 ---
 
@@ -130,7 +130,7 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 Zwei Wege, die Batterie nach einem dynamischen Tarif zu steuern, in einem eigenen Gerät:
 
 - **Feste Preise** – bei oder unter einem **günstigen Preis** lädt die Batterie (aus dem Netz oder nur aus Solarüberschuss), bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null (die Modi je Band wählst du selbst). Jeder Preissensor geht: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie oder dein eigener.
-- **Tagesplan** (neu in v1.6.0) – über die [Nord Pool](https://github.com/custom-components/nordpool)-Preise von heute und morgen bestimmt er je Viertelstunde, ob die Batterie lädt, entlädt oder keines von beiden, mit getrennten Bezugs- und Einspeisepreisen, Umwandlungsverlusten, Verschleiß und einer Mindestmarge pro kWh. Standardmäßig handelt er: Laden und Entladen mit der vollen Leistung der Batterie; über die Modi je Band deckt er auf Wunsch nur das Haus oder lädt nur aus Solarüberschuss. Bereit für das Ende der niederländischen Saldierung 2027: *Net metering* ausschalten, und der Einspeisepreis folgt seiner eigenen Formel.
+- **Tagesplan** (neu in v1.6.0) – über die Preise von heute und morgen von [Nord Pool](https://github.com/custom-components/nordpool) oder EPEX Spot bestimmt er je Viertelstunde, ob die Batterie lädt, entlädt oder keines von beiden, mit getrennten Bezugs- und Einspeisepreisen, Umwandlungsverlusten, Verschleiß und einer Mindestmarge pro kWh. Standardmäßig handelt er: Laden und Entladen mit der vollen Leistung der Batterie; über die Modi je Band deckt er auf Wunsch nur das Haus oder lädt nur aus Solarüberschuss. Bereit für das Ende der niederländischen Saldierung 2027: *Net metering* ausschalten, und der Einspeisepreis folgt seiner eigenen Formel.
 
 Auf 30 Tagen einer echten Anlage nachgespielt brachte der Tagesplan **€ 1,58 pro Tag** – so viel wie ein vollständiger Energieplaner an denselben Tagen; die festen Preise € 0,21.
 
@@ -140,6 +140,8 @@ Auf 30 Tagen einer echten Anlage nachgespielt brachte der Tagesplan **€ 1,58 p
 2. **Integration hinzufügen → Nord Pool**: *Region* dein Preisgebiet (`GER` für Deutschland, `AT` für Österreich), *Currency* `EUR`, *Include VAT* an, *Price in cents* aus, *Energy scale* `kWh`, *Template for additional costs* unverändert lassen.
 3. Preissteuerung (unten) mit diesem Sensor hinzufügen, `sensor.nordpool_kwh_…`, und *Der Preissensor enthält* auf **Spotpreis inkl. MwSt.** stellen; *Bezugsfaktor* auf 1 + MwSt.-Satz setzen (1,19 in Deutschland, 1,20 in Österreich).
 4. **Entscheidung** auf **Tagesplan** stellen und **Bezugspreis** mit dem Preis deines Anbieters für diese Viertelstunde vergleichen; weicht er ab, *Bezugsaufschlag* anpassen.
+
+Schon **EPEX Spot** im Einsatz? Schritte 1–2 für Nord Pool überspringen und in Schritt 3 diesen Sensor wählen: [welcher Sensor, welche Einstellung](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more) (Englisch).
 
 Ausführliche Anleitung, Tarifeinstellungen für andere Verträge und Länder: [Setting up Nord Pool](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-nord-pool-for-the-day-plan) (Englisch).
 
@@ -177,7 +179,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
+**Vorabversion – v1.6.5** (in HACS *Pre-release* für dieses Repository einschalten): das Dashboard zeigt den Netzwert, nach dem tatsächlich geregelt wird, **Netzleistung (in Regelung)**, gleich von welchem Zähler; der Tagesplan liest auch **EPEX-Spot**-Preise; jeder Zähler, der schon in Home Assistant ist, lässt sich als ganzes Gerät wählen. **v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
 
 ## Mehr
 

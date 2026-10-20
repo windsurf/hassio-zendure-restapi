@@ -234,6 +234,9 @@ class ZendureController:
         # against `_pending` would book watts that never arrived.
         self._source_used = "none"
         self._trim_source = "none"
+        # Listeners for "Grid power (in control)" (v1.6.5): called on every
+        # sample of the meter the loops act on.
+        self._grid_listeners: list[Any] = []
 
         # ── One battery steers on the grid ───────────────────────────
         # Set once the entry unloads, so a claim it still holds lapses.
@@ -602,6 +605,8 @@ class ZendureController:
         """
         self._watch_writers()
         await self._record()
+        for listener in list(self._grid_listeners):
+            listener()
         await self.async_trim()
         try:
             self._tracking(self._meter_reading()[0])
@@ -1531,6 +1536,25 @@ class ZendureController:
         power, source = self._meter_reading()
         self._source_used = source
         return power
+
+    def grid_in_control(self) -> tuple[float | None, str]:
+        """The grid reading the loops act on now, and the meter it came from.
+
+        The same call both loops use, so the sensor that shows it cannot
+        disagree with what steers (v1.6.5). None when the chosen meter has no
+        reading the loops would accept.
+        """
+        return self._meter_reading()
+
+    def add_grid_listener(self, listener: Any) -> Any:
+        """Call `listener` on every sample of the meter in control."""
+        self._grid_listeners.append(listener)
+
+        def _remove() -> None:
+            if listener in self._grid_listeners:
+                self._grid_listeners.remove(listener)
+
+        return _remove
 
     def _active_source(self) -> str:
         """Which meter feeds the loops right now: zendure, external or none."""

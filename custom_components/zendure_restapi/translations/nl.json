@@ -6,8 +6,8 @@
         "description": "Wat wil je toevoegen?",
         "menu_options": {
           "zendure": "Zendure-accu — begin hier (ook een Zendure P1-meter)",
-          "external_meter": "Externe netmeter (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant-sensor als externe meter (Zonneplan, DSMR, …)",
+          "external_meter": "Externe netmeter via IP — het snelst (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Externe netmeter uit Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Prijssturing (dynamische tarieven)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Externe netmeter",
-        "description": "Een tweede netmeter voor de accuregeling. Welke meter gebruikt wordt kies je met Meter source op de accu (standaard: auto). HomeWizard: zet eerst Lokale API aan in de HomeWizard Energy-app.",
+        "title": "Externe netmeter via IP",
+        "description": "Een netmeter die rechtstreeks via je netwerk wordt gelezen, tot vier keer per seconde. Zonder Zendure P1-meter is dit de enige meter van de accu. Met een Zendure P1-meter beslist Meter source op de accu (standaard auto: deze meter zolang hij meldt, anders de Zendure-meter). HomeWizard: zet eerst Lokale API aan in de HomeWizard Energy-app.",
         "data": {
           "external_meter_type": "Metertype",
           "host": "IP-adres",
@@ -45,19 +45,51 @@
         "description": "Een vermogenssensor die al in Home Assistant staat, afname positief. Zijn afname en teruglevering aparte sensoren, beide positief, kies dan ook de terugleversensor. Een sensor die minder dan eens per seconde ververst, staat tussen twee updates op geen nieuwe gegevens; Meter source auto gebruikt dan de Zendure-meter.",
         "data": {
           "source_entity": "Vermogenssensor (afname positief)",
-          "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
+          "export_entity": "Terugleversensor (optioneel, teruglevering positief)",
+          "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
         }
       },
       "price_control": {
         "title": "Prijssturing",
-        "description": "Zet de werkmodus van een accu op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de Nord Pool-prijzen van vandaag en morgen. Hij staat uit tot je hem aanzet.",
+        "description": "Zet de werkmodus van een accu op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan, …). Hij staat uit tot je hem aanzet.",
         "data": {
           "battery_entry": "Accu",
           "price_entity": "Prijssensor (prijs per kWh)",
           "price_contains": "De prijssensor bevat"
         },
         "data_description": {
-          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs."
+          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
+          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie of Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Meter uit Home Assistant",
+        "description": "Een meter die al in Home Assistant zit. Die is zo snel als zijn integratie hem ververst, en sturen vraagt minstens elke 1–2 s een meting. Een meter die deze integratie via IP kan lezen (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM) is zo sneller.",
+        "menu_options": {
+          "ha_device": "Een apparaat — de vermogenssensoren worden herkend",
+          "ha_sensor": "Sensoren zelf kiezen"
+        }
+      },
+      "ha_device": {
+        "title": "Meterapparaat",
+        "description": "Kies het apparaat dat je netaansluiting meet, bijvoorbeeld een Shelly, een DSMR-lezer of de netmeter van een omvormer. De vermogenssensoren worden op de volgende pagina herkend.",
+        "data": {
+          "source_device": "Apparaat"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Sneller via IP",
+        "description": "**{device}** kan rechtstreeks gelezen worden als {type} op {host}, meerdere keren per seconde. Via Home Assistant is hij zo snel als zijn integratie — bij de YouLess elke 10 s, te traag om te sturen.",
+        "menu_options": {
+          "ha_device_ip": "Via IP lezen (aanbevolen)",
+          "ha_device_confirm": "Toch via Home Assistant gebruiken"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Meter controleren",
+        "description": "**{device}** — netto netvermogen, afname positief:\n\n{sensors}\n\nNu: **{reading}**. Met zon op de panelen en weinig verbruik in huis hoort dit teruglevering te zijn. Staan afname en teruglevering omgekeerd, vink dan het vakje aan.",
+        "data": {
+          "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "Het adres antwoordt, maar niet als dit metertype. Controleer het metertype.",
       "homewizard_api_off": "De meter antwoordt niet. Zet Lokale API aan in de HomeWizard Energy-app en probeer opnieuw.",
       "not_a_power_sensor": "Deze sensor heeft nu geen vermogenswaarde (eenheid W of kW, numerieke waarde).",
-      "same_entity": "De terugleversensor moet een andere zijn dan de vermogenssensor."
+      "same_entity": "De terugleversensor moet een andere zijn dan de vermogenssensor.",
+      "no_power_total": "Geen vermogenssensor van dit apparaat geeft een nettotaal. Kies de sensoren dan zelf."
     },
     "abort": {
       "already_configured": "Dit apparaat is al geconfigureerd.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Externe netmeter",
+        "title": "Externe netmeter via IP",
         "data": {
           "host": "IP-adres",
           "external_meter_interval_ms": "Milliseconden tussen bevragingen (100-1000; onder 1000 alleen voor YouLess)"
@@ -98,7 +131,8 @@
         "title": "Home Assistant-sensor",
         "data": {
           "source_entity": "Vermogenssensor (afname positief)",
-          "export_entity": "Terugleversensor (optioneel, teruglevering positief)"
+          "export_entity": "Terugleversensor (optioneel, teruglevering positief)",
+          "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "De prijssensor bevat"
         },
         "data_description": {
-          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs."
+          "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
+          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie of Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Meterapparaat",
+        "description": "**{device}** — netto netvermogen, afname positief:\n\n{sensors}\n\nNu: **{reading}**. Met zon op de panelen en weinig verbruik in huis hoort dit teruglevering te zijn. Staan afname en teruglevering omgekeerd, vink dan het vakje aan.",
+        "data": {
+          "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Laden",
           "discharging": "Ontladen"
         },
-        "name": "Accu {index} status"
+        "name": "Pack {index} status"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Daartussen",
           "expensive": "Duur"
         },
-        "name": "Status"
+        "name": "Status",
+        "state_attributes": {
+          "price_name": {
+            "name": "Prijssensor"
+          },
+          "price_format": {
+            "name": "Prijslijst",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "andere prijslijst"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Laadvermogen accu"
       },
       "pack_batcur": {
-        "name": "Accu {index} stroom"
+        "name": "Pack {index} stroom"
       },
       "pack_input_power": {
         "name": "Ontlaadvermogen accu"
       },
       "pack_max_temp": {
-        "name": "Accu {index} temperatuur"
+        "name": "Pack {index} temperatuur"
       },
       "pack_max_vol": {
-        "name": "Accu {index} max. celspanning"
+        "name": "Pack {index} max. celspanning"
       },
       "pack_min_vol": {
-        "name": "Accu {index} min. celspanning"
+        "name": "Pack {index} min. celspanning"
       },
       "pack_model": {
-        "name": "Accu {index} model"
+        "name": "Pack {index} model"
       },
       "pack_num": {
-        "name": "Aantal accumodules"
+        "name": "Aantal packs"
       },
       "pack_pack_type": {
-        "name": "Accu {index} pakkettype"
+        "name": "Pack {index} type"
       },
       "pack_power": {
-        "name": "Accu {index} vermogen"
+        "name": "Pack {index} vermogen"
       },
       "pack_sn": {
-        "name": "Accu {index} serienummer"
+        "name": "Pack {index} serienummer"
       },
       "pack_soc_level": {
-        "name": "Accu {index} laadtoestand"
+        "name": "Pack {index} laadtoestand"
       },
       "pack_soft_version": {
-        "name": "Accu {index} firmwareversie"
+        "name": "Pack {index} firmwareversie"
       },
       "pack_total_vol": {
-        "name": "Accu {index} spanning"
+        "name": "Pack {index} spanning"
       },
       "phase_switch": {
         "name": "Fasewissel"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Verloren schrijfacties"
+      },
+      "grid_power_in_control": {
+        "name": "Netvermogen (in regeling)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lamp"
       },
       "pack_heat_state": {
-        "name": "Accu {index} verwarming"
+        "name": "Pack {index} verwarming"
       },
       "pass": {
         "name": "Doorvoer"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} verbruikt {watts} W in rust",
       "description": "Met beide limieten op nul heeft de accu het afgelopen etmaal in rust {watts} W verbruikt, waar ongeveer 5 W normaal is. Meestal ligt het aan Backup mode: zet die op **closed**. Met economic of open blijft de omvormer wakker en verbruikt hij ongeveer 35 W. Deze melding verdwijnt vanzelf zodra het verbruik weer onder 12 W is."
+    },
+    "slow_meter": {
+      "title": "{meter} meldt elke {seconds} s",
+      "description": "De regellussen accepteren een netmeting 5 seconden, dus een meter die elke {seconds} s meldt stuurt de accu maar een deel van de tijd. Bij een meter uit Home Assistant is dit de snelheid van zijn integratie. Lees hem via IP waar deze integratie dat kan (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), of stuur op de Zendure-meter met *Meter source*. Deze melding verdwijnt vanzelf zodra de metingen sneller komen."
     }
   }
 }

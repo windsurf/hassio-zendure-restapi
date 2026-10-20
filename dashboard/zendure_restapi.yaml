@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.4
+# ZENDURE RESTAPI DASHBOARD - v1.6.5
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -52,7 +52,7 @@
 #                      until measured)
 #   Device control   - device settings, Meter source, manual
 #   Controller settings, Power flow, Energy, Configuration,
-#   Battery 1, System status, Diagnostics, Zendure P1 Meter
+#   Pack 1, System status, Diagnostics, Zendure P1 Meter
 #   External P1 Meter - shown only when an external meter is
 #                      configured; energy tiles only for readers
 #                      with meter registers (HomeWizard,
@@ -65,17 +65,21 @@
 #   Mix AC+. The automatic dashboard takes the limit from the
 #   device; by hand, lower max: to 2400 or 1600 for a 2400 AC or
 #   1600 AC+, or raise it to 4000 for the 4000 Mix models.
+#   The day plan chart's power axis runs from -3000 to 4000 W
+#   in steps of 1000; for a 2400 AC keep it, for an 800 W
+#   device use -800 to 1000 (the automatic dashboard scales it).
 #
 # BATTERY PACKS:
-#   The section Battery 1 covers one pack. With more packs, the
-#   automatic dashboard adds Battery 2, 3 ... by itself, and a
-#   Battery n Power tile next to Battery 1 Power. By hand: copy
-#   the section and replace battery_1_ with battery_2_.
+#   The section Pack 1 covers one battery pack. With more packs,
+#   the automatic dashboard adds Pack 2, 3 ... by itself, and a
+#   Pack n Power tile next to Pack 1 Power. By hand: copy
+#   the section, replace pack_1_ with pack_2_ and the
+#   heading Pack 1 with Pack 2.
 #
 # NAMES:
 #   Tiles and gauges carry name: type: entity, so they show the
-#   entity name without the device name in front ("Battery 1
-#   State of charge", not "Zendure SolarFlow ... Battery 1 State
+#   entity name without the device name in front ("Pack 1
+#   State of charge", not "Zendure SolarFlow ... Pack 1 State
 #   of charge"). The label itself still comes from the
 #   integration: renaming an entity in Home Assistant changes the
 #   dashboard along with it. Needs Home Assistant 2025.11 or
@@ -216,7 +220,7 @@ views:
       heading_style: title
       icon: mdi:gauge
     - type: gauge
-      entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+      entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
       name:
         type: entity
       min: -3000
@@ -532,7 +536,7 @@ views:
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_power
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_power
       name:
         type: entity
     - type: tile
@@ -639,47 +643,47 @@ views:
     column_span: 2
     cards:
     - type: heading
-      heading: Battery 1
+      heading: Pack 1
       heading_style: title
       icon: mdi:battery-high
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_state_of_charge
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_state_of_charge
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_state
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_state
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_voltage
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_voltage
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_current
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_current
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_power
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_power
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_temperature
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_temperature
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_max_cell_voltage
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_max_cell_voltage
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_min_cell_voltage
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_firmware_version
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_1_model
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_model
       name:
         type: entity
   - type: grid
@@ -745,7 +749,7 @@ views:
       name:
         type: entity
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_battery_module_count
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_count
       name:
         type: entity
     - type: tile
@@ -901,11 +905,11 @@ views:
         **Decision** chooses how price control decides.
 
         - **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.
-        - **Day plan**: over the Nord Pool prices of today and tomorrow (the Nord Pool integration from HACS), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.
+        - **Day plan**: over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan and others), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.
 
         Both take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
 
-        Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up Nord Pool: see *Price control* in the README.
+        Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up a price sensor: see *Price control* in the README.
       grid_options:
         columns: full
         rows: auto
@@ -944,7 +948,7 @@ views:
       content: |
         {% set p = 'sensor.price_control_plan' %}
         {% if states(p) in ['unavailable', 'unknown'] %}
-        No day plan: *Decision* is on *Fixed prices*, or there is no Nord Pool price list or battery data yet.
+        No day plan: *Decision* is on *Fixed prices*, or there is no price list or battery data yet.
         {% else %}
         {% set nc = state_attr(p, 'next_change') %}
         {% set ns = namespace(c=[], d=[]) %}
@@ -973,7 +977,17 @@ views:
       header:
         show: false
       yaxis:
-      - decimals: 0
+      - id: power
+        min: -3000
+        max: 4000
+        decimals: 0
+        apex_config:
+          tickAmount: 7
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
       apex_config:
         chart:
           height: 240
@@ -983,12 +997,12 @@ views:
           x:
             format: dd-MM HH:mm
       series:
-      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
-        name: Grid (P1)
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
+        name: Grid
         type: area
         unit: W
         color: '#1E88E5'
-        opacity: 0.25
+        opacity: 0.2
         stroke_width: 2
         curve: smooth
         float_precision: 0
@@ -999,12 +1013,13 @@ views:
         show:
           in_header: false
           legend_value: false
+        yaxis_id: power
       - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
         name: Discharging
         type: area
         unit: W
-        color: '#FFB300'
-        opacity: 0.25
+        color: '#4CAF50'
+        opacity: 0.2
         stroke_width: 2
         curve: smooth
         float_precision: 0
@@ -1015,12 +1030,13 @@ views:
         show:
           in_header: false
           legend_value: false
+        yaxis_id: power
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
         unit: W
         color: '#E53935'
-        opacity: 0.25
+        opacity: 0.2
         stroke_width: 2
         curve: smooth
         float_precision: 0
@@ -1032,6 +1048,24 @@ views:
           in_header: false
           legend_value: false
         transform: return x * -1;
+        yaxis_id: power
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        group_by:
+          func: avg
+          duration: 5min
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
       - entity: sensor.price_control_plan
         name: Plan
         type: line
@@ -1054,6 +1088,23 @@ views:
           if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);
           pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);
           return pts.map(p => [p[0], p[1]]);
+        yaxis_id: power
+      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+        name: SoC
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 3
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 5min
+        show:
+          in_header: false
+          legend_value: false
       grid_options:
         columns: 24
         rows: auto
@@ -1065,6 +1116,15 @@ views:
       heading: Pricing modes
       heading_style: title
       icon: mdi:cash-multiple
+      badges:
+      - type: entity
+        entity: sensor.price_control_status
+        icon: mdi:cash
+        state_content: price_name
+      - type: entity
+        entity: sensor.price_control_status
+        icon: mdi:format-list-bulleted
+        state_content: price_format
     - type: tile
       entity: number.price_control_cheap_price
       name:
@@ -1281,7 +1341,7 @@ views:
         type: entity
       icon: mdi:flash
     - type: tile
-      entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+      entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
       name:
         type: entity
       icon: mdi:transmission-tower

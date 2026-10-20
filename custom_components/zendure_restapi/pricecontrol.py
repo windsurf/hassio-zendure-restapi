@@ -11,7 +11,8 @@ Two ways to decide, chosen with the Decision select:
   follows the meter or rests. Works with any sensor that gives the current
   price per kWh.
 - **Day plan** (v1.6.0). A plan over the prices of today and tomorrow from a
-  Nord Pool sensor (HACS integration), with the import price and the export
+  price sensor with a price list (Nord Pool; since v1.6.5 also EPEX Spot,
+  Zonneplan and others, see dayplan.read_prices), with the import price and the export
   value each from a formula of their own, the conversion losses and a
   minimum margin per kWh; see dayplan.py. A charge period runs the cheap
   price mode, a discharge period the expensive price mode, every other
@@ -97,6 +98,7 @@ from .dayplan import (
     Tariff,
     ahead,
     make_plan,
+    price_format,
     price_scale,
     read_prices,
 )
@@ -199,6 +201,8 @@ class PriceControl:
         self._last_target: str | None = None
         self.price: float | None = None
         self.unit: str | None = None
+        # The integration the price list comes from (v1.6.5), or None.
+        self.price_format: str | None = None
         self.status: str = PRICE_STATUS_OFF
         self.target: str | None = None
         self.import_price: float | None = None
@@ -401,6 +405,7 @@ class PriceControl:
         tens of milliseconds, too long for the event loop on a small machine.
         """
         self.price, attributes = self._read_price()
+        self.price_format = price_format(attributes)
         if self.price is not None:
             # Per kWh in the currency's main unit, whatever the sensor's scale.
             self.price = round(self.price * price_scale(attributes), 6)
@@ -480,6 +485,8 @@ class PriceControl:
         return {
             "price": self.price,
             "price_entity": self._entity or None,
+            "price_name": self._price_name(),
+            "price_format": self.price_format,
             "decision": self._settings.get(OPT_PRICE_DECISION),
             "target_mode": self.target,
             "operation_mode": self._battery.get(OPT_OPERATION_MODE),
@@ -488,6 +495,14 @@ class PriceControl:
             "import_price": self.import_price,
             "export_value": self.export_value,
         }
+
+    def _price_name(self) -> str | None:
+        """The name of the price sensor, for the dashboard heading (v1.6.5)."""
+        if not self._entity:
+            return None
+        state = self.hass.states.get(self._entity)
+        name = state.attributes.get("friendly_name") if state is not None else None
+        return str(name) if name else self._entity
 
     @property
     def plan_attributes(self) -> dict[str, Any]:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -12,8 +13,10 @@ from homeassistant.util import slugify
 from homeassistant.helpers.entity import Entity, EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN, MANUFACTURER, PACK_PREFIX
 from .coordinator import ZendureCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def name_key(key: str) -> str:
@@ -130,6 +133,7 @@ ALIGN_KEYS = (
     "measured_charge_efficiency", "measured_discharge_efficiency",
     "round_trip_ac", "round_trip_dc", "usable_capacity", "full_cycles",
     "standby_draw", "response_time", "grid_tracking_error", "lost_writes",
+    "grid_power_in_control",
 )
 
 
@@ -166,3 +170,46 @@ def align_entity_ids(hass: HomeAssistant, domain: str, entities: list[Any], pref
         ):
             registry.async_update_entity(current, new_entity_id=wanted)
 
+
+# Pack entities were named "Battery N …" until v1.6.5, so their ids read
+# …_battery_N_…; from v1.6.5 they are "Pack N …" and …_pack_N_…. Moved over
+# once per entity when the battery is set up: the recorder carries the history
+# to the new id. Only ids still in the integration's own form are moved; one
+# renamed by hand, or a target that is taken, stays as it is.
+_OLD_PACK_ID = re.compile(r"^(sensor|binary_sensor)\.(.+)_(?:battery|pack)_(\d+)_(.+)$")
+# Names that changed with the move, by the end of the old id: Pack N Type (was
+# Pack type), Pack count (was Battery module count).
+_RENAMED_TAILS = {"pack_type": "type"}
+_RENAMED_IDS = {"_battery_module_count": "_pack_count"}
+
+
+def migrate_pack_entity_ids(hass: HomeAssistant, entry_id: str) -> int:
+    """Rename …_battery_N_… pack entities to …_pack_N_…; the number moved."""
+    registry = er.async_get(hass)
+    moved = 0
+    for entity in er.async_entries_for_config_entry(registry, entry_id):
+        old = next((o for o in _RENAMED_IDS if entity.entity_id.endswith(o)), None)
+        if old is not None and (entity.unique_id or "").endswith("_packNum"):
+            wanted = entity.entity_id[: -len(old)] + _RENAMED_IDS[old]
+            if not registry.async_is_registered(wanted) and hass.states.get(wanted) is None:
+                registry.async_update_entity(entity.entity_id, new_entity_id=wanted)
+                moved += 1
+            continue
+        match = _OLD_PACK_ID.match(entity.entity_id)
+        if match is None or f"_{PACK_PREFIX}{match.group(3)}_" not in (entity.unique_id or ""):
+            continue
+        domain, head, number, tail = match.groups()
+        wanted = f"{domain}.{head}_pack_{number}_{_RENAMED_TAILS.get(tail, tail)}"
+        if wanted == entity.entity_id:
+            continue
+        if registry.async_is_registered(wanted) or hass.states.get(wanted) is not None:
+            _LOGGER.warning("Not renaming %s: %s is already in use", entity.entity_id, wanted)
+            continue
+        registry.async_update_entity(entity.entity_id, new_entity_id=wanted)
+        moved += 1
+    if moved:
+        _LOGGER.info(
+            "Renamed %d pack entities from battery_N_ to pack_N_ (v1.6.5); "
+            "history is kept, dashboards that name the old ids need updating", moved,
+        )
+    return moved

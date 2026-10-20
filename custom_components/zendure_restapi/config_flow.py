@@ -9,6 +9,8 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -24,6 +26,9 @@ from .const import (
     CONF_EXTERNAL_INTERVAL,
     CONF_EXTERNAL_TYPE,
     CONF_HOST,
+    CONF_INVERT,
+    CONF_METER_PLAN,
+    CONF_SOURCE_DEVICE,
     CONF_MODEL,
     CONF_PORT,
     CONF_PRODUCT,
@@ -59,7 +64,8 @@ from .const import (
     PRICE_DEVICE_NAME,
     ZEROCONF_HOMEWIZARD,
 )
-from .p1meter import ADAPTERS, state_power
+from .hadevice import Candidate, MeterPlan, fast_route, plan as device_plan, summary
+from .p1meter import ADAPTERS, HaSensorMeter, state_power
 from .registry import is_known_model, meter_name, model_name, parse_service_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -123,6 +129,8 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._port: int = DEFAULT_PORT
         self._result: ProbeResult | None = None
         self._discovered: dict[str, Any] = {}
+        # The device meter being added (v1.6.5): see _device_meter.
+        self._device: dict[str, Any] = {}
 
     def _entry_options(self, dashboard: bool) -> dict[str, Any]:
         """Options of a new Zendure entry. The dashboard request only means
@@ -155,8 +163,14 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Choose what to add: a Zendure device, an external meter or price control."""
         return self.async_show_menu(
             step_id="user",
-            menu_options=["zendure", "external_meter", "ha_sensor", "price_control"],
+            menu_options=["zendure", "external_meter", "ha_meter", "price_control"],
         )
+
+    async def async_step_ha_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A meter already in Home Assistant: a whole device, or sensors chosen by hand."""
+        return self.async_show_menu(step_id="ha_meter", menu_options=["ha_device", "ha_sensor"])
 
     # ── Price control ────────────────────────────────────────────────────
 
@@ -271,32 +285,34 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "wrong_meter_type"
         return None
 
-    def _device_name(self, kind: str) -> str:
+    def _device_name(self, kind: str, label: str | None = None) -> str:
         """The first external meter is `External P1 meter`, as in v1.5.2, so
         its entity IDs are sensor.external_p1_meter_*. Later ones carry their
-        type in the name, which keeps their IDs apart and recognisable."""
+        type in the name, which keeps their IDs apart and recognisable; a
+        meter from a Home Assistant device carries that device's name, so two
+        of them stay apart too (v1.6.5)."""
         others = [
             e for e in self._async_current_entries(include_ignore=False)
             if e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
         ]
         if not others:
             return EXTERNAL_DEVICE_NAME
-        return f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_KIND_LABELS.get(kind, kind)})"
+        return f"{EXTERNAL_DEVICE_NAME} ({label or EXTERNAL_KIND_LABELS.get(kind, kind)})"
 
     def _external_entry(
         self, kind: str, host: str | None, interval: int | None,
-        extra: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None, label: str | None = None,
     ) -> ConfigFlowResult:
         data = {
             CONF_DEVICE_TYPE: DEVICE_TYPE_EXTERNAL,
             CONF_EXTERNAL_TYPE: kind,
-            CONF_DEVICE_NAME: self._device_name(kind),
+            CONF_DEVICE_NAME: self._device_name(kind, label),
             **(extra or {}),
         }
         if host is not None:
             data[CONF_HOST] = host
         return self.async_create_entry(
-            title=f"{EXTERNAL_DEVICE_NAME} ({EXTERNAL_KIND_LABELS.get(kind, kind)})",
+            title=f"{EXTERNAL_DEVICE_NAME} ({label or EXTERNAL_KIND_LABELS.get(kind, kind)})",
             data=data,
             options={CONF_EXTERNAL_INTERVAL: interval} if interval is not None else {},
         )
@@ -353,7 +369,10 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 await self.async_set_unique_id(f"{EXTERNAL_TYPE_HA_SENSOR}_{source}")
                 self._abort_if_unique_id_configured()
-                extra = {CONF_SOURCE_ENTITY: source}
+                extra: dict[str, Any] = {
+                    CONF_SOURCE_ENTITY: source,
+                    CONF_INVERT: bool(user_input.get(CONF_INVERT, False)),
+                }
                 if export:
                     extra[CONF_EXPORT_ENTITY] = export
                 return self._external_entry(EXTERNAL_TYPE_HA_SENSOR, None, None, extra)
@@ -361,6 +380,97 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="ha_sensor",
             data_schema=_ha_sensor_schema(current),
             errors=errors,
+        )
+
+    async def async_step_ha_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A device of another integration as external meter (v1.6.5)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            device_id = user_input[CONF_SOURCE_DEVICE]
+            found = _device_meter(self.hass, device_id)
+            if not found["plan"].ok:
+                errors["base"] = "no_power_total"
+            else:
+                await self.async_set_unique_id(f"ha_device_{device_id}")
+                self._abort_if_unique_id_configured()
+                self._device = found
+                if found["fast"]:
+                    return await self.async_step_ha_device_fast()
+                return await self.async_step_ha_device_confirm()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SOURCE_DEVICE): selector.DeviceSelector(
+                    selector.DeviceSelectorConfig(
+                        entity=[
+                            selector.EntityFilterSelectorConfig(
+                                domain="sensor", device_class="power"
+                            )
+                        ]
+                    )
+                )
+            }
+        )
+        return self.async_show_form(step_id="ha_device", data_schema=schema, errors=errors)
+
+    async def async_step_ha_device_fast(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The reader can be polled directly: offer that, faster than through HA."""
+        kind, host = self._device["fast"]
+        return self.async_show_menu(
+            step_id="ha_device_fast",
+            menu_options=["ha_device_ip", "ha_device_confirm"],
+            description_placeholders={
+                "device": self._device["name"],
+                "type": EXTERNAL_KIND_LABELS.get(kind, kind),
+                "host": host,
+            },
+        )
+
+    async def async_step_ha_device_ip(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Add the reader over IP instead, at its own address."""
+        kind, host = self._device["fast"]
+        return await self.async_step_external_meter(
+            {
+                CONF_EXTERNAL_TYPE: kind,
+                CONF_HOST: host,
+                CONF_EXTERNAL_INTERVAL: DEFAULT_EXTERNAL_INTERVAL,
+            }
+        )
+
+    async def async_step_ha_device_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show which sensors make the total, and the reading now, before saving."""
+        found = self._device
+        plan: MeterPlan = found["plan"]
+        if user_input is not None:
+            plan.invert = bool(user_input.get(CONF_INVERT, plan.invert))
+            return self._external_entry(
+                EXTERNAL_TYPE_HA_SENSOR,
+                None,
+                None,
+                {
+                    CONF_SOURCE_DEVICE: found["device_id"],
+                    CONF_METER_PLAN: plan.as_data(),
+                    CONF_INVERT: plan.invert,
+                },
+                label=found["name"],
+            )
+        reading = await _reading(self.hass, plan)
+        schema = vol.Schema({vol.Optional(CONF_INVERT, default=plan.invert): bool})
+        return self.async_show_form(
+            step_id="ha_device_confirm",
+            data_schema=schema,
+            description_placeholders={
+                "device": found["name"],
+                "sensors": summary(plan, found["names"]),
+                "reading": reading,
+            },
         )
 
     async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
@@ -515,6 +625,8 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
             return await self.async_step_price(user_input)
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
+            if entry.data.get(CONF_METER_PLAN):
+                return await self.async_step_device(user_input)
             if entry.data.get(CONF_EXTERNAL_TYPE) == EXTERNAL_TYPE_HA_SENSOR:
                 return await self.async_step_sensor(user_input)
             return await self.async_step_external(user_input)
@@ -603,7 +715,11 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             export = user_input.get(CONF_EXPORT_ENTITY) or None
             errors = _check_power_entities(self.hass, source, export)
             if not errors:
-                data = {**entry.data, CONF_SOURCE_ENTITY: source}
+                data = {
+                    **entry.data,
+                    CONF_SOURCE_ENTITY: source,
+                    CONF_INVERT: bool(user_input.get(CONF_INVERT, False)),
+                }
                 data.pop(CONF_EXPORT_ENTITY, None)
                 if export:
                     data[CONF_EXPORT_ENTITY] = export
@@ -612,9 +728,37 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         current = user_input or {
             CONF_SOURCE_ENTITY: entry.data.get(CONF_SOURCE_ENTITY),
             CONF_EXPORT_ENTITY: entry.data.get(CONF_EXPORT_ENTITY),
+            CONF_INVERT: entry.data.get(CONF_INVERT, False),
         }
         return self.async_show_form(
             step_id="sensor", data_schema=_ha_sensor_schema(current), errors=errors
+        )
+
+    async def async_step_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A device meter: the sign, and the sensors found again (v1.6.5)."""
+        entry = self.config_entry
+        device_id = entry.data.get(CONF_SOURCE_DEVICE) or ""
+        found = _device_meter(self.hass, device_id)
+        plan: MeterPlan = found["plan"] if found["plan"].ok else MeterPlan.from_data(
+            entry.data.get(CONF_METER_PLAN) or {}
+        )
+        plan.invert = bool(entry.data.get(CONF_INVERT, plan.invert))
+        if user_input is not None:
+            plan.invert = bool(user_input.get(CONF_INVERT, plan.invert))
+            data = {**entry.data, CONF_METER_PLAN: plan.as_data(), CONF_INVERT: plan.invert}
+            self.hass.config_entries.async_update_entry(entry, data=data)
+            return self.async_create_entry(title="", data=dict(entry.options))
+        schema = vol.Schema({vol.Optional(CONF_INVERT, default=plan.invert): bool})
+        return self.async_show_form(
+            step_id="device",
+            data_schema=schema,
+            description_placeholders={
+                "device": found["name"],
+                "sensors": summary(plan, found["names"]),
+                "reading": await _reading(self.hass, plan),
+            },
         )
 
 
@@ -635,7 +779,13 @@ def _ha_sensor_schema(current: dict[str, Any]) -> vol.Schema:
         if current.get(CONF_SOURCE_ENTITY)
         else vol.Required(CONF_SOURCE_ENTITY)
     )
-    return vol.Schema({source_key: power, export_key: power})
+    return vol.Schema(
+        {
+            source_key: power,
+            export_key: power,
+            vol.Optional(CONF_INVERT, default=bool(current.get(CONF_INVERT, False))): bool,
+        }
+    )
 
 
 def _check_power_entities(hass, source: str, export: str | None) -> dict[str, str]:
@@ -652,3 +802,50 @@ def _check_power_entities(hass, source: str, export: str | None) -> dict[str, st
         errors[CONF_EXPORT_ENTITY] = "same_entity"
     return errors
 
+
+def _device_meter(hass, device_id: str) -> dict[str, Any]:
+    """The device, its power sensors and the plan they make (v1.6.5)."""
+    device = dr.async_get(hass).async_get(device_id)
+    registry = er.async_get(hass)
+    candidates: list[Candidate] = []
+    names: dict[str, str] = {}
+    platforms: list[str] = []
+    for entity in er.async_entries_for_device(registry, device_id):
+        if entity.platform == DOMAIN or entity.domain != "sensor":
+            continue
+        state = hass.states.get(entity.entity_id)
+        attributes = state.attributes if state is not None else {}
+        unit = attributes.get("unit_of_measurement") or entity.unit_of_measurement
+        name = entity.original_name or ""
+        candidates.append(Candidate(entity.entity_id, unit, name))
+        names[entity.entity_id] = attributes.get("friendly_name") or name or entity.entity_id
+        platforms.append(entity.platform)
+    platform = max(set(platforms), key=platforms.count) if platforms else ""
+    fast = None
+    if device is not None:
+        model = " ".join(str(x) for x in (device.model, getattr(device, "model_id", None)) if x)
+        for entry_id in device.config_entries:
+            config_entry = hass.config_entries.async_get_entry(entry_id)
+            if config_entry is not None and config_entry.domain == platform:
+                fast = fast_route(platform, model, dict(config_entry.data))
+                if fast:
+                    break
+    return {
+        "device_id": device_id,
+        "name": (device.name_by_user or device.name) if device else device_id,
+        "plan": device_plan(platform, candidates),
+        "names": names,
+        "fast": fast,
+    }
+
+
+async def _reading(hass, plan: MeterPlan) -> str:
+    """The net grid power now, as the meter would read it, for the confirm step."""
+    meter = HaSensorMeter(hass, None, "", 250)
+    meter.plan = plan
+    try:
+        _stamp, power, _extra = meter.parse(await meter._async_fetch())
+    except (ValueError, TypeError, KeyError, IndexError):
+        return "–"
+    direction = "import" if power > 0 else "export" if power < 0 else "zero"
+    return f"{power:.0f} W ({direction})"

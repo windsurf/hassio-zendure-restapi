@@ -176,8 +176,12 @@ class ZendureBinarySensor(ZendureEntity, BinarySensorEntity):
         """Rename and re-key this entity as belonging to a specific pack."""
         description = self.entity_description
         self._attr_unique_id = f"{self._device_id}_{PACK_PREFIX}{index}_{description.key}"
+        # "Pack {index} …" (v1.6.5): shown through the translations, and in
+        # English as suggested_object_id, so the entity ids read pack_N_ in
+        # every language. Ids from before v1.6.5 (battery_N_) are moved over
+        # once by migrate_pack_entity_ids.
         self._set_name(
-            description, "pack_", {"index": str(index)}, f"Battery {index} {description.name}"
+            description, "pack_", {"index": str(index)}, f"Pack {index} {description.name}"
         )
 
     @property

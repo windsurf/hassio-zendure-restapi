@@ -1,8 +1,8 @@
 """The day plan: when to charge and when to discharge, from the prices ahead.
 
 Pure arithmetic, no Home Assistant objects, so it can be tested and replayed
-on its own. Price control feeds it the price list of a Nord Pool sensor (the
-HACS integration: attributes raw_today and raw_tomorrow), the tariff and the
+on its own. Price control feeds it the price list of a price sensor (Nord
+Pool, EPEX Spot, Zonneplan and others: see read_prices), the tariff and the
 battery, and acts on the action for the current period.
 
 **Prices.** The sensor value is turned back into the bare spot price first,
@@ -39,7 +39,7 @@ fixed prices earned EUR 0.21. Under the 2027 rules it earned EUR 0.83 a day.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from statistics import median
 from typing import Any, Iterable
 
@@ -192,34 +192,138 @@ def price_scale(attributes: dict[str, Any]) -> float:
     return scale * per
 
 
-def read_prices(attributes: dict[str, Any]) -> list[Period]:
-    """The price list of a Nord Pool sensor (HACS): today, and tomorrow when known.
+# Price lists, recognised by where they are kept. Each family is a group of
+# attributes read together (today and tomorrow); the first family that gives
+# prices is used, so two lists of different meaning are never mixed.
+#   Nord Pool (HACS)       raw_today, raw_tomorrow: start, end, value
+#   Energi Data Service    raw_today, raw_tomorrow: hour, price
+#   EPEX Spot (HACS)       data: start_time, end_time, price_per_kwh
+#   Zonneplan              forecast: start_date, end_date,
+#                          price_tax_included.amount (× 10^-7)
+#   Zonneplan (older)      forecast: datetime, electricity_price (× 10^-7)
+#   ENTSO-e (HACS)         prices_today, prices_tomorrow, prices: time, price
+#   Frank Energie (HACS)   prices: from, till, price
+PRICE_FAMILIES: tuple[tuple[str, ...], ...] = (
+    ("raw_today", "raw_tomorrow"),
+    ("data",),
+    ("forecast",),
+    ("prices_today", "prices_tomorrow", "prices"),
+)
+START_KEYS = ("start", "start_time", "start_date", "from", "time", "datetime", "hour")
+END_KEYS = ("end", "end_time", "end_date", "till", "to")
+# Value field and its factor to an amount per kWh; None: the sensor's own
+# scale (price_scale), for the fields that carry no unit in their name.
+VALUE_KEYS: tuple[tuple[str, float | None], ...] = (
+    ("value", None),
+    ("price_per_kwh", 1.0),
+    ("price_tax_included.amount", 1e-7),
+    ("electricity_price", 1e-7),
+    ("price_ct_per_kwh", 0.01),
+    ("price_eur_per_mwh", 0.001),
+    ("price", None),
+)
+# Which integration a list comes from, by its family, start field and value
+# field: shown in the status attributes, so a wrong sensor is quick to spot.
+FORMAT_NAMES = {
+    ("raw_today", "start", "value"): "nord_pool",
+    ("raw_today", "hour", "price"): "energi_data_service",
+    ("data", "start_time", "price_per_kwh"): "epex_spot",
+    ("data", "start_time", "price_ct_per_kwh"): "epex_spot",
+    ("data", "start_time", "price_eur_per_mwh"): "epex_spot",
+    ("forecast", "start_date", "price_tax_included.amount"): "zonneplan",
+    ("forecast", "datetime", "electricity_price"): "zonneplan",
+    ("prices_today", "time", "price"): "entso_e",
+    ("prices_today", "from", "price"): "frank_energie",
+}
+# The length of a period whose end is not given and cannot be taken from the
+# next one: the most common step in the list, else an hour.
+DEFAULT_STEP = timedelta(hours=1)
 
-    Values per kWh in the currency's main unit, whatever the sensor's own
-    scale. Entries without a usable start, end or value are left out; a list
-    that is not there gives nothing. Sorted by start, duplicates dropped.
-    """
-    scale = price_scale(attributes)
-    lists: list[Iterable[Any]] = [attributes.get("raw_today") or []]
-    if attributes.get("tomorrow_valid", True):
-        lists.append(attributes.get("raw_tomorrow") or [])
-    seen: dict[datetime, Period] = {}
-    for items in lists:
+
+def _field(item: dict[str, Any], path: str) -> Any:
+    value: Any = item
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _first(item: dict[str, Any], keys: Iterable[str]) -> tuple[str | None, Any]:
+    for key in keys:
+        value = _field(item, key)
+        if value is not None:
+            return key, value
+    return None, None
+
+
+def _family(attributes: dict[str, Any], family: tuple[str, ...]) -> tuple[list[Period], tuple[str, str]]:
+    """The prices in one family of attributes, and their start and value fields."""
+    unit_scale = price_scale(attributes)
+    rows: list[tuple[datetime, datetime | None, float]] = []
+    fields: tuple[str, str] | None = None
+    for name in family:
+        if name == "raw_tomorrow" and not attributes.get("tomorrow_valid", True):
+            continue
+        items = attributes.get(name)
         if not isinstance(items, (list, tuple)):
             continue
         for item in items:
             if not isinstance(item, dict):
                 continue
-            start = _as_datetime(item.get("start"))
-            end = _as_datetime(item.get("end"))
+            start_key, start_raw = _first(item, START_KEYS)
+            start = _as_datetime(start_raw)
+            end = _as_datetime(_first(item, END_KEYS)[1])
+            key, raw = _first(item, (k for k, _ in VALUE_KEYS))
+            if start is None or key is None:
+                continue
             try:
-                value = float(item.get("value")) * scale
+                factor = dict(VALUE_KEYS)[key]
+                value = float(raw) * (unit_scale if factor is None else factor)
             except (TypeError, ValueError):
                 continue
-            if start is None or end is None or end <= start:
-                continue
-            seen[start] = Period(start, end, value)
-    return [seen[k] for k in sorted(seen)]
+            fields = fields or (str(start_key), key)
+            rows.append((start, end, value))
+    if not rows or fields is None:
+        return [], ("", "")
+    rows.sort(key=lambda r: r[0])
+    starts = [r[0] for r in rows]
+    steps = [b - a for a, b in zip(starts, starts[1:]) if b > a]
+    step = max(set(steps), key=steps.count) if steps else DEFAULT_STEP
+    seen: dict[datetime, Period] = {}
+    for i, (start, end, value) in enumerate(rows):
+        if end is None:
+            nxt = next((s for s in starts[i + 1:] if s > start), None)
+            end = nxt if nxt is not None and nxt - start <= step else start + step
+        if end <= start:
+            continue
+        seen[start] = Period(start, end, value)
+    return [seen[k] for k in sorted(seen)], fields
+
+
+def _read(attributes: dict[str, Any]) -> tuple[list[Period], str | None]:
+    for family in PRICE_FAMILIES:
+        periods, fields = _family(attributes, family)
+        if periods:
+            return periods, FORMAT_NAMES.get((family[0], *fields), "other")
+    return [], None
+
+
+def read_prices(attributes: dict[str, Any]) -> list[Period]:
+    """The price list of a price sensor: today, and tomorrow when known.
+
+    Recognises the lists of Nord Pool (HACS), EPEX Spot, Zonneplan, ENTSO-e,
+    Frank Energie and Energi Data Service (PRICE_FAMILIES). Values per kWh in
+    the currency's main unit, whatever the sensor's own scale. Entries without
+    a usable start or value are left out; a missing end is the next start.
+    Sorted by start, duplicates dropped.
+    """
+    return _read(attributes)[0]
+
+
+def price_format(attributes: dict[str, Any]) -> str | None:
+    """Which integration the price list comes from, or None without a list."""
+    return _read(attributes)[1]
 
 
 def ahead(periods: list[Period], now: datetime) -> list[Period]:

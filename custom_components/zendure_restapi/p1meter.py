@@ -49,8 +49,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from collections.abc import Callable
 from datetime import datetime
+from statistics import median
 from typing import Any
 
 import aiohttp
@@ -74,12 +76,22 @@ from .const import (
     EXTERNAL_TYPE_YOULESS,
     EXTERNAL_TYPE_ZENDURE,
 )
+from .hadevice import MeterPlan
 
 _LOGGER = logging.getLogger(__name__)
 
 
 # Marks "no telegram seen since the poller started".
 _UNSEEN = object()
+
+# The update interval is the median gap over the last readings, from this many
+# on: enough to ride out one late reading, few enough to follow a change.
+UPDATE_SAMPLES = 30
+UPDATE_MIN_SAMPLES = 10
+# A meter that reports every few minutes would need most of an hour for ten
+# gaps; two gaps spanning a minute already show it is far too slow to steer.
+UPDATE_SLOW_SAMPLES = 2
+UPDATE_SLOW_SPAN = 60.0         # s
 
 
 class ExternalMeter:
@@ -123,6 +135,8 @@ class ExternalMeter:
 
         self._failures_in_row = 0
         self._last_stamp: Any = _UNSEEN
+        # Seconds between new readings, for the update interval (v1.6.5).
+        self._gaps: deque[float] = deque(maxlen=UPDATE_SAMPLES)
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task | None = None
         # The config entry this meter belongs to, set on setup.
@@ -149,6 +163,21 @@ class ExternalMeter:
         if self.recent_power(METER_FALLBACK_AGE) is None:
             return EXTERNAL_STATUS_STALE
         return EXTERNAL_STATUS_LIVE
+
+    @property
+    def update_interval(self) -> float | None:
+        """Median seconds between new readings, once there are enough of them.
+
+        What the meter really delivers, whatever it is polled at: a Home
+        Assistant sensor is only as fast as its own integration (v1.6.5).
+        """
+        gaps = len(self._gaps)
+        enough = gaps >= UPDATE_MIN_SAMPLES or (
+            gaps >= UPDATE_SLOW_SAMPLES and sum(self._gaps) >= UPDATE_SLOW_SPAN
+        )
+        if not enough:
+            return None
+        return round(median(self._gaps), 2)
 
     def telegram_age(self) -> float | None:
         """Seconds since the last new telegram, None before the first."""
@@ -274,7 +303,10 @@ class ExternalMeter:
             return
         self._last_stamp = stamp
         self.data = {"stamp": stamp, "power": power, **extra}
-        self.updated_at = dt_util.utcnow()
+        now = dt_util.utcnow()
+        if self.updated_at is not None:
+            self._gaps.append((now - self.updated_at).total_seconds())
+        self.updated_at = now
         self.telegrams += 1
 
         for listener in list(self._listeners):
@@ -318,6 +350,7 @@ class ExternalMeter:
             "failures": self.failures,
             "last_poll_ok": self.last_poll_ok,
             "telegram_age_s": age,
+            "update_interval_s": self.update_interval,
             "last_telegram": dict(self.data),
         }
 
@@ -475,19 +508,26 @@ def state_power(state: Any) -> float:
 
 
 class HaSensorMeter(ExternalMeter):
-    """A power sensor already in Home Assistant, read as an external meter.
+    """Power sensors already in Home Assistant, read as an external meter.
 
     For meters this integration has no adapter for: a Zonneplan Connect, a DSMR
-    reader, the YouLess integration that ships with Home Assistant. Whether the
-    result can steer depends on how often that sensor is updated, not on this
-    adapter. A sensor refreshed every ten seconds, let alone every five minutes
-    as the Zonneplan cloud does, reads as `stale` between updates, and `auto`
-    then uses the Zendure meter. It is still worth having on the dashboard.
+    reader, a Shelly other than the Pro 3EM, an inverter's grid meter. Whether
+    the result can steer depends on how often those sensors are updated, not
+    on this adapter. A sensor refreshed every ten seconds, as the YouLess
+    integration of Home Assistant does, let alone every five minutes as the
+    Zonneplan cloud does, reads as `stale` between updates, and `auto` then
+    uses the Zendure meter. It is still worth having on the dashboard; the
+    update interval shows how fast it really is.
 
-    The telegram stamp is the sensor's `last_reported`: it moves on every
+    Since v1.6.5 the meter is a plan (hadevice.MeterPlan): the terms of the
+    total with their signs, the phases, optionally a direction sensor and an
+    inverted sign. An entry from before v1.6.5 holds one power sensor, import
+    positive, and optionally an export sensor; it reads as the plan
+    [(power, +1), (export, -1)].
+
+    The telegram stamp is the sensors' `last_reported`: it moves on every
     report, also when the value is unchanged, so a steady reading is not
-    mistaken for a frozen one. Import is positive. Where import and export are
-    separate sensors, both positive, the export sensor is subtracted.
+    mistaken for a frozen one.
     """
 
     manufacturer = "Home Assistant"
@@ -499,27 +539,75 @@ class HaSensorMeter(ExternalMeter):
     def __init__(self, hass, session, host, interval_ms) -> None:
         super().__init__(hass, session, host, interval_ms)
         self.export_entity: str | None = None
+        self.plan: MeterPlan | None = None
+        # How the meter is named in the External meter select: the device,
+        # or the sensor for an entry of one sensor.
+        self.name: str | None = None
+
+    def _plan(self) -> MeterPlan:
+        if self.plan is not None:
+            return self.plan
+        terms = [(self.host, 1)]
+        if self.export_entity:
+            terms.append((self.export_entity, -1))
+        return MeterPlan(terms=terms, how="sensor")
 
     async def _async_fetch(self) -> Any:
-        states = [self.hass.states.get(self.host)]
-        if self.export_entity:
-            states.append(self.hass.states.get(self.export_entity))
-        return states
+        plan = self._plan()
+        get = self.hass.states.get
+        return {
+            "terms": [(get(entity_id), sign) for entity_id, sign in plan.total_terms()],
+            "phases": [(get(entity_id), sign, phase) for entity_id, sign, phase in plan.phases],
+            "direction": (get(plan.direction[0]), plan.direction[1]) if plan.direction else None,
+            "invert": plan.invert,
+            "split": plan.how == "sensor" and len(plan.terms) == 2,
+        }
 
     def parse(self, payload: Any) -> tuple[Any, float, dict[str, Any]]:
-        power = state_power(payload[0])
-        stamp = [_reported(payload[0])]
-        extra: dict[str, Any] = {"import_w": power}
-        if len(payload) > 1:
-            export = state_power(payload[1])
-            stamp.append(_reported(payload[1]))
-            extra["export_w"] = export
-            power -= export
+        if isinstance(payload, list):
+            # The shape before v1.6.5: [power state, export state?].
+            payload = {
+                "terms": [(payload[0], 1)] + ([(payload[1], -1)] if len(payload) > 1 else []),
+                "phases": [], "direction": None, "invert": False, "split": len(payload) > 1,
+            }
+        terms = payload["terms"]
+        if not terms:
+            raise ValueError("no sensors to read")
+        power = 0.0
+        stamp = []
+        values = []
+        for state, sign in terms:
+            value = state_power(state)
+            values.append(value)
+            power += sign * value
+            stamp.append(_reported(state))
+        extra: dict[str, Any] = {}
+        if payload.get("split"):
+            # One import and one export sensor, both positive, as before v1.6.5.
+            extra["import_w"] = values[0]
+            extra["export_w"] = values[1]
+        direction = payload.get("direction")
+        if direction is not None:
+            state, export = direction
+            if state is None:
+                raise ValueError("direction sensor not found")
+            stamp.append(_reported(state))
+            if str(state.state).lower() == str(export).lower():
+                power = -abs(power)
+        if payload.get("invert"):
+            power = -power
+        for state, sign, phase in payload.get("phases") or []:
+            try:
+                value = sign * state_power(state)
+            except ValueError:
+                continue
+            key = f"phase_{phase}_w"
+            extra[key] = round(extra.get(key, 0.0) + (-value if payload.get("invert") else value), 1)
         return tuple(stamp), round(power, 1), extra
 
     @property
     def label(self) -> str:
-        return f"{EXTERNAL_KIND_LABELS[self.kind]} ({self.host})"
+        return f"{EXTERNAL_KIND_LABELS[self.kind]} ({self.name or self.host})"
 
     @property
     def configuration_url(self) -> str | None:

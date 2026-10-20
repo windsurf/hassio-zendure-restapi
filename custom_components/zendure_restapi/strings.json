@@ -6,8 +6,8 @@
         "description": "What would you like to add?",
         "menu_options": {
           "zendure": "Zendure battery — start here (also a Zendure P1 meter)",
-          "external_meter": "External grid meter (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant sensor as external meter (Zonneplan, DSMR, …)",
+          "external_meter": "External grid meter over IP — fastest (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "External grid meter from Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Price control (dynamic tariffs)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "External grid meter",
-        "description": "A second grid meter for the battery controller. Which meter is used is chosen with the Meter source select on the battery (default: auto). HomeWizard: switch on Local API in the HomeWizard Energy app first.",
+        "title": "External grid meter over IP",
+        "description": "A grid meter read directly over your network, up to four times a second. Without a Zendure P1 meter it is the battery's only meter. With one, Meter source on the battery decides (default auto: this meter while it reports, otherwise the Zendure meter). HomeWizard: switch on Local API in the HomeWizard Energy app first.",
         "data": {
           "external_meter_type": "Meter type",
           "host": "IP address",
@@ -45,19 +45,51 @@
         "description": "A power sensor already in Home Assistant, import positive. With separate import and export sensors, both positive, also choose the export sensor. A sensor that updates less than once a second shows as stale between updates; Meter source auto then uses the Zendure meter.",
         "data": {
           "source_entity": "Power sensor (import positive)",
-          "export_entity": "Export sensor (optional, export positive)"
+          "export_entity": "Export sensor (optional, export positive)",
+          "export_positive": "The meter reads export as positive (invert the sign)"
         }
       },
       "price_control": {
         "title": "Price control",
-        "description": "Sets the Operation mode of a battery from the electricity price: with two fixed prices, or with a day plan over the Nord Pool prices of today and tomorrow. It is off until you switch it on.",
+        "description": "Sets the Operation mode of a battery from the electricity price: with two fixed prices, or with a day plan over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan, …). It is off until you switch it on.",
         "data": {
           "battery_entry": "Battery",
           "price_entity": "Price sensor (price per kWh)",
           "price_contains": "The price sensor holds"
         },
         "data_description": {
-          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price."
+          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price. EPEX Spot: Market price sensor: spot price; Total price sensor: import price. Zonneplan: import price.",
+          "price_entity": "Fixed prices: any sensor with the current price. Day plan: a sensor with a price list — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie or Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Meter from Home Assistant",
+        "description": "A meter that is already in Home Assistant. It is only as fast as its integration updates it, and steering needs a reading at least every 1–2 s. A meter this integration can read over IP (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM) is faster that way.",
+        "menu_options": {
+          "ha_device": "A device — its power sensors are recognised",
+          "ha_sensor": "Sensors chosen by hand"
+        }
+      },
+      "ha_device": {
+        "title": "Meter device",
+        "description": "Choose the device that measures your grid connection, for example a Shelly, a DSMR reader or an inverter's grid meter. Its power sensors are recognised on the next page.",
+        "data": {
+          "source_device": "Device"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Faster over IP",
+        "description": "**{device}** can be read directly as {type} at {host}, several times a second. Through Home Assistant it is only as fast as its integration — for the YouLess every 10 s, too slow to steer.",
+        "menu_options": {
+          "ha_device_ip": "Read it over IP (recommended)",
+          "ha_device_confirm": "Use it through Home Assistant anyway"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Check the meter",
+        "description": "**{device}** — net grid power, import positive:\n\n{sensors}\n\nNow: **{reading}**. With sun on the panels and little use in the house this should read export. If import and export are the wrong way round, tick the box.",
+        "data": {
+          "export_positive": "The meter reads export as positive (invert the sign)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "The address answers, but not as this meter type. Check the meter type.",
       "homewizard_api_off": "The meter does not answer. Switch on Local API in the HomeWizard Energy app and try again.",
       "not_a_power_sensor": "This sensor has no power reading right now (unit W or kW, numeric state).",
-      "same_entity": "The export sensor must differ from the power sensor."
+      "same_entity": "The export sensor must differ from the power sensor.",
+      "no_power_total": "No power sensor on this device makes a grid total. Choose the sensors by hand instead."
     },
     "abort": {
       "already_configured": "This device is already configured.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "External grid meter",
+        "title": "External grid meter over IP",
         "data": {
           "host": "IP address",
           "external_meter_interval_ms": "Milliseconds between polls (100-1000; below 1000 only for YouLess)"
@@ -98,7 +131,8 @@
         "title": "Home Assistant sensor",
         "data": {
           "source_entity": "Power sensor (import positive)",
-          "export_entity": "Export sensor (optional, export positive)"
+          "export_entity": "Export sensor (optional, export positive)",
+          "export_positive": "The meter reads export as positive (invert the sign)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "The price sensor holds"
         },
         "data_description": {
-          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price."
+          "price_contains": "For the day plan. Nord Pool (HACS) with VAT on and no additional costs: spot price incl. VAT. With VAT off: spot price. With your whole tariff in its additional costs: import price. EPEX Spot: Market price sensor: spot price; Total price sensor: import price. Zonneplan: import price.",
+          "price_entity": "Fixed prices: any sensor with the current price. Day plan: a sensor with a price list — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie or Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Meter device",
+        "description": "**{device}** — net grid power, import positive:\n\n{sensors}\n\nNow: **{reading}**. With sun on the panels and little use in the house this should read export. If import and export are the wrong way round, tick the box.",
+        "data": {
+          "export_positive": "The meter reads export as positive (invert the sign)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Charging",
           "discharging": "Discharging"
         },
-        "name": "Battery {index} State"
+        "name": "Pack {index} State"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "In between",
           "expensive": "Expensive"
         },
-        "name": "Status"
+        "name": "Status",
+        "state_attributes": {
+          "price_name": {
+            "name": "Price sensor"
+          },
+          "price_format": {
+            "name": "Price list",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "other price list"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Battery charge power"
       },
       "pack_batcur": {
-        "name": "Battery {index} Current"
+        "name": "Pack {index} Current"
       },
       "pack_input_power": {
         "name": "Battery discharge power"
       },
       "pack_max_temp": {
-        "name": "Battery {index} Temperature"
+        "name": "Pack {index} Temperature"
       },
       "pack_max_vol": {
-        "name": "Battery {index} Max cell voltage"
+        "name": "Pack {index} Max cell voltage"
       },
       "pack_min_vol": {
-        "name": "Battery {index} Min cell voltage"
+        "name": "Pack {index} Min cell voltage"
       },
       "pack_model": {
-        "name": "Battery {index} Model"
+        "name": "Pack {index} Model"
       },
       "pack_num": {
-        "name": "Battery module count"
+        "name": "Pack count"
       },
       "pack_pack_type": {
-        "name": "Battery {index} Pack type"
+        "name": "Pack {index} Type"
       },
       "pack_power": {
-        "name": "Battery {index} Power"
+        "name": "Pack {index} Power"
       },
       "pack_sn": {
-        "name": "Battery {index} Serial number"
+        "name": "Pack {index} Serial number"
       },
       "pack_soc_level": {
-        "name": "Battery {index} State of charge"
+        "name": "Pack {index} State of charge"
       },
       "pack_soft_version": {
-        "name": "Battery {index} Firmware version"
+        "name": "Pack {index} Firmware version"
       },
       "pack_total_vol": {
-        "name": "Battery {index} Voltage"
+        "name": "Pack {index} Voltage"
       },
       "phase_switch": {
         "name": "Phase switch"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Lost writes"
+      },
+      "grid_power_in_control": {
+        "name": "Grid power (in control)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lamp"
       },
       "pack_heat_state": {
-        "name": "Battery {index} Heating"
+        "name": "Pack {index} Heating"
       },
       "pass": {
         "name": "Pass-through"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} draws {watts} W at rest",
       "description": "With both limits at zero the battery has drawn {watts} W at rest over the last day, where about 5 W is normal. The usual cause is Backup mode: set it to **closed**. With economic or open the converter stays awake and draws around 35 W. This message disappears by itself once the draw is back below 12 W."
+    },
+    "slow_meter": {
+      "title": "{meter} reports every {seconds} s",
+      "description": "The control loops accept a grid reading for 5 seconds, so a meter that reports every {seconds} s steers the battery only part of the time. For a meter added from Home Assistant this is the speed of its integration. Read it over IP where this integration can (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), or steer on the Zendure meter with *Meter source*. This message disappears by itself when readings come faster."
     }
   }
 }

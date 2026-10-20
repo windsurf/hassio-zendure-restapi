@@ -6,8 +6,8 @@
         "description": "Co chcesz dodać?",
         "menu_options": {
           "zendure": "Bateria Zendure — zacznij tutaj (także licznik P1 Zendure)",
-          "external_meter": "Zewnętrzny licznik sieciowy (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Czujnik Home Assistant jako licznik zewnętrzny (Zonneplan, DSMR, …)",
+          "external_meter": "Zewnętrzny licznik sieci przez IP — najszybszy (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Zewnętrzny licznik sieci z Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Sterowanie cenowe (taryfy dynamiczne)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Zewnętrzny licznik sieciowy",
-        "description": "Drugi licznik sieciowy dla sterowania baterią. Używany licznik wybiera się w Meter source przy baterii (domyślnie: auto). HomeWizard: najpierw włącz lokalne API w aplikacji HomeWizard Energy.",
+        "title": "Zewnętrzny licznik sieciowy przez IP",
+        "description": "Licznik sieciowy czytany bezpośrednio przez sieć, do czterech razy na sekundę. Bez licznika P1 Zendure jest jedynym licznikiem baterii. Z nim decyduje Meter source przy baterii (domyślnie auto: ten licznik, dopóki raportuje, w przeciwnym razie licznik Zendure). HomeWizard: najpierw włącz lokalne API w aplikacji HomeWizard Energy.",
         "data": {
           "external_meter_type": "Typ licznika",
           "host": "Adres IP",
@@ -45,19 +45,51 @@
         "description": "Czujnik mocy, który już jest w Home Assistant, pobór dodatni. Jeśli pobór i oddawanie to osobne czujniki, oba dodatnie, wybierz też czujnik oddawania. Czujnik aktualizowany rzadziej niż raz na sekundę nie ma nowych danych między aktualizacjami; Meter source auto używa wtedy licznika Zendure.",
         "data": {
           "source_entity": "Czujnik mocy (pobór dodatni)",
-          "export_entity": "Czujnik oddawania (opcjonalny, oddawanie dodatnie)"
+          "export_entity": "Czujnik oddawania (opcjonalny, oddawanie dodatnie)",
+          "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
         }
       },
       "price_control": {
         "title": "Sterowanie cenowe",
-        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach Nord Pool z dziś i jutra. Jest wyłączone, dopóki go nie włączysz.",
+        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach z dziś i jutra (Nord Pool, EPEX Spot, Zonneplan, …). Jest wyłączone, dopóki go nie włączysz.",
         "data": {
           "battery_entry": "Bateria",
           "price_entity": "Czujnik ceny (cena za kWh)",
           "price_contains": "Czujnik ceny zawiera"
         },
         "data_description": {
-          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu."
+          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu. EPEX Spot: czujnik Market price: cena spot; czujnik Total price: cena zakupu. Zonneplan: cena zakupu.",
+          "price_entity": "Stałe ceny: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie lub Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Licznik z Home Assistant",
+        "description": "Licznik, który jest już w Home Assistant. Jest tak szybki, jak aktualizuje go jego integracja, a regulacja potrzebuje odczytu co najmniej co 1–2 s. Licznik, który ta integracja może czytać przez IP (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), jest w ten sposób szybszy.",
+        "menu_options": {
+          "ha_device": "Urządzenie — jego czujniki mocy zostaną rozpoznane",
+          "ha_sensor": "Czujniki wybrane ręcznie"
+        }
+      },
+      "ha_device": {
+        "title": "Urządzenie pomiarowe",
+        "description": "Wybierz urządzenie, które mierzy przyłącze sieciowe, na przykład Shelly, czytnik DSMR lub licznik sieci falownika. Jego czujniki mocy zostaną rozpoznane na następnej stronie.",
+        "data": {
+          "source_device": "Urządzenie"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Szybciej przez IP",
+        "description": "**{device}** można czytać bezpośrednio jako {type} pod {host}, kilka razy na sekundę. Przez Home Assistant jest tak szybki jak jego integracja — dla YouLess co 10 s, za wolno do regulacji.",
+        "menu_options": {
+          "ha_device_ip": "Czytaj przez IP (zalecane)",
+          "ha_device_confirm": "Mimo to używaj przez Home Assistant"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Sprawdź licznik",
+        "description": "**{device}** — moc sieci netto, pobór dodatni:\n\n{sensors}\n\nTeraz: **{reading}**. Przy słońcu na panelach i małym zużyciu w domu powinien to być oddawanie do sieci. Jeśli pobór i oddawanie są zamienione, zaznacz pole.",
+        "data": {
+          "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "Adres odpowiada, ale nie jak ten typ licznika. Sprawdź typ licznika.",
       "homewizard_api_off": "Licznik nie odpowiada. Włącz lokalne API w aplikacji HomeWizard Energy i spróbuj ponownie.",
       "not_a_power_sensor": "Ten czujnik nie ma teraz wartości mocy (jednostka W lub kW, stan liczbowy).",
-      "same_entity": "Czujnik oddawania musi być inny niż czujnik mocy."
+      "same_entity": "Czujnik oddawania musi być inny niż czujnik mocy.",
+      "no_power_total": "Żaden czujnik mocy tego urządzenia nie daje sumy sieci. Wybierz wtedy czujniki ręcznie."
     },
     "abort": {
       "already_configured": "To urządzenie jest już skonfigurowane.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Zewnętrzny licznik sieciowy",
+        "title": "Zewnętrzny licznik sieciowy przez IP",
         "data": {
           "host": "Adres IP",
           "external_meter_interval_ms": "Milisekundy między odpytaniami (100-1000; poniżej 1000 tylko dla YouLess)"
@@ -98,7 +131,8 @@
         "title": "Czujnik Home Assistant",
         "data": {
           "source_entity": "Czujnik mocy (pobór dodatni)",
-          "export_entity": "Czujnik oddawania (opcjonalny, oddawanie dodatnie)"
+          "export_entity": "Czujnik oddawania (opcjonalny, oddawanie dodatnie)",
+          "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "Czujnik ceny zawiera"
         },
         "data_description": {
-          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu."
+          "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu. EPEX Spot: czujnik Market price: cena spot; czujnik Total price: cena zakupu. Zonneplan: cena zakupu.",
+          "price_entity": "Stałe ceny: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie lub Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Urządzenie pomiarowe",
+        "description": "**{device}** — moc sieci netto, pobór dodatni:\n\n{sensors}\n\nTeraz: **{reading}**. Przy słońcu na panelach i małym zużyciu w domu powinien to być oddawanie do sieci. Jeśli pobór i oddawanie są zamienione, zaznacz pole.",
+        "data": {
+          "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Ładowanie",
           "discharging": "Rozładowywanie"
         },
-        "name": "Bateria {index} stan"
+        "name": "Pakiet {index} stan"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Pomiędzy",
           "expensive": "Drogo"
         },
-        "name": "Stan"
+        "name": "Stan",
+        "state_attributes": {
+          "price_name": {
+            "name": "Czujnik ceny"
+          },
+          "price_format": {
+            "name": "Lista cen",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "inna lista cen"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Moc ładowania baterii"
       },
       "pack_batcur": {
-        "name": "Bateria {index} prąd"
+        "name": "Pakiet {index} prąd"
       },
       "pack_input_power": {
         "name": "Moc rozładowania baterii"
       },
       "pack_max_temp": {
-        "name": "Bateria {index} temperatura"
+        "name": "Pakiet {index} temperatura"
       },
       "pack_max_vol": {
-        "name": "Bateria {index} maks. napięcie ogniwa"
+        "name": "Pakiet {index} maks. napięcie ogniwa"
       },
       "pack_min_vol": {
-        "name": "Bateria {index} min. napięcie ogniwa"
+        "name": "Pakiet {index} min. napięcie ogniwa"
       },
       "pack_model": {
-        "name": "Bateria {index} model"
+        "name": "Pakiet {index} model"
       },
       "pack_num": {
-        "name": "Liczba modułów baterii"
+        "name": "Liczba pakietów"
       },
       "pack_pack_type": {
-        "name": "Bateria {index} typ pakietu"
+        "name": "Pakiet {index} typ"
       },
       "pack_power": {
-        "name": "Bateria {index} moc"
+        "name": "Pakiet {index} moc"
       },
       "pack_sn": {
-        "name": "Bateria {index} numer seryjny"
+        "name": "Pakiet {index} numer seryjny"
       },
       "pack_soc_level": {
-        "name": "Bateria {index} stan naładowania"
+        "name": "Pakiet {index} stan naładowania"
       },
       "pack_soft_version": {
-        "name": "Bateria {index} wersja oprogramowania"
+        "name": "Pakiet {index} wersja oprogramowania"
       },
       "pack_total_vol": {
-        "name": "Bateria {index} napięcie"
+        "name": "Pakiet {index} napięcie"
       },
       "phase_switch": {
         "name": "Przełączanie faz"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Utracone zapisy"
+      },
+      "grid_power_in_control": {
+        "name": "Moc sieci (w regulacji)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lampka"
       },
       "pack_heat_state": {
-        "name": "Bateria {index} grzanie"
+        "name": "Pakiet {index} grzanie"
       },
       "pass": {
         "name": "Przepust"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} pobiera {watts} W w spoczynku",
       "description": "Przy obu limitach na zero bateria pobierała w spoczynku {watts} W w ciągu ostatniej doby, podczas gdy normalne jest około 5 W. Zwykle przyczyną jest Backup mode: ustaw go na **closed**. Przy economic lub open falownik pozostaje aktywny i pobiera około 35 W. Ten komunikat zniknie sam, gdy pobór spadnie poniżej 12 W."
+    },
+    "slow_meter": {
+      "title": "{meter} raportuje co {seconds} s",
+      "description": "Pętle regulacji akceptują odczyt sieci przez 5 sekund, więc licznik raportujący co {seconds} s steruje baterią tylko przez część czasu. Dla licznika dodanego z Home Assistant to szybkość jego integracji. Czytaj go przez IP, gdzie ta integracja to potrafi (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), lub reguluj na liczniku Zendure przez *Meter source*. Ten komunikat zniknie sam, gdy odczyty będą przychodzić szybciej."
     }
   }
 }

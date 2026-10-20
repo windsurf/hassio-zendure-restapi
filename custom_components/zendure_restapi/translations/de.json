@@ -6,8 +6,8 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "zendure": "Zendure-Batterie — hier beginnen (auch ein Zendure-P1-Zähler)",
-          "external_meter": "Externer Netzzähler (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home-Assistant-Sensor als externer Zähler (Zonneplan, DSMR, …)",
+          "external_meter": "Externer Netzzähler über IP — am schnellsten (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Externer Netzzähler aus Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Preissteuerung (dynamische Tarife)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Externer Netzzähler",
-        "description": "Ein zweiter Netzzähler für die Batteriesteuerung. Welcher Zähler verwendet wird, wählst du mit Meter source an der Batterie (Standard: auto). HomeWizard: zuerst Lokale API in der HomeWizard-Energy-App aktivieren.",
+        "title": "Externer Netzzähler über IP",
+        "description": "Ein Netzzähler, der direkt über dein Netzwerk gelesen wird, bis zu viermal pro Sekunde. Ohne Zendure-P1-Zähler ist er der einzige Zähler der Batterie. Mit einem entscheidet Meter source an der Batterie (Standard auto: dieser Zähler, solange er meldet, sonst der Zendure-Zähler). HomeWizard: zuerst Lokale API in der HomeWizard-Energy-App aktivieren.",
         "data": {
           "external_meter_type": "Zählertyp",
           "host": "IP-Adresse",
@@ -45,19 +45,51 @@
         "description": "Ein Leistungssensor, der bereits in Home Assistant ist, Bezug positiv. Sind Bezug und Einspeisung getrennte Sensoren, beide positiv, wähle auch den Einspeisesensor. Ein Sensor, der seltener als einmal pro Sekunde aktualisiert, zeigt zwischen Updates keine neuen Daten; Meter source auto nutzt dann den Zendure-Zähler.",
         "data": {
           "source_entity": "Leistungssensor (Bezug positiv)",
-          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)"
+          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)",
+          "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
         }
       },
       "price_control": {
         "title": "Preissteuerung",
-        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit zwei festen Preisen oder mit einem Tagesplan über die Nord-Pool-Preise von heute und morgen. Sie ist aus, bis du sie einschaltest.",
+        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit zwei festen Preisen oder mit einem Tagesplan über die Preise von heute und morgen (Nord Pool, EPEX Spot, Zonneplan, …). Sie ist aus, bis du sie einschaltest.",
         "data": {
           "battery_entry": "Batterie",
           "price_entity": "Preissensor (Preis pro kWh)",
           "price_contains": "Der Preissensor enthält"
         },
         "data_description": {
-          "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis."
+          "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis. EPEX Spot: Sensor Market price: Spotpreis; Sensor Total price: Bezugspreis. Zonneplan: Bezugspreis.",
+          "price_entity": "Feste Preise: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie oder Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Zähler aus Home Assistant",
+        "description": "Ein Zähler, der schon in Home Assistant ist. Er ist so schnell, wie seine Integration ihn aktualisiert, und die Regelung braucht mindestens alle 1–2 s einen Messwert. Ein Zähler, den diese Integration über IP lesen kann (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), ist so schneller.",
+        "menu_options": {
+          "ha_device": "Ein Gerät — seine Leistungssensoren werden erkannt",
+          "ha_sensor": "Sensoren selbst wählen"
+        }
+      },
+      "ha_device": {
+        "title": "Zählergerät",
+        "description": "Wähle das Gerät, das deinen Netzanschluss misst, zum Beispiel einen Shelly, einen DSMR-Leser oder den Netzzähler eines Wechselrichters. Seine Leistungssensoren werden auf der nächsten Seite erkannt.",
+        "data": {
+          "source_device": "Gerät"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Schneller über IP",
+        "description": "**{device}** kann direkt als {type} unter {host} gelesen werden, mehrmals pro Sekunde. Über Home Assistant ist er so schnell wie seine Integration — beim YouLess alle 10 s, zu langsam zum Regeln.",
+        "menu_options": {
+          "ha_device_ip": "Über IP lesen (empfohlen)",
+          "ha_device_confirm": "Trotzdem über Home Assistant nutzen"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Zähler prüfen",
+        "description": "**{device}** — Netto-Netzleistung, Bezug positiv:\n\n{sensors}\n\nJetzt: **{reading}**. Mit Sonne auf den Modulen und wenig Verbrauch im Haus sollte das Einspeisung sein. Sind Bezug und Einspeisung vertauscht, das Kästchen ankreuzen.",
+        "data": {
+          "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "Die Adresse antwortet, aber nicht wie dieser Zählertyp. Prüfe den Zählertyp.",
       "homewizard_api_off": "Der Zähler antwortet nicht. Aktiviere Lokale API in der HomeWizard-Energy-App und versuche es erneut.",
       "not_a_power_sensor": "Dieser Sensor hat gerade keinen Leistungswert (Einheit W oder kW, numerischer Zustand).",
-      "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden."
+      "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden.",
+      "no_power_total": "Kein Leistungssensor dieses Geräts ergibt eine Netzsumme. Wähle die Sensoren dann selbst."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Externer Netzzähler",
+        "title": "Externer Netzzähler über IP",
         "data": {
           "host": "IP-Adresse",
           "external_meter_interval_ms": "Millisekunden zwischen Abfragen (100-1000; unter 1000 nur für YouLess)"
@@ -98,7 +131,8 @@
         "title": "Home-Assistant-Sensor",
         "data": {
           "source_entity": "Leistungssensor (Bezug positiv)",
-          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)"
+          "export_entity": "Einspeisesensor (optional, Einspeisung positiv)",
+          "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "Der Preissensor enthält"
         },
         "data_description": {
-          "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis."
+          "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis. EPEX Spot: Sensor Market price: Spotpreis; Sensor Total price: Bezugspreis. Zonneplan: Bezugspreis.",
+          "price_entity": "Feste Preise: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie oder Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Zählergerät",
+        "description": "**{device}** — Netto-Netzleistung, Bezug positiv:\n\n{sensors}\n\nJetzt: **{reading}**. Mit Sonne auf den Modulen und wenig Verbrauch im Haus sollte das Einspeisung sein. Sind Bezug und Einspeisung vertauscht, das Kästchen ankreuzen.",
+        "data": {
+          "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Lädt",
           "discharging": "Entlädt"
         },
-        "name": "Batterie {index} Zustand"
+        "name": "Pack {index} Zustand"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Dazwischen",
           "expensive": "Teuer"
         },
-        "name": "Status"
+        "name": "Status",
+        "state_attributes": {
+          "price_name": {
+            "name": "Preissensor"
+          },
+          "price_format": {
+            "name": "Preisliste",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "andere Preisliste"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Ladeleistung Batterie"
       },
       "pack_batcur": {
-        "name": "Batterie {index} Strom"
+        "name": "Pack {index} Strom"
       },
       "pack_input_power": {
         "name": "Entladeleistung Batterie"
       },
       "pack_max_temp": {
-        "name": "Batterie {index} Temperatur"
+        "name": "Pack {index} Temperatur"
       },
       "pack_max_vol": {
-        "name": "Batterie {index} Max. Zellspannung"
+        "name": "Pack {index} Max. Zellspannung"
       },
       "pack_min_vol": {
-        "name": "Batterie {index} Min. Zellspannung"
+        "name": "Pack {index} Min. Zellspannung"
       },
       "pack_model": {
-        "name": "Batterie {index} Modell"
+        "name": "Pack {index} Modell"
       },
       "pack_num": {
-        "name": "Anzahl Batteriemodule"
+        "name": "Anzahl Packs"
       },
       "pack_pack_type": {
-        "name": "Batterie {index} Packtyp"
+        "name": "Pack {index} Typ"
       },
       "pack_power": {
-        "name": "Batterie {index} Leistung"
+        "name": "Pack {index} Leistung"
       },
       "pack_sn": {
-        "name": "Batterie {index} Seriennummer"
+        "name": "Pack {index} Seriennummer"
       },
       "pack_soc_level": {
-        "name": "Batterie {index} Ladezustand"
+        "name": "Pack {index} Ladezustand"
       },
       "pack_soft_version": {
-        "name": "Batterie {index} Firmware-Version"
+        "name": "Pack {index} Firmware-Version"
       },
       "pack_total_vol": {
-        "name": "Batterie {index} Spannung"
+        "name": "Pack {index} Spannung"
       },
       "phase_switch": {
         "name": "Phasenumschaltung"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Verlorene Schreibbefehle"
+      },
+      "grid_power_in_control": {
+        "name": "Netzleistung (in Regelung)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Leuchte"
       },
       "pack_heat_state": {
-        "name": "Batterie {index} Heizung"
+        "name": "Pack {index} Heizung"
       },
       "pass": {
         "name": "Durchleitung"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} verbraucht {watts} W im Ruhezustand",
       "description": "Mit beiden Limits auf null hat der Speicher am letzten Tag im Ruhezustand {watts} W verbraucht, normal sind etwa 5 W. Meist liegt es am Backup mode: auf **closed** stellen. Mit economic oder open bleibt der Wechselrichter wach und verbraucht etwa 35 W. Diese Meldung verschwindet von selbst, sobald der Verbrauch wieder unter 12 W liegt."
+    },
+    "slow_meter": {
+      "title": "{meter} meldet alle {seconds} s",
+      "description": "Die Regelkreise akzeptieren einen Netzwert 5 Sekunden lang, ein Zähler, der alle {seconds} s meldet, steuert die Batterie also nur einen Teil der Zeit. Bei einem Zähler aus Home Assistant ist das die Geschwindigkeit seiner Integration. Lies ihn über IP, wo diese Integration das kann (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), oder regle mit *Meter source* auf den Zendure-Zähler. Diese Meldung verschwindet von selbst, sobald die Messwerte schneller kommen."
     }
   }
 }

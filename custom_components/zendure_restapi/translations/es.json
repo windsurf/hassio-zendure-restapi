@@ -6,8 +6,8 @@
         "description": "¿Qué quieres añadir?",
         "menu_options": {
           "zendure": "Batería Zendure — empiece aquí (también un contador P1 Zendure)",
-          "external_meter": "Contador de red externo (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Sensor de Home Assistant como contador externo (Zonneplan, DSMR, …)",
+          "external_meter": "Contador de red externo por IP — el más rápido (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Contador de red externo desde Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Control por precio (tarifas dinámicas)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Contador de red externo",
-        "description": "Un segundo contador de red para el control de la batería. El contador que se usa se elige con Meter source en la batería (por defecto: auto). HomeWizard: activa primero la API local en la app HomeWizard Energy.",
+        "title": "Contador de red externo por IP",
+        "description": "Un contador de red leído directamente por tu red, hasta cuatro veces por segundo. Sin contador P1 de Zendure es el único contador de la batería. Con uno, decide Meter source en la batería (por defecto auto: este contador mientras informa, si no el contador Zendure). HomeWizard: activa primero la API local en la app HomeWizard Energy.",
         "data": {
           "external_meter_type": "Tipo de contador",
           "host": "Dirección IP",
@@ -45,19 +45,51 @@
         "description": "Un sensor de potencia que ya está en Home Assistant, consumo positivo. Si consumo y vertido son sensores separados, ambos positivos, elige también el sensor de vertido. Un sensor que se actualiza menos de una vez por segundo no tiene datos nuevos entre actualizaciones; Meter source auto usa entonces el contador Zendure.",
         "data": {
           "source_entity": "Sensor de potencia (consumo positivo)",
-          "export_entity": "Sensor de vertido (opcional, vertido positivo)"
+          "export_entity": "Sensor de vertido (opcional, vertido positivo)",
+          "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
         }
       },
       "price_control": {
         "title": "Control por precio",
-        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: con dos precios fijos o con un plan diario sobre los precios Nord Pool de hoy y mañana. Está apagado hasta que lo actives.",
+        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: con dos precios fijos o con un plan diario sobre los precios de hoy y mañana (Nord Pool, EPEX Spot, Zonneplan, …). Está apagado hasta que lo actives.",
         "data": {
           "battery_entry": "Batería",
           "price_entity": "Sensor de precio (precio por kWh)",
           "price_contains": "El sensor de precio contiene"
         },
         "data_description": {
-          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra."
+          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra. EPEX Spot: sensor Market price: precio spot; sensor Total price: precio de compra. Zonneplan: precio de compra.",
+          "price_entity": "Precios fijos: cualquier sensor con el precio actual. Plan diario: un sensor con lista de precios — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie o Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Contador desde Home Assistant",
+        "description": "Un contador que ya está en Home Assistant. Es tan rápido como lo actualiza su integración, y el control necesita una lectura al menos cada 1–2 s. Un contador que esta integración puede leer por IP (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM) es más rápido así.",
+        "menu_options": {
+          "ha_device": "Un dispositivo — se reconocen sus sensores de potencia",
+          "ha_sensor": "Sensores elegidos a mano"
+        }
+      },
+      "ha_device": {
+        "title": "Dispositivo de medida",
+        "description": "Elige el dispositivo que mide tu conexión a la red, por ejemplo un Shelly, un lector DSMR o el contador de red de un inversor. Sus sensores de potencia se reconocen en la página siguiente.",
+        "data": {
+          "source_device": "Dispositivo"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Más rápido por IP",
+        "description": "**{device}** se puede leer directamente como {type} en {host}, varias veces por segundo. A través de Home Assistant es tan rápido como su integración — en el YouLess cada 10 s, demasiado lento para controlar.",
+        "menu_options": {
+          "ha_device_ip": "Leerlo por IP (recomendado)",
+          "ha_device_confirm": "Usarlo igualmente a través de Home Assistant"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Comprobar el contador",
+        "description": "**{device}** — potencia neta de red, consumo positivo:\n\n{sensors}\n\nAhora: **{reading}**. Con sol en los paneles y poco consumo en casa debería indicar exportación. Si consumo y exportación están invertidos, marca la casilla.",
+        "data": {
+          "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "La dirección responde, pero no como este tipo de contador. Comprueba el tipo de contador.",
       "homewizard_api_off": "El contador no responde. Activa la API local en la app HomeWizard Energy y vuelve a intentarlo.",
       "not_a_power_sensor": "Este sensor no tiene ahora un valor de potencia (unidad W o kW, estado numérico).",
-      "same_entity": "El sensor de vertido debe ser distinto del sensor de potencia."
+      "same_entity": "El sensor de vertido debe ser distinto del sensor de potencia.",
+      "no_power_total": "Ningún sensor de potencia de este dispositivo da un total de red. Elige entonces los sensores a mano."
     },
     "abort": {
       "already_configured": "Este dispositivo ya está configurado.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Contador de red externo",
+        "title": "Contador de red externo por IP",
         "data": {
           "host": "Dirección IP",
           "external_meter_interval_ms": "Milisegundos entre consultas (100-1000; por debajo de 1000 solo para YouLess)"
@@ -98,7 +131,8 @@
         "title": "Sensor de Home Assistant",
         "data": {
           "source_entity": "Sensor de potencia (consumo positivo)",
-          "export_entity": "Sensor de vertido (opcional, vertido positivo)"
+          "export_entity": "Sensor de vertido (opcional, vertido positivo)",
+          "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "El sensor de precio contiene"
         },
         "data_description": {
-          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra."
+          "price_contains": "Para el plan diario. Nord Pool (HACS) con IVA y sin costes adicionales: precio spot con IVA. Sin IVA: precio spot. Con toda tu tarifa en los costes adicionales: precio de compra. EPEX Spot: sensor Market price: precio spot; sensor Total price: precio de compra. Zonneplan: precio de compra.",
+          "price_entity": "Precios fijos: cualquier sensor con el precio actual. Plan diario: un sensor con lista de precios — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie o Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Dispositivo de medida",
+        "description": "**{device}** — potencia neta de red, consumo positivo:\n\n{sensors}\n\nAhora: **{reading}**. Con sol en los paneles y poco consumo en casa debería indicar exportación. Si consumo y exportación están invertidos, marca la casilla.",
+        "data": {
+          "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Cargando",
           "discharging": "Descargando"
         },
-        "name": "Batería {index} estado"
+        "name": "Pack {index} estado"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Intermedio",
           "expensive": "Caro"
         },
-        "name": "Estado"
+        "name": "Estado",
+        "state_attributes": {
+          "price_name": {
+            "name": "Sensor de precio"
+          },
+          "price_format": {
+            "name": "Lista de precios",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "otra lista de precios"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Potencia de carga de la batería"
       },
       "pack_batcur": {
-        "name": "Batería {index} corriente"
+        "name": "Pack {index} corriente"
       },
       "pack_input_power": {
         "name": "Potencia de descarga de la batería"
       },
       "pack_max_temp": {
-        "name": "Batería {index} temperatura"
+        "name": "Pack {index} temperatura"
       },
       "pack_max_vol": {
-        "name": "Batería {index} tensión de celda máx."
+        "name": "Pack {index} tensión de celda máx."
       },
       "pack_min_vol": {
-        "name": "Batería {index} tensión de celda mín."
+        "name": "Pack {index} tensión de celda mín."
       },
       "pack_model": {
-        "name": "Batería {index} modelo"
+        "name": "Pack {index} modelo"
       },
       "pack_num": {
-        "name": "Número de módulos de batería"
+        "name": "Número de packs"
       },
       "pack_pack_type": {
-        "name": "Batería {index} tipo de paquete"
+        "name": "Pack {index} tipo"
       },
       "pack_power": {
-        "name": "Batería {index} potencia"
+        "name": "Pack {index} potencia"
       },
       "pack_sn": {
-        "name": "Batería {index} número de serie"
+        "name": "Pack {index} número de serie"
       },
       "pack_soc_level": {
-        "name": "Batería {index} estado de carga"
+        "name": "Pack {index} estado de carga"
       },
       "pack_soft_version": {
-        "name": "Batería {index} versión de firmware"
+        "name": "Pack {index} versión de firmware"
       },
       "pack_total_vol": {
-        "name": "Batería {index} tensión"
+        "name": "Pack {index} tensión"
       },
       "phase_switch": {
         "name": "Conmutación de fase"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Escrituras perdidas"
+      },
+      "grid_power_in_control": {
+        "name": "Potencia de red (en control)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lámpara"
       },
       "pack_heat_state": {
-        "name": "Batería {index} calefacción"
+        "name": "Pack {index} calefacción"
       },
       "pass": {
         "name": "Paso directo"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} consume {watts} W en reposo",
       "description": "Con ambos límites a cero, la batería ha consumido {watts} W en reposo durante el último día, cuando lo normal son unos 5 W. La causa habitual es el Backup mode: póngalo en **closed**. Con economic u open el convertidor sigue despierto y consume unos 35 W. Este mensaje desaparece solo cuando el consumo vuelve a estar por debajo de 12 W."
+    },
+    "slow_meter": {
+      "title": "{meter} informa cada {seconds} s",
+      "description": "Los bucles de control aceptan una lectura de red durante 5 segundos, así que un contador que informa cada {seconds} s solo controla la batería parte del tiempo. Para un contador añadido desde Home Assistant es la velocidad de su integración. Léelo por IP cuando esta integración pueda (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), o controla con el contador Zendure mediante *Meter source*. Este mensaje desaparece solo cuando las lecturas llegan más rápido."
     }
   }
 }

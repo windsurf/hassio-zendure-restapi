@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 import inspect
 import json
+import math
 import logging
 import re
 from pathlib import Path
@@ -66,8 +67,8 @@ CARD_NAMING = (MAJOR_VERSION, MINOR_VERSION) >= (2025, 11)
 
 # The template has one battery pack; a device with more gets a section per pack
 # (v1.6.4). Pack entities are `<battery>battery_<n>_<name>`.
-PACK_HEADING = "Battery 1"
-PACK_TEMPLATE = "battery_1_"
+PACK_HEADING = "Pack 1"
+PACK_TEMPLATE = "pack_1_"
 
 CREATED = "created"
 EXISTS = "exists"
@@ -178,6 +179,8 @@ def build_config(
                         continue
                 if card_naming and card.get("type") in NAMED_CARDS and "name" not in card:
                     card["name"] = dict(NAME_ENTITY)
+                if "yaxis" in card and ceiling != TEMPLATE_CEILING:
+                    _scale_power_axis(card, ceiling)
                 if card.get("type") == "gauge":
                     if card.get("max") == TEMPLATE_CEILING:
                         card["max"] = ceiling
@@ -193,22 +196,40 @@ def build_config(
     return config
 
 
+def _scale_power_axis(card: dict[str, Any], ceiling: int) -> None:
+    """The chart's power axis for another device than the template's 3000 W.
+
+    The template fixes it at -3000 to 4000 W in steps of 1000: a full charge
+    below zero, a full discharge plus the house above (v1.6.5). The same shape
+    for a smaller device: from minus its limit, rounded up to a step, to one
+    step above that, so an 800 W battery does not draw a flat line.
+    """
+    for axis in card.get("yaxis") or []:
+        if axis.get("id") != "power" or axis.get("min") != -TEMPLATE_CEILING:
+            continue
+        step = 1000 if ceiling >= 2000 else 500 if ceiling >= 1000 else 200
+        low = -math.ceil(ceiling / step) * step
+        high = -low + step
+        axis["min"], axis["max"] = low, high
+        axis.setdefault("apex_config", {})["tickAmount"] = (high - low) // step
+
+
 def _pack_numbers(battery: str, known: set[str]) -> list[int]:
     """Pack numbers above 1 that have entities in the registry."""
-    pattern = re.compile(rf"^[a-z_]+\.{re.escape(battery)}battery_(\d+)_")
+    pattern = re.compile(rf"^[a-z_]+\.{re.escape(battery)}pack_(\d+)_")
     found = {int(m.group(1)) for e in known if (m := pattern.match(e))}
     return sorted(n for n in found if n > 1)
 
 
 def _for_pack(card: dict[str, Any], number: int) -> dict[str, Any]:
-    text = json.dumps(card).replace(PACK_TEMPLATE, f"battery_{number}_")
-    return json.loads(text.replace(f'"{PACK_HEADING}"', f'"Battery {number}"'))
+    text = json.dumps(card).replace(PACK_TEMPLATE, f"pack_{number}_")
+    return json.loads(text.replace(f'"{PACK_HEADING}"', f'"Pack {number}"'))
 
 
 def _add_packs(config: dict[str, Any], battery: str, known: set[str]) -> None:
     """A section per extra battery pack, and its tile next to pack 1's elsewhere.
 
-    The section *Battery 1* is copied once per further pack, right after the
+    The section *Pack 1* is copied once per further pack, right after the
     last one; a pack-1 tile in another section (Power flow) gets its siblings
     right after it. The usual pass that drops missing entities runs after this.
     """

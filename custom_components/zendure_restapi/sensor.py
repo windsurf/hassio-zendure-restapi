@@ -240,7 +240,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     ZendureSensorDescription(
         key="packNum",
-        name="Battery module count",
+        name="Pack count",              # "Battery module count" until v1.6.5
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorDescription(
@@ -374,7 +374,7 @@ PACK_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ),
     _diag("sn", "Serial number"),
     _diag("softVersion", "Firmware version"),
-    _diag("packType", "Pack type"),
+    _diag("packType", "Type"),          # "Pack type" until v1.6.5: Pack N Type
 )
 
 
@@ -435,6 +435,14 @@ async def async_setup_entry(
         entities.append(
             ZendureBatteryPowerSensor(
                 coordinator, BATTERY_POWER_DESCRIPTION, device_id, model
+            )
+        )
+
+    if runtime is not None:
+        entities.append(
+            ZendureGridInControlSensor(
+                coordinator, GRID_IN_CONTROL_DESCRIPTION, device_id, model,
+                runtime["controller"],
             )
         )
 
@@ -499,7 +507,11 @@ class ZendureSensor(ZendureEntity, SensorEntity):
 
 
 class ZendurePackSensor(ZendureSensor):
-    """A sensor scoped to one battery pack."""
+    """A sensor scoped to one battery pack.
+
+    Terms (v1.6.5): *battery* is the SolarFlow itself, with its inverter; a
+    *pack* is one entry of packData in the zenSDK report, numbered 1 to N.
+    """
 
     def __init__(
         self,
@@ -512,8 +524,12 @@ class ZendurePackSensor(ZendureSensor):
     ) -> None:
         super().__init__(coordinator, description, device_id, model, data_key)
         self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_{description.key}"
+        # "Pack {index} …" (v1.6.5): shown through the translations, and in
+        # English as suggested_object_id, so the entity ids read pack_N_ in
+        # every language. Ids from before v1.6.5 (battery_N_) are moved over
+        # once by migrate_pack_entity_ids.
         self._set_name(
-            description, "pack_", {"index": str(index)}, f"Battery {index} {description.name}"
+            description, "pack_", {"index": str(index)}, f"Pack {index} {description.name}"
         )
 
 
@@ -544,7 +560,11 @@ class ZendurePackModelSensor(ZendureSensor):
         self._prefix = f"{PACK_PREFIX}{index}."
         super().__init__(coordinator, description, device_id, model, f"{self._prefix}sn")
         self._attr_unique_id = f"{device_id}_{PACK_PREFIX}{index}_model"
-        self._set_name(description, "pack_", {"index": str(index)}, f"Battery {index} Model")
+        # "Pack {index} …" (v1.6.5): shown through the translations, and in
+        # English as suggested_object_id, so the entity ids read pack_N_ in
+        # every language. Ids from before v1.6.5 (battery_N_) are moved over
+        # once by migrate_pack_entity_ids.
+        self._set_name(description, "pack_", {"index": str(index)}, f"Pack {index} Model")
 
     def _derived(self) -> tuple[str, float | None]:
         data = self.coordinator.data or {}
@@ -658,6 +678,91 @@ class ZendureBatteryPowerSensor(ZendureEntity, SensorEntity):
             return float(discharge) - float(charge)
         except (TypeError, ValueError):
             return None
+
+
+# ── Grid power in control ────────────────────────────────────────────────
+
+GRID_IN_CONTROL_DESCRIPTION = SensorEntityDescription(
+    key="grid_power_in_control",
+    name="Grid power (in control)",
+    native_unit_of_measurement=UnitOfPower.WATT,
+    device_class=SensorDeviceClass.POWER,
+    state_class=SensorStateClass.MEASUREMENT,
+    icon="mdi:transmission-tower",
+)
+# A reading with no new sample for this long shows as unavailable.
+GRID_IN_CONTROL_TICK = timedelta(seconds=5)
+# State writes: on a change of a watt or of the meter, else at most this often.
+GRID_IN_CONTROL_HEARTBEAT = 30
+
+
+class ZendureGridInControlSensor(ZendureEntity, SensorEntity):
+    """The grid power the control loops act on, from whichever meter (v1.6.5).
+
+    With Meter source on auto, or after switching it, the meter that steers is
+    not always the Zendure P1 meter; a gauge on that meter then shows another
+    figure than the one being regulated. This sensor is the reading the loops
+    use, sample for sample, with the meter as an attribute: what it shows is
+    what steers. Unavailable when the chosen meter has nothing the loops would
+    accept, which is exactly when they stop the battery.
+    """
+
+    def __init__(self, coordinator, description, device_id, model, controller) -> None:
+        super().__init__(coordinator, description, device_id, model)
+        self._controller = controller
+        self._last: tuple[Any, str] | None = None
+        self._last_write = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._controller.add_grid_listener(self._sample))
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._tick, GRID_IN_CONTROL_TICK)
+        )
+
+    def _reading(self) -> tuple[Any, str]:
+        power, source = self._controller.grid_in_control()
+        return (None if power is None else round(power)), source
+
+    @callback
+    def _sample(self) -> None:
+        self._write(self._reading())
+
+    @callback
+    def _tick(self, _now: Any) -> None:
+        self._write(self._reading())
+
+    @callback
+    def _write(self, reading: tuple[Any, str]) -> None:
+        from homeassistant.util import dt as dt_util
+
+        now = dt_util.utcnow()
+        stale = (
+            self._last_write is None
+            or (now - self._last_write).total_seconds() >= GRID_IN_CONTROL_HEARTBEAT
+        )
+        if reading == self._last and not stale:
+            return
+        self._last = reading
+        self._last_write = now
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success and self._reading()[0] is not None
+
+    @property
+    def native_value(self) -> Any:
+        return self._reading()[0]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        source = self._reading()[1]
+        meter = self._controller.external if source == "external" else None
+        return {
+            "meter": source,
+            "meter_kind": getattr(meter, "kind", "zendure" if source == "zendure" else None),
+        }
 
 
 # ── Energy counters ──────────────────────────────────────────────────────
@@ -1149,6 +1254,8 @@ class ExternalMeterSensor(TranslatedName, SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     entity_description: ExternalSensorDescription
+    # The phases change with every reading; the history needs only the total.
+    _unrecorded_attributes = frozenset({"phase_1_w", "phase_2_w", "phase_3_w"})
 
     def __init__(
         self, meter: ExternalMeter, entry: ConfigEntry, description: ExternalSensorDescription
@@ -1189,3 +1296,18 @@ class ExternalMeterSensor(TranslatedName, SensorEntity):
     @property
     def native_value(self) -> Any:
         return self.entity_description.value(self._meter)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Status: how often the meter really reports. Power: its phases (v1.6.5)."""
+        key = self.entity_description.key
+        if key == "status":
+            interval = self._meter.update_interval
+            return {"update_interval": round(interval, 1) if interval is not None else None}
+        if key == "power":
+            phases = {
+                k: v for k, v in (self._meter.data or {}).items()
+                if k.startswith("phase_") and k.endswith("_w")
+            }
+            return phases or None
+        return None

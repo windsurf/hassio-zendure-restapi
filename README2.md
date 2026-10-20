@@ -210,7 +210,7 @@ The view **Measured** holds the [measured diagnostics](#measured-diagnostics), e
 | Overview | gauges for grid, state of charge, AC input and output, both limits, and the conversion efficiencies once measured |
 | Device control | converter mode, SOC limits and protection, charge and discharge limit, Meter source, manual power |
 | Controller settings | the ten controller settings |
-| Power flow, Energy, Configuration, Battery 1, System status, Diagnostics | readings and device settings |
+| Power flow, Energy, Configuration, Pack 1 (and further packs), System status, Diagnostics | readings and device settings |
 | Zendure P1 Meter | grid power, the three phases, energy imported and exported |
 | External P1 Meter | the External meter select, power, status and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
 
@@ -256,8 +256,9 @@ Steering on dynamic tariffs, built in, in two ways:
   **expensive price** it discharges, and in between it follows the meter or rests. Any sensor
   that gives the current price per kWh will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank
   Energie, or a template of your own.
-- **Day plan.** Over the prices of today and tomorrow from the **Nord Pool** integration
-  ([HACS](https://github.com/custom-components/nordpool)), it works out for every quarter of an
+- **Day plan.** Over the prices of today and tomorrow from a price sensor with a price list —
+  **Nord Pool** or **EPEX Spot** from HACS, the **Zonneplan** integration and
+  [others](#other-price-sources-epex-spot-zonneplan-and-more) — it works out for every quarter of an
   hour whether to charge, discharge or neither — with an import price and an export price each
   from a formula of their own, the conversion losses on both sides, wear, and a minimum margin
   per kWh that every cycle has to clear.
@@ -440,7 +441,8 @@ the Operation mode; two writers would undo each other's choices.
 The day plan reads the price list of the **Nord Pool** integration from HACS
 ([custom-components/nordpool](https://github.com/custom-components/nordpool)): the attributes
 `raw_today` and `raw_tomorrow`, per quarter of an hour or per hour, with tomorrow's prices from
-about 13:00. Fixed prices work with any price sensor; the day plan needs this one.
+about 13:00. Fixed prices work with any price sensor; the day plan needs a sensor with a price
+list: this one, or one of the [other sources](#other-price-sources-epex-spot-zonneplan-and-more).
 
 Two prerequisites, both from HACS:
 
@@ -496,6 +498,43 @@ watch the plan first.
 quarter (app or website). A difference of a few tenths of a cent is rounding; more means a
 surcharge or the VAT setting is off.
 
+#### Other price sources: EPEX Spot, Zonneplan and more
+
+Price Control recognises the price list itself; you only choose the sensor. The status sensor
+shows which list it found in the attribute `price_format`.
+
+| Integration | Sensor to choose | Attribute | `price_format` | The price sensor holds |
+|---|---|---|---|---|
+| **Nord Pool** (HACS) | `sensor.nordpool_kwh_…` | `raw_today`, `raw_tomorrow` | `nord_pool` | see the table above |
+| **EPEX Spot** (HACS) | *Market price* | `data` | `epex_spot` | **Spot price excl. VAT** |
+| **EPEX Spot** (HACS) | *Total price* | `data` | `epex_spot` | **Import price (whole tariff)** |
+| **Zonneplan** | *Current quarter-hourly electricity tariff* (`…_current_quarter_hourly_electricity_tariff`) | `forecast` | `zonneplan` | **Import price (whole tariff)** |
+| ENTSO-e (HACS) | the *current price* sensor | `prices_today`, `prices_tomorrow` | `entso_e` | as set up in ENTSO-e |
+| Frank Energie (HACS) | the current electricity price | `prices` | `frank_energie` | as set up |
+| Energi Data Service | the price sensor | `raw_today`, `raw_tomorrow` | `energi_data_service` | as set up |
+
+Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; the other three are read
+from their documented attributes. A list that is recognised but not named shows
+`price_format: other`.
+
+**EPEX Spot** ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)) fetches the
+day-ahead prices for many market areas, per quarter of an hour where the source has them.
+Install it from HACS ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)),
+restart, and add it under **Add integration → EPEX Spot** with your market area. It makes two
+sensors that both work:
+
+- **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import
+  factor and surcharge in Price Control, as in [Your tariff](#your-tariff).
+- **Total price** — the market price with the surcharge, tax and VAT you enter in the EPEX Spot
+  options. Choose **Import price (whole tariff)**; the import surcharge in Price Control is then
+  only used to work back to the spot price for the export formula.
+
+**Zonneplan** customers already have their own prices: the Zonneplan integration's quarter tariff
+sensor carries a list of today and tomorrow, all-in, exactly what Zonneplan bills. Choose
+**Import price (whole tariff)**.
+
+Compare **Import price** with your supplier's price for the current quarter, as in step 5.
+
 #### Your tariff
 
 Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor*
@@ -532,10 +571,10 @@ Switching it also fills in the modes per band with their presets (see
 
 | Status | Cause | What to do |
 |---|---|---|
-| `no_price` | the sensor has no `raw_today`: not the HACS Nord Pool sensor, or not yet loaded | choose the `sensor.nordpool_kwh_…` sensor; wait for the first prices after a restart |
+| `no_price` | the sensor has no price list (`price_format` empty): a sensor with the current price only, or not yet loaded | choose a sensor from the [table above](#other-price-sources-epex-spot-zonneplan-and-more); wait for the first prices after a restart |
 | `no_plan` | the battery reports no state of charge or pack yet | wait for the battery; check that it is online |
 | plan stops at midnight | tomorrow's prices are not out yet | normal before about 13:00 |
-| *Import price* far off | VAT counted twice or not at all | match *The price sensor holds* to the Nord Pool setup above |
+| *Import price* far off | VAT counted twice or not at all | match *The price sensor holds* to the sensor, as in the tables above |
 
 **The built-in Nord Pool integration.** Home Assistant also has a Nord Pool integration of its own.
 Its sensors have no price list, so the day plan cannot use them. The HACS integration has the
@@ -561,7 +600,7 @@ configured and the meter source on `auto` (the default), the smart modes run on 
 
 ### Adding it
 
-**Settings → Devices & Services → Add integration → Zendure RestAPI → External grid meter**: choose
+**Settings → Devices & Services → Add integration → Zendure RestAPI → External grid meter over IP**: choose
 the type, enter the IP address and, for a YouLess, the poll interval. The address is tried once
 before the entry is saved, so a wrong address or a wrong type is caught on the form. A HomeWizard
 P1 meter is **discovered** by itself: it is offered under *Discovered* as soon as its local API is
@@ -597,21 +636,48 @@ reads `none` rather than a wish. Switching takes effect on the next sample, with
 The first external meter keeps the device name **External P1 meter** and its entity IDs
 `sensor.external_p1_meter_*`. Later ones carry their type in the name — *External P1 meter (YouLess
 LS120)*, entity IDs `sensor.external_p1_meter_youless_ls120_*` — so the dashboards keep showing the
-first one and the others are easy to add.
+first one and the others are easy to add. A meter from a Home Assistant device carries that
+device's name: *External P1 meter (Grid meter)*.
 
-### A Home Assistant sensor as external meter
+### A meter from Home Assistant
 
-**Add integration → Zendure RestAPI → Home Assistant sensor as external meter** turns any power
-sensor already in Home Assistant into an external meter: a Zonneplan Connect, a DSMR reader, the
-YouLess integration that ships with Home Assistant. Import is positive. Where import and export are
-separate sensors, both positive, choose the export sensor too and it is subtracted. W, kW and MW are
-accepted.
+**Add integration → Zendure RestAPI → External grid meter from Home Assistant** turns a meter that is
+already in Home Assistant into an external meter, in one of two ways:
 
-Whether such a meter can steer depends on how often its sensor is updated, not on this integration.
-A reading counts as new when the sensor's `last_reported` moves — also when the value is unchanged —
-and a reading older than 5 s is `stale`. A sensor refreshed every ten seconds is therefore stale most
-of the time and `auto` uses the Zendure meter in between; the Zonneplan Connect, which reaches Home
-Assistant through the Zonneplan cloud about once every five minutes, is for the dashboard only. A sensor that turns `unavailable` reads as `unreachable` after two seconds.
+- **A device** (since v1.6.5). Choose the device that measures the grid connection — a Shelly, a
+  DSMR reader, an inverter's grid meter — and its power sensors are recognised: a net total, or
+  import minus export, or the sum of the phases when there is no total; an average, such as the
+  Zonneplan Connect's *Elektriciteitsgemiddelde*, only when there is nothing else. kW is converted to W.
+  The next page shows which sensors make the total and the reading of that moment, so the sign can
+  be checked: with sun on the panels and little use in the house it should read export. Tick
+  *The meter reads export as positive* if import and export come out the wrong way round. A few
+  integrations are recognised by name: Huawei (sign inverted), SMA, Enphase and SolarEdge.
+  Phase readings are kept as attributes of the meter's *Power* sensor.
+- **Sensors chosen by hand**, as before v1.6.5: one power sensor, import positive, and where
+  import and export are separate sensors, both positive, the export sensor too.
+
+A meter from Home Assistant is only as fast as its integration updates it, and the control loops
+accept a reading for 5 s. Choose the reader over IP where this integration has one:
+
+| Meter | Over IP (this integration) | Through Home Assistant |
+|---|---|---|
+| YouLess LS120 | 4 readings a second | every 10 s (YouLess integration) |
+| HomeWizard P1 meter | once a second | depends on the HomeWizard integration |
+| Shelly Pro 3EM | once a second | depends on the Shelly integration |
+| Other Shelly models, DSMR, SMA, Huawei, Enphase, SolarEdge | — | depends on the integration |
+| Zonneplan Connect | — | about every 5 minutes, for the dashboard only |
+
+**Offered over IP when it can be.** Choosing a YouLess, a HomeWizard P1 meter or a Shelly Pro 3EM
+device offers to read it over IP instead, at the address its integration already has.
+
+**Measured, not assumed.** The *Status* sensor of every external meter carries the attribute
+`update_interval`: the median time between new readings. A reading counts as new when the sensor's
+`last_reported` moves, also when the value is unchanged. It is known after ten readings, or for a slow meter after two readings a minute or more apart. A
+meter slower than 2 s raises a repair,
+*… reports every 10 s*; it disappears by itself once readings come faster. With *Meter source* on
+`auto` the battery then steers on the Zendure meter between readings; with `external` it stops
+when a reading is older than 5 s. A sensor that turns `unavailable` reads as `unreachable` after
+two seconds.
 
 **Upgrading from v1.5.0 or v1.5.1**, where the reader was configured on the battery under
 **Configure**: on the first start of v1.5.2 it moves into an entry of its own, with the same type,
@@ -673,7 +739,13 @@ The **Meter source** select decides which meter feeds both loops:
 | `auto` | **Default.** The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. Without an external reader configured this is exactly `zendure`. |
 
 The controller status carries `meter_source` (the setting) and `meter_active` (the meter in use
-at this moment). Both meters stay subscribed whatever the setting, and the choice is made per
+at this moment). The sensor **Grid power (in control)** on the battery shows the reading itself:
+the grid power the loops act on, sample for sample, with the meter it came from as attribute
+`meter` (`zendure`, `external`) and `meter_kind` (`zendure`, `youless`, `shelly_pro_3em`, ...).
+It is unavailable exactly when the loops have no reading they accept. The dashboard's grid gauge,
+the grid tile under Price Control and the grid line in the day plan chart use it, so what you see
+is what steers; the sections *Zendure P1 Meter* and *External P1 Meter* keep showing each meter
+on its own, for comparison. Both meters stay subscribed whatever the setting, and the choice is made per
 sample, so a fallback takes effect on the next Zendure sample rather than after a resubscription.
 On every change of meter the trim loop's previous reading is dropped: the step between two meters
 is their offset and their lag, not movement of the grid.
@@ -1278,10 +1350,15 @@ discharge with v1.6.3's writes, none with one request.
 
 ## Supported Entities
 
+**Terms.** *Battery* is the SolarFlow itself, with its inverter. A *pack* is one battery pack
+connected to it — one entry of `packData` in the zenSDK report, numbered 1 to N. Pack entities
+are named *Pack 1 …*, *Pack 2 …*, with entity IDs to match, for example
+`sensor.zendure_solarflow_2400_ac_pack_2_state_of_charge` for *Pack 2 State of charge*.
+
 | Group | Count | Entities |
 |---|---|---|
-| **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Battery module count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
-| **Per battery** | 12 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Pack type, Serial number |
+| **Sensor** | 50 | AC coupling status, AC state, Backup output power, Backup output power 2, Battery charge power, Battery discharge power, Pack count, Battery state, DC bus voltage, DC state, Enclosure temperature, Fan level, Fan speed step, Fault level, Battery power, Grid input power, Home output power, PV input power, PV state, PV string 1–6, Remaining discharge time, SOC calibration status, SOC limit status, Signal strength, State of charge · *disabled by default:* Activation voltage, Bind state, Device timestamp, Factory mode state, Grid HD status, HV battery voltage (raw), IoT connection state, LCN state, Legacy mode, Message id, OTA state, Off-grid state, Phase switch, Powerhub status, Report timestamp, Slave address, Timezone, Timezone offset, Voltage wake-up, Write response |
+| **Per pack** (*Pack N …*) | 12 + 1 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Type, Serial number · binary sensor: Heating |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
 | **Measured** | 10 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes |
@@ -1289,10 +1366,10 @@ discharge with v1.6.3's writes, none with one request.
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Controller** | 20 | Operation mode, Meter source, External meter, Controller status, Grid power (in control), Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
-| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a Home Assistant sensor gets the first three. |
+| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first three. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
@@ -1531,6 +1608,54 @@ to average out the sampling offset between the AC and cell readings.
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.5 — The grid reading that steers; meters from Home Assistant; EPEX Spot and Zonneplan prices
+
+The control loop decides as before. After updating, restart Home Assistant; to get the new
+dashboard, delete it and tick *Create the Zendure RestAPI dashboard* under **Configure**.
+
+- **Grid power (in control).** A new sensor on the battery: the grid power the control loops act
+  on, from whichever meter *Meter source* picks, with that meter as an attribute. With *Meter
+  source* on `auto`, or after switching it, the gauge used to show the Zendure P1 meter while
+  another meter was steering. The grid gauge, the grid tile under Price Control and the grid line
+  in the day plan chart now show this sensor. Add it to the recorder if you filter it, or the
+  chart line stays empty.
+- **More price sources for the day plan.** Besides Nord Pool, the day plan now reads the price
+  lists of **EPEX Spot** (HACS) and the **Zonneplan** integration, and those of ENTSO-e, Frank
+  Energie and Energi Data Service. Nothing to set: choose the sensor in Price Control and set
+  *The price sensor holds* ([table](#other-price-sources-epex-spot-zonneplan-and-more)). The
+  status sensor shows the list it found in `price_format`. Replayed on one day of prices: EPEX Spot
+  market price, EPEX Spot total price and Zonneplan gave the same plan, quarter for quarter.
+- **A meter from a Home Assistant device.** The setup menu offers three meters next to the
+  battery: the Zendure meter, an *External grid meter over IP* (HomeWizard, YouLess, EcoTracker,
+  Shelly Pro 3EM) and an *External grid meter from Home Assistant*. The last one now takes a whole
+  device — a Shelly, a DSMR reader, an inverter's grid meter — and recognises its power sensors:
+  a net total, import minus export, or the sum of the phases, with profiles for Huawei, SMA,
+  Enphase and SolarEdge and an option for meters that read export as positive. Choosing a YouLess,
+  HomeWizard or Shelly Pro 3EM device offers it over IP instead, which is faster. Sensors chosen
+  by hand still work as before. Every external meter now reports its `update_interval`, and one
+  slower than 2 s raises a repair: through Home Assistant a YouLess updates every 10 s, too slow
+  to steer. See [A meter from Home Assistant](#a-meter-from-home-assistant).
+- **Which price sensor.** The *Price Control* tab of the dashboard shows the price sensor in use
+  and the price list found in it, or that there is none.
+- **Leftovers removed.** The *Net metering mode* select of v1.6.0, replaced by the in-between mode
+  in v1.6.1, stayed in Home Assistant as "no longer provided". It is removed when Price Control
+  starts; nothing used it.
+- **Pack, not battery.** Pack entities are now named *Pack N …* instead of *Battery N …*, in all
+  eleven languages, and the dashboard sections *Pack 1*, *Pack 2* …: *battery* is the SolarFlow
+  itself, a *pack* one battery pack in it. **Their entity IDs change too**, from `…_battery_N_…` to
+  `…_pack_N_…`, once, on the first start of v1.6.5; the history moves along. An entity you renamed
+  yourself keeps its ID. A dashboard, automation or script that names an old ID has to be updated:
+  recreate the *Zendure RestAPI* dashboard, and in your own replace `_battery_1_` with `_pack_1_`
+  (and so on per pack). *Battery module count* reads *Pack count*, ID `…_pack_count`; *Pack N Pack
+  type* reads *Pack N Type*, ID `…_pack_N_type`.
+- **Day plan chart:** one set of colours, matching the gauges — grid blue, discharging green,
+  charging red, PV amber (the battery's own PV inputs, where it has them), plan grey — and the
+  state of charge as a violet line on a right axis from 0 to 100 %. Above zero is power into the
+  house. The power axis is fixed, −3000 to 4000 W for a 3000 W battery and scaled to the device
+  otherwise, so days compare at a glance. Recreate the dashboard to get it.
+- **Docs:** the check in getting started says what a good answer looks like: a result in JSON format, not the word *JSON*; getting started reduced to *Add to HEMS* off; *Before you start* lists *Add to HEMS*
+  off first, Custom Mode second. The Price Control view is pictured in the README.
 
 ### v1.6.4 — A direction change in one write, lost writes, and how fast the device follows
 
@@ -1781,7 +1906,7 @@ identical writes.
   one is. See [Several external meters](#several-external-meters).
 - **A Home Assistant sensor as external meter**, for meters without an adapter here: Zonneplan,
   DSMR, the Home Assistant YouLess integration. Optional separate export sensor. See
-  [A Home Assistant sensor as external meter](#a-home-assistant-sensor-as-external-meter).
+  [A meter from Home Assistant](#a-meter-from-home-assistant).
 - **Device names stay apart.** The first external meter is *External P1 meter*, later ones carry
   their type, so their entity IDs do not collide.
 - **Dashboard rebuilt** after the author's own: a header row with the battery's state, an

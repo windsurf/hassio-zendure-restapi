@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.4"
+INTEGRATION_VERSION = "1.6.5"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -24,6 +24,14 @@ CONF_EXTERNAL_INTERVAL = "external_meter_interval_ms"
 # integrations such as DSMR that report import and export separately.
 CONF_SOURCE_ENTITY = "source_entity"
 CONF_EXPORT_ENTITY = "export_entity"
+# An external meter from a Home Assistant device (v1.6.5): the device, and the
+# plan of its sensors (hadevice.MeterPlan.as_data). CONF_INVERT turns the sign
+# of a meter that reads export as positive, also for one sensor.
+CONF_SOURCE_DEVICE = "source_device"
+CONF_METER_PLAN = "meter_plan"
+CONF_INVERT = "export_positive"
+# A Home Assistant sensor slower than this is reported: too slow to steer.
+SLOW_METER_SECONDS = 2.0
 # The device name chosen when the entry was created. Fixed per entry, so the
 # entity IDs derived from it do not move when a second meter is added.
 CONF_DEVICE_NAME = "device_name"
@@ -256,9 +264,18 @@ PRICE_STATUSES = (
 )
 SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 
+# Entities an earlier version made and this one no longer does (v1.6.5).
+# Home Assistant keeps them in the entity registry as "no longer provided"
+# until removed by hand; the integration removes them when their entry is set
+# up. Listed by platform and the unique id after the entry id, so only these
+# go: an entity that still exists but is disabled stays.
+RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
+    ("select", "net_metering_mode"),    # v1.6.0; replaced by In-between mode in v1.6.1
+)
+
 # ── Price control: the day plan (v1.6.0) ─────────────────────────────────
 # A second way to decide, next to the two fixed prices: a plan over the
-# prices of today and tomorrow (Nord Pool, HACS integration), with separate
+# prices of today and tomorrow (Nord Pool, EPEX Spot and others), with separate
 # import and export formulas, conversion losses and a margin per kWh. See
 # dayplan.py.
 OPT_PRICE_DECISION = "price_decision"

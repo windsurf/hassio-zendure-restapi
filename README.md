@@ -13,7 +13,7 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 
 **🔌 Works with HomeWizard.** Already have a HomeWizard P1 meter? That is all you need — no Zendure meter required. YouLess, EcoTracker, Shelly Pro 3EM and the Zendure meters work too.
 
-**💶 Dynamic tariffs, built in.** On a dynamic contract? Price Control plans charging and discharging per quarter of an hour over the Nord Pool prices of today and tomorrow — import and export prices, conversion losses and wear included. Net metering (Dutch *salderen*) included: one switch while it lasts. No automation to write: switch it on.
+**💶 Dynamic tariffs, built in.** On a dynamic contract? Price Control plans charging and discharging per quarter of an hour over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan) — import and export prices, conversion losses and wear included. Net metering (Dutch *salderen*) included: one switch while it lasts. No automation to write: switch it on.
 
 ![Zendure dashboard](images/dashboard.png)
 
@@ -54,9 +54,9 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 | **Zendure Smart Meter 3CT** | 🧪 Same API as the Zendure P1 meter |
 | **EcoTracker** (everHome) | 🧪 Documented local API, one reading per second |
 | **Shelly Pro 3EM** (clamps on the grid connection) | ✅ Tested by a user as grid meter for the control loop, one reading per second |
-| **Any power sensor in Home Assistant** (Zonneplan, DSMR, …) | 🧪 New in v1.5.3 — for the dashboard and comparison; steers only if it updates every second |
+| **Any meter in Home Assistant** (Shelly, DSMR, SMA, Huawei, Zonneplan, …) | 🧪 Choose the device, its sensors are recognised (v1.6.5); steers only if it updates every second or two |
 
-Set it up in one go: **Add integration → Zendure RestAPI → External grid meter**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
+Set it up in one go: **Add integration → Zendure RestAPI → External grid meter over IP**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
 HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 
 *Not affiliated with HomeWizard, YouLess, everHome or Shelly; these are compatibility notes.*
@@ -68,7 +68,7 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 - **100% local.** Talks straight to the battery's own HTTP server on your network. Keeps working when the internet or the Zendure cloud does not.
 - **Zero-export control, once a second.** A fast loop follows your meter every second; a slower one handles direction and safety. Built and tuned on measurements, not guesses.
 - **Seven operation modes** — from hands-off `standby` to `smart_matching`, charge-only, discharge-only, quick charge/discharge and manual. Drive them by hand, from Price Control or from your own automation.
-- **Dynamic tariffs, built in.** Price Control steers the battery on two fixed prices or on a day plan over the Nord Pool prices — see [Price control](#-price-control).
+- **Dynamic tariffs, built in.** Price Control steers the battery on two fixed prices or on a day plan over the prices of today and tomorrow — see [Price control](#-price-control).
 - **Settings are entities.** Every setting survives a restart and can be changed live from the dashboard or an automation. Updates through HACS leave your own configuration alone.
 - **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — found on your network or added by IP, read directly once a second, not through a slower Home Assistant sensor. Or any power sensor Home Assistant already has.
 - **Safe by design.** No valid meter reading, no movement: the battery stops. Two batteries never fight over the same meter; each has its own controller, meter choice and price control.
@@ -102,7 +102,7 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 **3. Add your devices**
 Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure battery** (the first option) and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
-**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
+**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: **External grid meter from Home Assistant**. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
@@ -130,7 +130,7 @@ The mode names stay the same in every language, so automations and documentation
 Two ways to steer the battery on a dynamic tariff, in a device of its own:
 
 - **Fixed prices** — at or below a **cheap price** the battery charges (from the grid, or from solar only), at or above an **expensive price** it discharges, in between it holds the grid at zero (the modes per band are yours to change). Any price sensor will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie or your own.
-- **Day plan** (new in v1.6.0) — over the [Nord Pool](https://github.com/custom-components/nordpool) prices of today and tomorrow it works out per quarter of an hour whether to charge, discharge or neither, with separate import and export prices, conversion losses, wear and a minimum margin per kWh. By default it trades: charging and discharging at the battery's full power; the modes per band can make it cover the house only or charge from solar only. Ready for the end of Dutch net metering in 2027: switch *Net metering* off and the export price follows its own formula.
+- **Day plan** (new in v1.6.0) — over the prices of today and tomorrow from [Nord Pool](https://github.com/custom-components/nordpool), EPEX Spot or Zonneplan it works out per quarter of an hour whether to charge, discharge or neither, with separate import and export prices, conversion losses, wear and a minimum margin per kWh. By default it trades: charging and discharging at the battery's full power; the modes per band can make it cover the house only or charge from solar only. Ready for the end of Dutch net metering in 2027: switch *Net metering* off and the export price follows its own formula.
 
 Replayed on 30 days of a real installation, the day plan earned **€ 1.58 a day** — as much as a full home-energy planner on the same days; the fixed prices earned € 0.21.
 
@@ -140,6 +140,8 @@ Replayed on 30 days of a real installation, the day plan earned **€ 1.58 a day
 2. **Add integration → Nord Pool**: *Region* your price area (`NL` for the Netherlands), *Currency* `EUR`, *Include VAT* on, *Price in cents* off, *Energy scale* `kWh`, *Template for additional costs* left as it is.
 3. Add Price Control (below) with that sensor, `sensor.nordpool_kwh_…`, and *The price sensor holds* on **Spot price incl. VAT**.
 4. Set **Decision** to **Day plan**; in the Netherlands, switch **Net metering** on until 1 January 2027. Compare **Import price** with your supplier's price for this quarter; adjust *Import surcharge* if they differ.
+
+Already have **EPEX Spot** or **Zonneplan**? Skip steps 1–2 for Nord Pool and choose that sensor in step 3: [which sensor, which setting](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more).
 
 Full walk-through, tariff settings for other contracts and countries: [Setting up Nord Pool](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-nord-pool-for-the-day-plan).
 
@@ -177,7 +179,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
+**Pre-release – v1.6.5** (switch on *Pre-release* for this repository in HACS to get it): the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
 
 ## More
 

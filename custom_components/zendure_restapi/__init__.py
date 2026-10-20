@@ -34,13 +34,18 @@ battery's `External meter` select says which of them it uses.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import slugify
@@ -75,11 +80,18 @@ from .const import (
     SIGNAL_EXTERNALS_CHANGED,
     CONF_EXPORT_ENTITY,
     CONF_SOURCE_ENTITY,
+    RETIRED_PRICE_ENTITIES,
+    CONF_INVERT,
+    CONF_METER_PLAN,
+    CONF_SOURCE_DEVICE,
+    SLOW_METER_SECONDS,
 )
 from .controller import ZendureController
 from .dashboard import EXISTS, async_create_dashboard, notify
 from .pricecontrol import PriceControl
 from .coordinator import ZendureCoordinator
+from .entity import migrate_pack_entity_ids
+from .hadevice import MeterPlan
 from .p1meter import ADAPTERS, ExternalMeter
 from .settings import ZendureSettings
 
@@ -148,6 +160,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _link_meters(hass)
 
+    # Before the platforms: the pack entities come up under their new ids.
+    migrate_pack_entity_ids(hass, entry.entry_id)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
@@ -174,6 +188,7 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, entry, ZendureSettings(hass, entry), runtime["settings"], battery_id
     )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = price
+    _remove_retired(hass, entry, RETIRED_PRICE_ENTITIES)
     await hass.config_entries.async_forward_entry_setups(entry, PRICE_PLATFORMS)
 
     # The listener first: on a reload Home Assistant is already running, so
@@ -194,6 +209,19 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+def _remove_retired(
+    hass: HomeAssistant, entry: ConfigEntry, retired: tuple[tuple[str, str], ...]
+) -> None:
+    """Remove the registry entries of entities an earlier version made (v1.6.5)."""
+    registry = er.async_get(hass)
+    for platform, key in retired:
+        entity_id = registry.async_get_entity_id(platform, DOMAIN, f"{entry.entry_id}_{key}")
+        if entity_id is None:
+            continue
+        registry.async_remove(entity_id)
+        _LOGGER.info("Removed %s: no longer provided since an earlier version", entity_id)
+
+
 async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Start polling an external P1 reader and link it to the controllers."""
     kind = entry.data.get(CONF_EXTERNAL_TYPE)
@@ -202,10 +230,7 @@ async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool
         return False
     session = async_get_clientsession(hass)
     if kind == EXTERNAL_TYPE_HA_SENSOR:
-        meter = ADAPTERS[kind](
-            hass, session, entry.data[CONF_SOURCE_ENTITY], HA_SENSOR_INTERVAL
-        )
-        meter.export_entity = entry.data.get(CONF_EXPORT_ENTITY) or None
+        meter = _ha_meter(hass, session, entry)
     else:
         interval = _as_int(
             entry.options.get(CONF_EXTERNAL_INTERVAL), DEFAULT_EXTERNAL_INTERVAL
@@ -216,6 +241,13 @@ async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool
     meter.async_start()
     entry.async_on_unload(meter.async_stop)
 
+    @callback
+    def _check_speed(_now: Any = None) -> None:
+        _slow_meter_issue(hass, entry, meter)
+
+    entry.async_on_unload(async_track_time_interval(hass, _check_speed, SPEED_CHECK))
+    entry.async_on_unload(lambda: ir.async_delete_issue(hass, DOMAIN, f"slow_meter_{entry.entry_id}"))
+
     _link_meters(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, EXTERNAL_PLATFORMS)
@@ -223,6 +255,63 @@ async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool
     # rebuild by reloading the entry; nothing else hangs off it.
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+# How often the update interval of an external meter is checked (v1.6.5).
+SPEED_CHECK = timedelta(minutes=1)
+
+
+def _slow_meter_issue(hass: HomeAssistant, entry: ConfigEntry, meter: Any) -> None:
+    """A repair while a meter delivers readings further apart than steering needs.
+
+    The loops accept a reading for METER_FALLBACK_AGE seconds; a meter that
+    reports every ten seconds steers only part of the time. Mostly a Home
+    Assistant sensor whose integration polls slowly, such as the YouLess
+    integration of Home Assistant (every 10 s). Clears by itself.
+    """
+    issue_id = f"slow_meter_{entry.entry_id}"
+    interval = meter.update_interval
+    if interval is not None and interval > SLOW_METER_SECONDS:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="slow_meter",
+            translation_placeholders={
+                "meter": meter.label,
+                "seconds": f"{interval:.0f}" if interval >= 10 else f"{interval:.1f}",
+            },
+        )
+    elif interval is not None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+
+def _ha_meter(hass: HomeAssistant, session: Any, entry: ConfigEntry) -> Any:
+    """A meter of Home Assistant sensors: a device's plan, or one sensor (v1.6.5)."""
+    data = entry.data
+    if data.get(CONF_METER_PLAN):
+        plan = MeterPlan.from_data(data[CONF_METER_PLAN])
+        plan.invert = bool(data.get(CONF_INVERT, plan.invert))
+        device = dr.async_get(hass).async_get(data.get(CONF_SOURCE_DEVICE) or "")
+        name = (device.name_by_user or device.name) if device else None
+        # The host only names the meter in the log; the plan says what is read.
+        meter = ADAPTERS[EXTERNAL_TYPE_HA_SENSOR](
+            hass, session, name or data.get(CONF_SOURCE_DEVICE) or "", HA_SENSOR_INTERVAL
+        )
+        meter.plan = plan
+        meter.name = name
+        return meter
+    meter = ADAPTERS[EXTERNAL_TYPE_HA_SENSOR](
+        hass, session, data[CONF_SOURCE_ENTITY], HA_SENSOR_INTERVAL
+    )
+    meter.export_entity = data.get(CONF_EXPORT_ENTITY) or None
+    terms = [(data[CONF_SOURCE_ENTITY], 1)]
+    if meter.export_entity:
+        terms.append((meter.export_entity, -1))
+    meter.plan = MeterPlan(terms=terms, invert=bool(data.get(CONF_INVERT)), how="sensor")
+    return meter
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

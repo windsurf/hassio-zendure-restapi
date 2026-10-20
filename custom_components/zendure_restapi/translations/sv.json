@@ -6,8 +6,8 @@
         "description": "Vad vill du lägga till?",
         "menu_options": {
           "zendure": "Zendure-batteri — börja här (även en Zendure P1-mätare)",
-          "external_meter": "Extern nätmätare (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Home Assistant-sensor som extern mätare (Zonneplan, DSMR, …)",
+          "external_meter": "Extern nätmätare via IP — snabbast (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Extern nätmätare från Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Prisstyrning (dynamiska tariffer)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Extern nätmätare",
-        "description": "En andra nätmätare för batteristyrningen. Vilken mätare som används väljs med Meter source på batteriet (standard: auto). HomeWizard: slå först på Lokalt API i appen HomeWizard Energy.",
+        "title": "Extern nätmätare via IP",
+        "description": "En nätmätare som läses direkt över ditt nätverk, upp till fyra gånger per sekund. Utan Zendure P1-mätare är det batteriets enda mätare. Med en avgör Meter source på batteriet (standard auto: den här mätaren så länge den rapporterar, annars Zendure-mätaren). HomeWizard: slå först på Lokalt API i appen HomeWizard Energy.",
         "data": {
           "external_meter_type": "Mätartyp",
           "host": "IP-adress",
@@ -45,19 +45,51 @@
         "description": "En effektsensor som redan finns i Home Assistant, uttag positivt. Är uttag och export separata sensorer, båda positiva, välj även exportsensorn. En sensor som uppdateras mer sällan än en gång per sekund saknar nya data mellan uppdateringarna; Meter source auto använder då Zendure-mätaren.",
         "data": {
           "source_entity": "Effektsensor (uttag positivt)",
-          "export_entity": "Exportsensor (valfri, export positiv)"
+          "export_entity": "Exportsensor (valfri, export positiv)",
+          "export_positive": "Mätaren visar export som positiv (vänd tecknet)"
         }
       },
       "price_control": {
         "title": "Prisstyrning",
-        "description": "Ställer in ett batteris driftläge efter elpriset: med två fasta priser eller med en dagsplan över Nord Pool-priserna för i dag och i morgon. Den är av tills du slår på den.",
+        "description": "Ställer in ett batteris driftläge efter elpriset: med två fasta priser eller med en dagsplan över priserna för i dag och i morgon (Nord Pool, EPEX Spot, Zonneplan, …). Den är av tills du slår på den.",
         "data": {
           "battery_entry": "Batteri",
           "price_entity": "Prissensor (pris per kWh)",
           "price_contains": "Prissensorn innehåller"
         },
         "data_description": {
-          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris."
+          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris. EPEX Spot: sensorn Market price: spotpris; sensorn Total price: köppris. Zonneplan: köppris.",
+          "price_entity": "Fasta priser: vilken sensor som helst med aktuellt pris. Dagsplan: en sensor med prislista — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie eller Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Mätare från Home Assistant",
+        "description": "En mätare som redan finns i Home Assistant. Den är bara så snabb som dess integration uppdaterar den, och regleringen behöver ett värde minst var 1–2 s. En mätare som den här integrationen kan läsa via IP (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM) är snabbare så.",
+        "menu_options": {
+          "ha_device": "En enhet — dess effektsensorer känns igen",
+          "ha_sensor": "Sensorer valda för hand"
+        }
+      },
+      "ha_device": {
+        "title": "Mätarenhet",
+        "description": "Välj enheten som mäter din nätanslutning, till exempel en Shelly, en DSMR-läsare eller en växelriktares nätmätare. Dess effektsensorer känns igen på nästa sida.",
+        "data": {
+          "source_device": "Enhet"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Snabbare via IP",
+        "description": "**{device}** kan läsas direkt som {type} på {host}, flera gånger per sekund. Via Home Assistant är den bara så snabb som dess integration — för YouLess var 10:e s, för långsamt för att reglera.",
+        "menu_options": {
+          "ha_device_ip": "Läs den via IP (rekommenderas)",
+          "ha_device_confirm": "Använd den ändå via Home Assistant"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Kontrollera mätaren",
+        "description": "**{device}** — nettoeffekt från nätet, köp positivt:\n\n{sensors}\n\nNu: **{reading}**. Med sol på panelerna och lite förbrukning i huset bör det vara export. Är köp och export omvända, kryssa i rutan.",
+        "data": {
+          "export_positive": "Mätaren visar export som positiv (vänd tecknet)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "Adressen svarar, men inte som denna mätartyp. Kontrollera mätartypen.",
       "homewizard_api_off": "Mätaren svarar inte. Slå på Lokalt API i appen HomeWizard Energy och försök igen.",
       "not_a_power_sensor": "Den här sensorn har just nu inget effektvärde (enhet W eller kW, numeriskt tillstånd).",
-      "same_entity": "Exportsensorn måste vara en annan än effektsensorn."
+      "same_entity": "Exportsensorn måste vara en annan än effektsensorn.",
+      "no_power_total": "Ingen effektsensor på den här enheten ger en nätsumma. Välj då sensorerna för hand."
     },
     "abort": {
       "already_configured": "Den här enheten är redan konfigurerad.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Extern nätmätare",
+        "title": "Extern nätmätare via IP",
         "data": {
           "host": "IP-adress",
           "external_meter_interval_ms": "Millisekunder mellan avläsningar (100-1000; under 1000 endast för YouLess)"
@@ -98,7 +131,8 @@
         "title": "Home Assistant-sensor",
         "data": {
           "source_entity": "Effektsensor (uttag positivt)",
-          "export_entity": "Exportsensor (valfri, export positiv)"
+          "export_entity": "Exportsensor (valfri, export positiv)",
+          "export_positive": "Mätaren visar export som positiv (vänd tecknet)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "Prissensorn innehåller"
         },
         "data_description": {
-          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris."
+          "price_contains": "För dagsplanen. Nord Pool (HACS) med moms och utan extra kostnader: spotpris inkl. moms. Utan moms: spotpris. Med hela tariffen i extra kostnader: köppris. EPEX Spot: sensorn Market price: spotpris; sensorn Total price: köppris. Zonneplan: köppris.",
+          "price_entity": "Fasta priser: vilken sensor som helst med aktuellt pris. Dagsplan: en sensor med prislista — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie eller Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Mätarenhet",
+        "description": "**{device}** — nettoeffekt från nätet, köp positivt:\n\n{sensors}\n\nNu: **{reading}**. Med sol på panelerna och lite förbrukning i huset bör det vara export. Är köp och export omvända, kryssa i rutan.",
+        "data": {
+          "export_positive": "Mätaren visar export som positiv (vänd tecknet)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "Laddar",
           "discharging": "Urladdar"
         },
-        "name": "Batteri {index} status"
+        "name": "Paket {index} status"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Däremellan",
           "expensive": "Dyrt"
         },
-        "name": "Status"
+        "name": "Status",
+        "state_attributes": {
+          "price_name": {
+            "name": "Prissensor"
+          },
+          "price_format": {
+            "name": "Prislista",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "annan prislista"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Batteriets laddningseffekt"
       },
       "pack_batcur": {
-        "name": "Batteri {index} ström"
+        "name": "Paket {index} ström"
       },
       "pack_input_power": {
         "name": "Batteriets urladdningseffekt"
       },
       "pack_max_temp": {
-        "name": "Batteri {index} temperatur"
+        "name": "Paket {index} temperatur"
       },
       "pack_max_vol": {
-        "name": "Batteri {index} max cellspänning"
+        "name": "Paket {index} max cellspänning"
       },
       "pack_min_vol": {
-        "name": "Batteri {index} min cellspänning"
+        "name": "Paket {index} min cellspänning"
       },
       "pack_model": {
-        "name": "Batteri {index} modell"
+        "name": "Paket {index} modell"
       },
       "pack_num": {
-        "name": "Antal batterimoduler"
+        "name": "Antal paket"
       },
       "pack_pack_type": {
-        "name": "Batteri {index} pakettyp"
+        "name": "Paket {index} typ"
       },
       "pack_power": {
-        "name": "Batteri {index} effekt"
+        "name": "Paket {index} effekt"
       },
       "pack_sn": {
-        "name": "Batteri {index} serienummer"
+        "name": "Paket {index} serienummer"
       },
       "pack_soc_level": {
-        "name": "Batteri {index} laddningsnivå"
+        "name": "Paket {index} laddningsnivå"
       },
       "pack_soft_version": {
-        "name": "Batteri {index} firmwareversion"
+        "name": "Paket {index} firmwareversion"
       },
       "pack_total_vol": {
-        "name": "Batteri {index} spänning"
+        "name": "Paket {index} spänning"
       },
       "phase_switch": {
         "name": "Fasväxling"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Förlorade skrivningar"
+      },
+      "grid_power_in_control": {
+        "name": "Näteffekt (i reglering)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lampa"
       },
       "pack_heat_state": {
-        "name": "Batteri {index} uppvärmning"
+        "name": "Paket {index} uppvärmning"
       },
       "pass": {
         "name": "Genomkoppling"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} förbrukar {watts} W i vila",
       "description": "Med båda gränserna på noll har batteriet under det senaste dygnet förbrukat {watts} W i vila, där ungefär 5 W är normalt. Den vanliga orsaken är Backup mode: ställ in den på **closed**. Med economic eller open förblir växelriktaren vaken och förbrukar ungefär 35 W. Detta meddelande försvinner av sig självt när förbrukningen åter är under 12 W."
+    },
+    "slow_meter": {
+      "title": "{meter} rapporterar var {seconds}:e s",
+      "description": "Regleringen accepterar ett nätvärde i 5 sekunder, så en mätare som rapporterar var {seconds}:e s styr batteriet bara en del av tiden. För en mätare från Home Assistant är det dess integrations hastighet. Läs den via IP där den här integrationen kan (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), eller reglera på Zendure-mätaren med *Meter source*. Meddelandet försvinner av sig självt när värdena kommer snabbare."
     }
   }
 }

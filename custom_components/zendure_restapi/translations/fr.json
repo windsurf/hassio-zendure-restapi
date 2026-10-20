@@ -6,8 +6,8 @@
         "description": "Que voulez-vous ajouter ?",
         "menu_options": {
           "zendure": "Batterie Zendure — commencez ici (aussi un compteur P1 Zendure)",
-          "external_meter": "Compteur réseau externe (HomeWizard, YouLess, EcoTracker, Shelly)",
-          "ha_sensor": "Capteur Home Assistant comme compteur externe (Zonneplan, DSMR, …)",
+          "external_meter": "Compteur réseau externe via IP — le plus rapide (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
+          "ha_meter": "Compteur réseau externe depuis Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Pilotage par le prix (tarifs dynamiques)"
         }
       },
@@ -28,8 +28,8 @@
         }
       },
       "external_meter": {
-        "title": "Compteur réseau externe",
-        "description": "Un second compteur réseau pour la régulation de la batterie. Le compteur utilisé se choisit avec Meter source sur la batterie (par défaut : auto). HomeWizard : activez d'abord l'API locale dans l'application HomeWizard Energy.",
+        "title": "Compteur réseau externe via IP",
+        "description": "Un compteur réseau lu directement sur votre réseau, jusqu'à quatre fois par seconde. Sans compteur P1 Zendure, c'est le seul compteur de la batterie. Avec un, Meter source sur la batterie décide (par défaut auto : ce compteur tant qu'il transmet, sinon le compteur Zendure). HomeWizard : activez d'abord l'API locale dans l'application HomeWizard Energy.",
         "data": {
           "external_meter_type": "Type de compteur",
           "host": "Adresse IP",
@@ -45,19 +45,51 @@
         "description": "Un capteur de puissance déjà présent dans Home Assistant, soutirage positif. Si soutirage et injection sont des capteurs séparés, tous deux positifs, choisissez aussi le capteur d'injection. Un capteur mis à jour moins d'une fois par seconde n'a pas de nouvelles données entre deux mises à jour ; Meter source auto utilise alors le compteur Zendure.",
         "data": {
           "source_entity": "Capteur de puissance (soutirage positif)",
-          "export_entity": "Capteur d'injection (facultatif, injection positive)"
+          "export_entity": "Capteur d'injection (facultatif, injection positive)",
+          "export_positive": "Le compteur indique l'injection en positif (inverser le signe)"
         }
       },
       "price_control": {
         "title": "Pilotage par le prix",
-        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix Nord Pool d'aujourd'hui et de demain. Désactivé tant que vous ne l'activez pas.",
+        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix d'aujourd'hui et de demain (Nord Pool, EPEX Spot, Zonneplan, …). Désactivé tant que vous ne l'activez pas.",
         "data": {
           "battery_entry": "Batterie",
           "price_entity": "Capteur de prix (prix par kWh)",
           "price_contains": "Le capteur de prix contient"
         },
         "data_description": {
-          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat."
+          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat. EPEX Spot : capteur Market price : prix spot ; capteur Total price : prix d'achat. Zonneplan : prix d'achat.",
+          "price_entity": "Prix fixes : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie ou Energi Data Service."
+        }
+      },
+      "ha_meter": {
+        "title": "Compteur depuis Home Assistant",
+        "description": "Un compteur déjà présent dans Home Assistant. Il n'est pas plus rapide que la mise à jour de son intégration, et la régulation demande une mesure au moins toutes les 1–2 s. Un compteur que cette intégration peut lire via IP (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM) est plus rapide ainsi.",
+        "menu_options": {
+          "ha_device": "Un appareil — ses capteurs de puissance sont reconnus",
+          "ha_sensor": "Capteurs choisis à la main"
+        }
+      },
+      "ha_device": {
+        "title": "Appareil de mesure",
+        "description": "Choisissez l'appareil qui mesure votre raccordement au réseau, par exemple un Shelly, un lecteur DSMR ou le compteur réseau d'un onduleur. Ses capteurs de puissance sont reconnus à la page suivante.",
+        "data": {
+          "source_device": "Appareil"
+        }
+      },
+      "ha_device_fast": {
+        "title": "Plus rapide via IP",
+        "description": "**{device}** peut être lu directement comme {type} à {host}, plusieurs fois par seconde. Via Home Assistant, il n'est pas plus rapide que son intégration — pour le YouLess toutes les 10 s, trop lent pour réguler.",
+        "menu_options": {
+          "ha_device_ip": "Le lire via IP (recommandé)",
+          "ha_device_confirm": "L'utiliser quand même via Home Assistant"
+        }
+      },
+      "ha_device_confirm": {
+        "title": "Vérifier le compteur",
+        "description": "**{device}** — puissance réseau nette, soutirage positif :\n\n{sensors}\n\nMaintenant : **{reading}**. Avec du soleil sur les panneaux et peu de consommation, cela devrait indiquer une injection. Si soutirage et injection sont inversés, cochez la case.",
+        "data": {
+          "export_positive": "Le compteur indique l'injection en positif (inverser le signe)"
         }
       }
     },
@@ -67,7 +99,8 @@
       "wrong_meter_type": "L'adresse répond, mais pas comme ce type de compteur. Vérifiez le type de compteur.",
       "homewizard_api_off": "Le compteur ne répond pas. Activez l'API locale dans l'application HomeWizard Energy et réessayez.",
       "not_a_power_sensor": "Ce capteur n'a pas de valeur de puissance pour l'instant (unité W ou kW, état numérique).",
-      "same_entity": "Le capteur d'injection doit différer du capteur de puissance."
+      "same_entity": "Le capteur d'injection doit différer du capteur de puissance.",
+      "no_power_total": "Aucun capteur de puissance de cet appareil ne donne un total réseau. Choisissez alors les capteurs à la main."
     },
     "abort": {
       "already_configured": "Cet appareil est déjà configuré.",
@@ -88,7 +121,7 @@
         }
       },
       "external": {
-        "title": "Compteur réseau externe",
+        "title": "Compteur réseau externe via IP",
         "data": {
           "host": "Adresse IP",
           "external_meter_interval_ms": "Millisecondes entre les interrogations (100-1000 ; sous 1000 uniquement pour YouLess)"
@@ -98,7 +131,8 @@
         "title": "Capteur Home Assistant",
         "data": {
           "source_entity": "Capteur de puissance (soutirage positif)",
-          "export_entity": "Capteur d'injection (facultatif, injection positive)"
+          "export_entity": "Capteur d'injection (facultatif, injection positive)",
+          "export_positive": "Le compteur indique l'injection en positif (inverser le signe)"
         }
       },
       "price": {
@@ -108,7 +142,15 @@
           "price_contains": "Le capteur de prix contient"
         },
         "data_description": {
-          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat."
+          "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat. EPEX Spot : capteur Market price : prix spot ; capteur Total price : prix d'achat. Zonneplan : prix d'achat.",
+          "price_entity": "Prix fixes : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie ou Energi Data Service."
+        }
+      },
+      "device": {
+        "title": "Appareil de mesure",
+        "description": "**{device}** — puissance réseau nette, soutirage positif :\n\n{sensors}\n\nMaintenant : **{reading}**. Avec du soleil sur les panneaux et peu de consommation, cela devrait indiquer une injection. Si soutirage et injection sont inversés, cochez la case.",
+        "data": {
+          "export_positive": "Le compteur indique l'injection en positif (inverser le signe)"
         }
       }
     },
@@ -210,7 +252,7 @@
           "charging": "En charge",
           "discharging": "En décharge"
         },
-        "name": "Batterie {index} état"
+        "name": "Pack {index} état"
       },
       "ac_state": {
         "state": {
@@ -286,7 +328,24 @@
           "between": "Intermédiaire",
           "expensive": "Cher"
         },
-        "name": "État"
+        "name": "État",
+        "state_attributes": {
+          "price_name": {
+            "name": "Capteur de prix"
+          },
+          "price_format": {
+            "name": "Liste de prix",
+            "state": {
+              "nord_pool": "Nord Pool",
+              "epex_spot": "EPEX Spot",
+              "zonneplan": "Zonneplan",
+              "entso_e": "ENTSO-e",
+              "frank_energie": "Frank Energie",
+              "energi_data_service": "Energi Data Service",
+              "other": "autre liste de prix"
+            }
+          }
+        }
       },
       "plan": {
         "state": {
@@ -423,43 +482,43 @@
         "name": "Puissance de charge de la batterie"
       },
       "pack_batcur": {
-        "name": "Batterie {index} courant"
+        "name": "Pack {index} courant"
       },
       "pack_input_power": {
         "name": "Puissance de décharge de la batterie"
       },
       "pack_max_temp": {
-        "name": "Batterie {index} température"
+        "name": "Pack {index} température"
       },
       "pack_max_vol": {
-        "name": "Batterie {index} tension cellule max."
+        "name": "Pack {index} tension cellule max."
       },
       "pack_min_vol": {
-        "name": "Batterie {index} tension cellule min."
+        "name": "Pack {index} tension cellule min."
       },
       "pack_model": {
-        "name": "Batterie {index} modèle"
+        "name": "Pack {index} modèle"
       },
       "pack_num": {
-        "name": "Nombre de modules de batterie"
+        "name": "Nombre de packs"
       },
       "pack_pack_type": {
-        "name": "Batterie {index} type de pack"
+        "name": "Pack {index} type"
       },
       "pack_power": {
-        "name": "Batterie {index} puissance"
+        "name": "Pack {index} puissance"
       },
       "pack_sn": {
-        "name": "Batterie {index} numéro de série"
+        "name": "Pack {index} numéro de série"
       },
       "pack_soc_level": {
-        "name": "Batterie {index} état de charge"
+        "name": "Pack {index} état de charge"
       },
       "pack_soft_version": {
-        "name": "Batterie {index} version du firmware"
+        "name": "Pack {index} version du firmware"
       },
       "pack_total_vol": {
-        "name": "Batterie {index} tension"
+        "name": "Pack {index} tension"
       },
       "phase_switch": {
         "name": "Commutation de phase"
@@ -553,6 +612,9 @@
       },
       "lost_writes": {
         "name": "Écritures perdues"
+      },
+      "grid_power_in_control": {
+        "name": "Puissance réseau (en régulation)"
       }
     },
     "binary_sensor": {
@@ -581,7 +643,7 @@
         "name": "Lampe"
       },
       "pack_heat_state": {
-        "name": "Batterie {index} chauffage"
+        "name": "Pack {index} chauffage"
       },
       "pass": {
         "name": "Passage direct"
@@ -729,6 +791,10 @@
     "standby_draw": {
       "title": "{device} consomme {watts} W au repos",
       "description": "Avec les deux limites à zéro, la batterie a consommé {watts} W au repos sur la dernière journée, alors qu'environ 5 W est normal. La cause habituelle est le Backup mode : réglez-le sur **closed**. En economic ou open, le convertisseur reste éveillé et consomme environ 35 W. Ce message disparaît de lui-même dès que la consommation repasse sous 12 W."
+    },
+    "slow_meter": {
+      "title": "{meter} transmet toutes les {seconds} s",
+      "description": "Les boucles de régulation acceptent une mesure réseau pendant 5 secondes : un compteur qui transmet toutes les {seconds} s ne pilote la batterie qu'une partie du temps. Pour un compteur ajouté depuis Home Assistant, c'est la vitesse de son intégration. Lisez-le via IP lorsque cette intégration le peut (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), ou régulez sur le compteur Zendure avec *Meter source*. Ce message disparaît de lui-même dès que les mesures arrivent plus vite."
     }
   }
 }

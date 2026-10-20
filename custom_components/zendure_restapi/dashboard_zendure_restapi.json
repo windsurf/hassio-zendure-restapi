@@ -148,7 +148,7 @@
             },
             {
               "type": "gauge",
-              "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
               "min": -3000,
               "max": 3000,
               "needle": true,
@@ -561,7 +561,7 @@
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_power"
             },
             {
               "type": "tile",
@@ -693,49 +693,49 @@
           "cards": [
             {
               "type": "heading",
-              "heading": "Battery 1",
+              "heading": "Pack 1",
               "heading_style": "title",
               "icon": "mdi:battery-high"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state_of_charge"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_state_of_charge"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_state"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_state"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_voltage"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_voltage"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_current"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_current"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_power"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_power"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_temperature"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_temperature"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_max_cell_voltage"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_max_cell_voltage"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_min_cell_voltage"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_min_cell_voltage"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_firmware_version"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_firmware_version"
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_1_model"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_1_model"
             }
           ]
         },
@@ -811,7 +811,7 @@
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_solarflow_3000_mix_ac_battery_module_count"
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_pack_count"
             },
             {
               "type": "tile",
@@ -1010,7 +1010,7 @@
             },
             {
               "type": "markdown",
-              "content": "**Decision** chooses how price control decides.\n\n- **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.\n- **Day plan**: over the Nord Pool prices of today and tomorrow (the Nord Pool integration from HACS), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.\n\nBoth take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.\n\nNot there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up Nord Pool: see *Price control* in the README.",
+              "content": "**Decision** chooses how price control decides.\n\n- **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.\n- **Day plan**: over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan and others), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.\n\nBoth take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.\n\nNot there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up a price sensor: see *Price control* in the README.",
               "grid_options": {
                 "columns": "full",
                 "rows": "auto"
@@ -1060,7 +1060,7 @@
             },
             {
               "type": "markdown",
-              "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan: *Decision* is on *Fixed prices*, or there is no Nord Pool price list or battery data yet.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
+              "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan: *Decision* is on *Fixed prices*, or there is no price list or battery data yet.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
               "grid_options": {
                 "columns": "full",
                 "rows": "auto"
@@ -1081,6 +1081,19 @@
               },
               "yaxis": [
                 {
+                  "id": "power",
+                  "min": -3000,
+                  "max": 4000,
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 7
+                  }
+                },
+                {
+                  "id": "soc",
+                  "opposite": true,
+                  "min": 0,
+                  "max": 100,
                   "decimals": 0
                 }
               ],
@@ -1099,12 +1112,12 @@
               },
               "series": [
                 {
-                  "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
-                  "name": "Grid (P1)",
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
+                  "name": "Grid",
                   "type": "area",
                   "unit": "W",
                   "color": "#1E88E5",
-                  "opacity": 0.25,
+                  "opacity": 0.2,
                   "stroke_width": 2,
                   "curve": "smooth",
                   "float_precision": 0,
@@ -1116,15 +1129,16 @@
                   "show": {
                     "in_header": false,
                     "legend_value": false
-                  }
+                  },
+                  "yaxis_id": "power"
                 },
                 {
                   "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
                   "name": "Discharging",
                   "type": "area",
                   "unit": "W",
-                  "color": "#FFB300",
-                  "opacity": 0.25,
+                  "color": "#4CAF50",
+                  "opacity": 0.2,
                   "stroke_width": 2,
                   "curve": "smooth",
                   "float_precision": 0,
@@ -1136,7 +1150,8 @@
                   "show": {
                     "in_header": false,
                     "legend_value": false
-                  }
+                  },
+                  "yaxis_id": "power"
                 },
                 {
                   "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
@@ -1144,7 +1159,7 @@
                   "type": "area",
                   "unit": "W",
                   "color": "#E53935",
-                  "opacity": 0.25,
+                  "opacity": 0.2,
                   "stroke_width": 2,
                   "curve": "smooth",
                   "float_precision": 0,
@@ -1157,7 +1172,29 @@
                     "in_header": false,
                     "legend_value": false
                   },
-                  "transform": "return x * -1;"
+                  "transform": "return x * -1;",
+                  "yaxis_id": "power"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power",
+                  "name": "PV",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#FFB300",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "5min"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power"
                 },
                 {
                   "entity": "sensor.price_control_plan",
@@ -1172,7 +1209,28 @@
                     "in_header": false,
                     "legend_value": false
                   },
-                  "data_generator": "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\nif (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\npts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n"
+                  "data_generator": "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\nif (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\npts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n",
+                  "yaxis_id": "power"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+                  "name": "SoC",
+                  "type": "line",
+                  "unit": "%",
+                  "color": "#9575CD",
+                  "stroke_width": 3,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "yaxis_id": "soc",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "5min"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  }
                 }
               ],
               "grid_options": {
@@ -1191,7 +1249,21 @@
               "type": "heading",
               "heading": "Pricing modes",
               "heading_style": "title",
-              "icon": "mdi:cash-multiple"
+              "icon": "mdi:cash-multiple",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_status",
+                  "icon": "mdi:cash",
+                  "state_content": "price_name"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_status",
+                  "icon": "mdi:format-list-bulleted",
+                  "state_content": "price_format"
+                }
+              ]
             },
             {
               "type": "tile",
@@ -1492,7 +1564,7 @@
             },
             {
               "type": "tile",
-              "entity": "sensor.zendure_p1_meter_3_phase_grid_power_total",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
               "icon": "mdi:transmission-tower"
             },
             {
