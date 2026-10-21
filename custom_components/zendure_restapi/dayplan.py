@@ -203,6 +203,7 @@ def price_scale(attributes: dict[str, Any]) -> float:
 #   Zonneplan (older)      forecast: datetime, electricity_price (× 10^-7)
 #   ENTSO-e (HACS)         prices_today, prices_tomorrow, prices: time, price
 #   Frank Energie (HACS)   prices: from, till, price
+#   Tibber                 prices: start_time, price
 PRICE_FAMILIES: tuple[tuple[str, ...], ...] = (
     ("raw_today", "raw_tomorrow"),
     ("data",),
@@ -234,6 +235,7 @@ FORMAT_NAMES = {
     ("forecast", "datetime", "electricity_price"): "zonneplan",
     ("prices_today", "time", "price"): "entso_e",
     ("prices_today", "from", "price"): "frank_energie",
+    ("prices_today", "start_time", "price"): "tibber",
 }
 # The length of a period whose end is not given and cannot be taken from the
 # next one: the most common step in the list, else an hour.
