@@ -52,6 +52,8 @@ from homeassistant.util import slugify
 
 from .api import ZendureApiError, ZendureLocalApi
 from .const import (
+    METER_SOURCE_EXTERNAL,
+    METER_SOURCE_ZENDURE,
     CONF_DEVICE_TYPE,
     CONF_EXTERNAL_HOST,
     CONF_EXTERNAL_INTERVAL,
@@ -75,11 +77,16 @@ from .const import (
     CONF_BATTERY_ENTRY,
     DEVICE_TYPE_PRICE,
     OPT_CREATE_DASHBOARD,
+    OPT_REBUILD_DASHBOARD,
+    OPT_SOLAR_ENERGY,
+    OPT_SOLAR_POWER,
+    OWN_PV_MIN_KWH,
     OPT_DASHBOARD_OFFERED,
     OPT_EXTERNAL_METER,
     SIGNAL_EXTERNALS_CHANGED,
     CONF_EXPORT_ENTITY,
     CONF_SOURCE_ENTITY,
+    RETIRED_BATTERY_ENTITIES,
     RETIRED_PRICE_ENTITIES,
     CONF_INVERT,
     CONF_METER_PLAN,
@@ -149,6 +156,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
 
         await controller.async_load_measure()
+        _remove_retired(
+            hass, coordinator.device_id or entry.unique_id or entry.entry_id, RETIRED_BATTERY_ENTITIES
+        )
 
         @callback
         def _on_update() -> None:
@@ -188,7 +198,7 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, entry, ZendureSettings(hass, entry), runtime["settings"], battery_id
     )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = price
-    _remove_retired(hass, entry, RETIRED_PRICE_ENTITIES)
+    _remove_retired(hass, entry.entry_id, RETIRED_PRICE_ENTITIES)
     await hass.config_entries.async_forward_entry_setups(entry, PRICE_PLATFORMS)
 
     # The listener first: on a reload Home Assistant is already running, so
@@ -210,12 +220,12 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _remove_retired(
-    hass: HomeAssistant, entry: ConfigEntry, retired: tuple[tuple[str, str], ...]
+    hass: HomeAssistant, unique_prefix: str, retired: tuple[tuple[str, str], ...]
 ) -> None:
     """Remove the registry entries of entities an earlier version made (v1.6.5)."""
     registry = er.async_get(hass)
     for platform, key in retired:
-        entity_id = registry.async_get_entity_id(platform, DOMAIN, f"{entry.entry_id}_{key}")
+        entity_id = registry.async_get_entity_id(platform, DOMAIN, f"{unique_prefix}_{key}")
         if entity_id is None:
             continue
         registry.async_remove(entity_id)
@@ -474,7 +484,21 @@ DASHBOARD_BUSY = f"{DOMAIN}_dashboard_busy"
 
 def _dashboard_wanted(entry: ConfigEntry) -> bool:
     """Asked for in the options, or never made yet on this installation."""
-    return bool(entry.options.get(OPT_CREATE_DASHBOARD)) or not entry.options.get(OPT_DASHBOARD_OFFERED)
+    return (
+        bool(entry.options.get(OPT_CREATE_DASHBOARD))
+        or bool(entry.options.get(OPT_REBUILD_DASHBOARD))
+        or not entry.options.get(OPT_DASHBOARD_OFFERED)
+    )
+
+
+def _own_pv(hass: HomeAssistant, registry: er.EntityRegistry, device_id: str) -> bool:
+    """Whether the device's own PV has produced anything worth a series."""
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{device_id}_energy_pv")
+    state = hass.states.get(entity_id) if entity_id else None
+    try:
+        return state is not None and float(state.state) >= OWN_PV_MIN_KWH
+    except (TypeError, ValueError):
+        return False
 
 
 def _prefix(registry: er.EntityRegistry, unique_id: str, suffix: str) -> str | None:
@@ -497,7 +521,8 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     ):
         return
     hass.data[DASHBOARD_BUSY] = True
-    requested = bool(entry.options.get(OPT_CREATE_DASHBOARD))
+    replace = bool(entry.options.get(OPT_REBUILD_DASHBOARD))
+    requested = bool(entry.options.get(OPT_CREATE_DASHBOARD)) or replace
     try:
         registry = er.async_get(hass)
         device_id = coordinator.device_id or entry.unique_id or entry.entry_id
@@ -529,6 +554,11 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
         # installation that kept the default device name (v1.6.4).
         external_ids: dict[str, str] = {}
         ext_ids = [k for k, m in hass.data.get(DOMAIN, {}).items() if isinstance(m, ExternalMeter)]
+        runtime = store.get(f"{entry.entry_id}{RUNTIME_SUFFIX}") or {}
+        controller = runtime.get("controller")
+        linked = getattr(controller, "external", None)
+        # The meter this battery is linked to first, so its sensors are the ones named.
+        ext_ids.sort(key=lambda k: hass.data[DOMAIN][k] is not linked)
         if ext_ids:
             ext_id = ext_ids[0]
             if ext_id:
@@ -536,6 +566,16 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
                     found = registry.async_get_entity_id("sensor", DOMAIN, f"{ext_id}_{key}")
                     if found:
                         external_ids[key] = found
+        # The grid figures name the sensor of the meter that steers, with its
+        # history (v1.6.6): the Zendure P1 meter's total or the external one.
+        grid = None
+        source = controller.grid_source() if controller is not None else METER_SOURCE_ZENDURE
+        zendure_grid = f"sensor.{meter}grid_power_total" if meter else None
+        external_grid = external_ids.get("power") if linked is not None or not meter else None
+        if source == METER_SOURCE_EXTERNAL:
+            grid = external_grid or zendure_grid
+        else:
+            grid = zendure_grid or external_grid
         result = await async_create_dashboard(
             hass,
             # Disabled entities have no state; a card for one says "not found".
@@ -549,6 +589,11 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
             external=bool(external_meters(hass)),
             ceiling=min(max(ceiling, 800), 5000),
             price=price,
+            solar_power=entry.options.get(OPT_SOLAR_POWER) or None,
+            solar_energy=entry.options.get(OPT_SOLAR_ENERGY) or None,
+            own_pv=_own_pv(hass, registry, device_id),
+            replace=replace,
+            grid=grid,
         )
         # Unasked, a dashboard that is already there needs no message.
         if requested or result != EXISTS:
@@ -557,5 +602,10 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass.data.pop(DASHBOARD_BUSY, None)
         hass.config_entries.async_update_entry(
             entry,
-            options={**entry.options, OPT_CREATE_DASHBOARD: False, OPT_DASHBOARD_OFFERED: True},
+            options={
+                **entry.options,
+                OPT_CREATE_DASHBOARD: False,
+                OPT_REBUILD_DASHBOARD: False,
+                OPT_DASHBOARD_OFFERED: True,
+            },
         )

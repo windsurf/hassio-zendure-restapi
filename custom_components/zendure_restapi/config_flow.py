@@ -57,6 +57,9 @@ from .const import (
     MIN_EXTERNAL_INTERVAL,
     MIN_SCAN_INTERVAL,
     OPT_CREATE_DASHBOARD,
+    OPT_REBUILD_DASHBOARD,
+    OPT_SOLAR_ENERGY,
+    OPT_SOLAR_POWER,
     OPT_DASHBOARD_OFFERED,
     OPT_PRICE_CONTAINS,
     OPT_PRICE_ENTITY,
@@ -634,6 +637,10 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         battery = entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_METER
         if user_input is not None:
             merged = {**entry.options, **user_input}
+            # An emptied selector is left out of user_input: drop the old value.
+            for key in (OPT_SOLAR_POWER, OPT_SOLAR_ENERGY):
+                if battery and not user_input.get(key):
+                    merged.pop(key, None)
             return self.async_create_entry(title="", data=merged)
 
         current = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -646,7 +653,19 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         # A battery can ask for the dashboard later; it is created once and an
         # existing one is left alone.
         if battery:
+            # Solar from outside the device, for the dashboard (v1.6.6).
+            for key, device_class in ((OPT_SOLAR_POWER, "power"), (OPT_SOLAR_ENERGY, "energy")):
+                current_entity = entry.options.get(key)
+                fields[
+                    vol.Optional(
+                        key,
+                        description={"suggested_value": current_entity} if current_entity else None,
+                    )
+                ] = selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class=device_class)
+                )
             fields[vol.Optional(OPT_CREATE_DASHBOARD, default=False)] = bool
+            fields[vol.Optional(OPT_REBUILD_DASHBOARD, default=False)] = bool
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
 
     async def async_step_price(

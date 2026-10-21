@@ -17,7 +17,7 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 
 ![Zendure dashboard](images/dashboard.png)
 
-*`smart_matching` holding the grid at zero: the house draws 79 W, the battery supplies it, and the controller keeps the meter within 10 W of zero. The integration creates this dashboard for you, with two more views: Price Control and Measured.*
+*`smart_matching` puts the solar surplus into the battery: it charges at 902 W and the controller keeps the grid within 10 W of zero, steering on the external meter. The integration creates this dashboard for you, with two more views: Price Control and History.*
 
 **Quick start below** · full details in the [Technical reference](#-technical-reference)
 
@@ -125,7 +125,7 @@ The mode names stay the same in every language, so automations and documentation
 
 ![Price Control view of the dashboard](images/dashboard_price.png)
 
-*The Price Control view: the day plan for today and tomorrow, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
+*The Price Control view: the day plan for today and tomorrow, measured up to now and planned after it, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Two ways to steer the battery on a dynamic tariff, in a device of its own:
 
@@ -179,7 +179,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.5:** the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
+**Pre-release – v1.6.6** (switch on *Pre-release* for this repository in HACS to get it): a **History** view with four charts — 30 minutes live, 4 hours, the last 24 hours, 30 days of daily totals; solar from a **micro inverter or second inverter** can be shown in the charts; the dashboard can be **replaced** from the options. **v1.6.5:** the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
 
 **Coming in 1.7:** several batteries behind one connection as one cluster — testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 

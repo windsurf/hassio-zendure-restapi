@@ -117,7 +117,14 @@
         "title": "Opcje",
         "data": {
           "scan_interval": "Sekundy między odpytaniami (1-60)",
-          "create_dashboard": "Utwórz pulpit Zendure RestAPI (istniejący pozostaje bez zmian)"
+          "solar_power_entity": "Moc solarna spoza magazynu (opcjonalnie, dla pulpitu)",
+          "solar_energy_entity": "Energia solarna spoza magazynu (opcjonalnie, dla pulpitu)",
+          "create_dashboard": "Utwórz pulpit Zendure RestAPI (istniejący pozostaje bez zmian)",
+          "rebuild_dashboard": "Zastąp istniejący pulpit nowym (twoje zmiany zostaną utracone)"
+        },
+        "data_description": {
+          "solar_power_entity": "Inteligentne gniazdko przy mikrofalowniku lub drugi falownik. Serie PV pulpitu pokazują je: zamiast własnego PV magazynu, gdy nie jest używane, w przeciwnym razie obok. Sterowanie go nie potrzebuje, licznik sieciowy już widzi tę moc.",
+          "solar_energy_entity": "Jego licznik kWh, dla sum dziennych na karcie History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "inna lista cen"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Utracone zapisy"
-      },
-      "grid_power_in_control": {
-        "name": "Moc sieci (w regulacji)"
       }
     },
     "binary_sensor": {

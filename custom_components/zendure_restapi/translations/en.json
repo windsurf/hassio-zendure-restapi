@@ -117,7 +117,14 @@
         "title": "Options",
         "data": {
           "scan_interval": "Seconds between polls (1-60)",
-          "create_dashboard": "Create the Zendure RestAPI dashboard (an existing one is left as it is)"
+          "solar_power_entity": "Solar power from outside the battery (optional, for the dashboard)",
+          "solar_energy_entity": "Solar energy from outside the battery (optional, for the dashboard)",
+          "create_dashboard": "Create the Zendure RestAPI dashboard (an existing one is left as it is)",
+          "rebuild_dashboard": "Replace the existing dashboard with a fresh one (your own changes to it are lost)"
+        },
+        "data_description": {
+          "solar_power_entity": "A smart plug on a micro inverter or a second inverter. The dashboard's PV series show it: instead of the battery's own PV when that is not in use, beside it otherwise. Control does not need it, the grid meter already sees this power.",
+          "solar_energy_entity": "Its kWh counter, for the daily totals on the History tab."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "other price list"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Lost writes"
-      },
-      "grid_power_in_control": {
-        "name": "Grid power (in control)"
       }
     },
     "binary_sensor": {

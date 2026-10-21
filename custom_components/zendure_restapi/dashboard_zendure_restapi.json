@@ -1007,14 +1007,6 @@
                 }
               ],
               "features_position": "inline"
-            },
-            {
-              "type": "markdown",
-              "content": "**Decision** chooses how price control decides.\n\n- **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.\n- **Day plan**: over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan and others), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.\n\nBoth take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.\n\nNot there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up a price sensor: see *Price control* in the README.",
-              "grid_options": {
-                "columns": "full",
-                "rows": "auto"
-              }
             }
           ]
         },
@@ -1057,18 +1049,37 @@
               "type": "tile",
               "entity": "sensor.price_control_expected_margin",
               "icon": "mdi:cash-check"
-            },
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
             {
               "type": "markdown",
               "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan: *Decision* is on *Fixed prices*, or there is no price list or battery data yet.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
               "grid_options": {
                 "columns": "full",
                 "rows": "auto"
+              },
+              "zendure": {
+                "needs": "sensor.price_control_plan"
+              }
+            },
+            {
+              "type": "markdown",
+              "content": "The day plan chart needs **ApexCharts Card** from HACS. Install it, refresh the browser, delete this dashboard and tick *Create the Zendure RestAPI dashboard* again under the battery's **Configure**.",
+              "grid_options": {
+                "columns": "full"
+              },
+              "zendure": {
+                "only_without": "custom:apexcharts-card"
               }
             },
             {
               "type": "custom:apexcharts-card",
-              "graph_span": "24h",
+              "graph_span": "48h",
               "span": {
                 "start": "day"
               },
@@ -1094,7 +1105,10 @@
                   "opposite": true,
                   "min": 0,
                   "max": 100,
-                  "decimals": 0
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 4
+                  }
                 }
               ],
               "apex_config": {
@@ -1186,15 +1200,15 @@
                   "curve": "smooth",
                   "float_precision": 0,
                   "extend_to": "now",
-                  "group_by": {
-                    "func": "avg",
-                    "duration": "5min"
-                  },
                   "show": {
                     "in_header": false,
                     "legend_value": false
                   },
-                  "yaxis_id": "power"
+                  "yaxis_id": "power",
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
                 },
                 {
                   "entity": "sensor.price_control_plan",
@@ -1223,18 +1237,18 @@
                   "float_precision": 0,
                   "extend_to": "now",
                   "yaxis_id": "soc",
-                  "group_by": {
-                    "func": "avg",
-                    "duration": "5min"
-                  },
                   "show": {
                     "in_header": false,
                     "legend_value": false
+                  },
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
                   }
                 }
               ],
               "grid_options": {
-                "columns": 24,
+                "columns": "full",
                 "rows": "auto"
               },
               "hours_12": false
@@ -1564,6 +1578,11 @@
             },
             {
               "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_external_solar_power",
+              "icon": "mdi:solar-power-variant"
+            },
+            {
+              "type": "tile",
               "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
               "icon": "mdi:transmission-tower"
             },
@@ -1582,9 +1601,9 @@
       ]
     },
     {
-      "title": "Measured",
-      "path": "measured",
-      "icon": "mdi:clipboard-pulse-outline",
+      "title": "History",
+      "path": "history",
+      "icon": "mdi:chart-timeline-variant",
       "type": "sections",
       "max_columns": 4,
       "sections": [
@@ -1594,10 +1613,609 @@
           "cards": [
             {
               "type": "markdown",
-              "content": "Measured while the battery runs, whoever steers it, to check the settings against the battery itself. A value stays *unknown* until there is something to measure: standby draw and response time within the hour, the efficiencies after a block of 1 kWh, round trip and usable capacity after a full cycle from one SOC bound back to the same one. Trends show the last 7 days, standby draw, response time and grid tracking the last 24 hours. Set the efficiencies of Price Control from the round trip AC: both at its square root.",
+              "content": "The charts on this tab need **ApexCharts Card** from HACS. Install it, refresh the browser, delete this dashboard and tick *Create the Zendure RestAPI dashboard* again under the battery's **Configure**.",
               "grid_options": {
                 "columns": "full"
+              },
+              "zendure": {
+                "only_without": "custom:apexcharts-card"
               }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Last 30 minutes",
+              "heading_style": "title",
+              "icon": "mdi:pulse"
+            },
+            {
+              "type": "custom:apexcharts-card",
+              "graph_span": "30min",
+              "update_interval": "10s",
+              "now": {
+                "show": true
+              },
+              "header": {
+                "show": false
+              },
+              "yaxis": [
+                {
+                  "id": "power",
+                  "decimals": 0,
+                  "align_to": 1000,
+                  "apex_config": {
+                    "stepSize": 1000
+                  }
+                },
+                {
+                  "id": "soc",
+                  "opposite": true,
+                  "min": 0,
+                  "max": 100,
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 4
+                  }
+                }
+              ],
+              "apex_config": {
+                "chart": {
+                  "height": 240
+                },
+                "legend": {
+                  "show": true
+                },
+                "tooltip": {
+                  "x": {
+                    "format": "HH:mm:ss"
+                  }
+                }
+              },
+              "series": [
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
+                  "name": "Grid",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#1E88E5",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "straight",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "10s"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
+                  "name": "Discharging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#4CAF50",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "straight",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "10s"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
+                  "name": "Charging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#E53935",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "straight",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "transform": "return x * -1;",
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "10s"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power",
+                  "name": "PV",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#FFB300",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "straight",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+                  "name": "SoC",
+                  "type": "line",
+                  "unit": "%",
+                  "color": "#9575CD",
+                  "stroke_width": 3,
+                  "curve": "straight",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "yaxis_id": "soc",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              },
+              "hours_12": false
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Last 4 hours",
+              "heading_style": "title",
+              "icon": "mdi:clock-outline"
+            },
+            {
+              "type": "custom:apexcharts-card",
+              "graph_span": "4h",
+              "update_interval": "1min",
+              "now": {
+                "show": true
+              },
+              "header": {
+                "show": false
+              },
+              "yaxis": [
+                {
+                  "id": "power",
+                  "decimals": 0,
+                  "align_to": 1000,
+                  "apex_config": {
+                    "stepSize": 1000
+                  }
+                },
+                {
+                  "id": "soc",
+                  "opposite": true,
+                  "min": 0,
+                  "max": 100,
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 4
+                  }
+                }
+              ],
+              "apex_config": {
+                "chart": {
+                  "height": 240
+                },
+                "legend": {
+                  "show": true
+                },
+                "tooltip": {
+                  "x": {
+                    "format": "HH:mm"
+                  }
+                }
+              },
+              "series": [
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
+                  "name": "Grid",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#1E88E5",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "1min"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
+                  "name": "Discharging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#4CAF50",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "1min"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
+                  "name": "Charging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#E53935",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "transform": "return x * -1;",
+                  "yaxis_id": "power",
+                  "group_by": {
+                    "func": "avg",
+                    "duration": "1min"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power",
+                  "name": "PV",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#FFB300",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+                  "name": "SoC",
+                  "type": "line",
+                  "unit": "%",
+                  "color": "#9575CD",
+                  "stroke_width": 3,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "yaxis_id": "soc",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              },
+              "hours_12": false
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Last 24 hours",
+              "heading_style": "title",
+              "icon": "mdi:history"
+            },
+            {
+              "type": "custom:apexcharts-card",
+              "graph_span": "24h",
+              "header": {
+                "show": false
+              },
+              "yaxis": [
+                {
+                  "id": "power",
+                  "min": -3000,
+                  "max": 4000,
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 7
+                  }
+                },
+                {
+                  "id": "soc",
+                  "opposite": true,
+                  "min": 0,
+                  "max": 100,
+                  "decimals": 0,
+                  "apex_config": {
+                    "tickAmount": 4
+                  }
+                }
+              ],
+              "apex_config": {
+                "chart": {
+                  "height": 240
+                },
+                "legend": {
+                  "show": true
+                },
+                "tooltip": {
+                  "x": {
+                    "format": "dd-MM HH:mm"
+                  }
+                }
+              },
+              "series": [
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control",
+                  "name": "Grid",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#1E88E5",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_home_output_power",
+                  "name": "Discharging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#4CAF50",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_grid_input_power",
+                  "name": "Charging",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#E53935",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "transform": "return x * -1;",
+                  "yaxis_id": "power",
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_input_power",
+                  "name": "PV",
+                  "type": "area",
+                  "unit": "W",
+                  "color": "#FFB300",
+                  "opacity": 0.2,
+                  "stroke_width": 2,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "power",
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_state_of_charge",
+                  "name": "SoC",
+                  "type": "line",
+                  "unit": "%",
+                  "color": "#9575CD",
+                  "stroke_width": 3,
+                  "curve": "smooth",
+                  "float_precision": 0,
+                  "extend_to": "now",
+                  "yaxis_id": "soc",
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "statistics": {
+                    "type": "mean",
+                    "period": "5minute"
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              },
+              "hours_12": false
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Last 30 days",
+              "heading_style": "title",
+              "icon": "mdi:calendar-month"
+            },
+            {
+              "type": "custom:apexcharts-card",
+              "graph_span": "30d",
+              "span": {
+                "end": "day"
+              },
+              "stacked": false,
+              "header": {
+                "show": false
+              },
+              "yaxis": [
+                {
+                  "id": "energy",
+                  "min": 0,
+                  "decimals": 0,
+                  "align_to": 5,
+                  "apex_config": {
+                    "stepSize": 5
+                  }
+                }
+              ],
+              "apex_config": {
+                "chart": {
+                  "height": 220
+                },
+                "legend": {
+                  "show": true
+                },
+                "tooltip": {
+                  "x": {
+                    "format": "dd-MM"
+                  }
+                }
+              },
+              "series": [
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_charged",
+                  "name": "Charged",
+                  "type": "column",
+                  "unit": "kWh",
+                  "color": "#E53935",
+                  "opacity": 0.7,
+                  "float_precision": 1,
+                  "statistics": {
+                    "type": "change",
+                    "period": "day",
+                    "align": "middle"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "energy"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_energy_discharged",
+                  "name": "Discharged",
+                  "type": "column",
+                  "unit": "kWh",
+                  "color": "#4CAF50",
+                  "opacity": 0.7,
+                  "float_precision": 1,
+                  "statistics": {
+                    "type": "change",
+                    "period": "day",
+                    "align": "middle"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "energy"
+                },
+                {
+                  "entity": "sensor.zendure_solarflow_3000_mix_ac_pv_energy",
+                  "name": "PV",
+                  "type": "column",
+                  "unit": "kWh",
+                  "color": "#FFB300",
+                  "opacity": 0.7,
+                  "float_precision": 1,
+                  "statistics": {
+                    "type": "change",
+                    "period": "day",
+                    "align": "middle"
+                  },
+                  "show": {
+                    "in_header": false,
+                    "legend_value": false
+                  },
+                  "yaxis_id": "energy"
+                }
+              ],
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              },
+              "hours_12": false
             }
           ]
         },

@@ -15,9 +15,9 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 ![Zendure dashboard](images/dashboard.png)
 
-*The example dashboard, showing `smart_matching` holding the grid at zero: the house draws 79 W,
-the battery supplies it, and the controller keeps the meter within 10 W of zero. Three views are
-included — the battery, Price Control and Measured — see [Dashboard](#dashboard).*
+*The example dashboard: `smart_matching` puts the solar surplus into the battery, charging at 902 W
+while the controller keeps the grid within 10 W of zero on the external meter. Three views are
+included — the battery, Price Control and History — see [Dashboard](#dashboard).*
 
 ---
 
@@ -196,12 +196,14 @@ a serial. It is read-only by nature.
 `dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from
 standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the
 switch, its status and decision, the day plan with its charge and discharge periods and the
-expected margin, a chart of the plan (with [apexcharts-card](https://github.com/RomRider/apexcharts-card)
-installed), the fixed prices and the three modes per band (used by both the fixed prices and the
-day plan), and the tariff, losses and margin — every
-setting a tile with a slider, a select or a toggle (see
-[Price control](#price-control)); without one it explains how to add it.
-The view **Measured** holds the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, control and the realized margin. The view **Zendure RestAPI** has thirteen sections:
+expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the fixed prices and the three modes
+per band (used by both the fixed prices and the day plan), the tariff, losses and
+margin — every setting a tile with a slider, a select or a toggle (see
+[Price control](#price-control)) — and the battery and grid now.
+The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card)
+installed) and, under them, the
+[measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, control
+and the realized margin. The view **Zendure RestAPI** has thirteen sections:
 
 | Section | Content |
 |---|---|
@@ -214,6 +216,29 @@ The view **Measured** holds the [measured diagnostics](#measured-diagnostics), e
 | Zendure P1 Meter | grid power, the three phases, energy imported and exported |
 | External P1 Meter | the External meter select, power, status and, for HomeWizard and YouLess, the energy registers; shown only when an external meter is configured |
 
+**The History view.** Four charts, each in the same colours: grid, discharging,
+charging, PV and state of charge.
+
+![History view of the dashboard](images/dashboard_history.png)
+
+*The History view: charging at 3 kW in the cheap hours around noon, with solar from a second
+inverter, then following the solar surplus; the last 24 hours with several cycles, and 30 days of
+daily totals.*
+
+| Chart | Shows |
+|---|---|
+| Last 30 minutes | live, every 10 s |
+| Last 4 hours | per minute |
+| Last 24 hours | the past day, from the 5-minute statistics |
+| Last 30 days | energy charged, discharged and from PV, per day |
+
+The power axis of the first two follows what happens, in whole steps; the third keeps a fixed
+axis, as the day plan chart on *Price Control* does: from a full charge below zero to a full
+discharge plus the house above. Without apexcharts-card a note takes the place of the
+charts. The charts read the recorder: if you filter it, include the grid power of the meter
+that steers, *Home output power*, *Grid input power*, *PV input power*, *State of charge*, *Energy charged*,
+*Energy discharged* and *PV energy*, or their lines stay empty.
+
 **Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the
 battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since
 v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the
@@ -222,8 +247,17 @@ the view to this installation: the entity IDs of your battery and Zendure P1 met
 up to the battery's own AC limit, and no cards for entities your model does not report; a section
 whose entities are all missing goes with its text. Without
 a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An
-existing dashboard at `/zendure-restapi` is never overwritten; delete it and tick the option
-again to rebuild it. A notification says what happened.
+existing dashboard at `/zendure-restapi` is left as it is, unless you tick *Replace the existing
+dashboard* under **Configure** (since v1.6.6): it then gets a fresh configuration, and your own
+changes to it are lost. A notification says what happened.
+
+**Solar from outside the battery** (since v1.6.6). A micro inverter on a smart plug, or a second
+inverter, is not seen by the battery. Control does not need it: your grid meter already sees that
+power. To see it in the charts, choose its power sensor (W) and, for the daily totals, its energy
+sensor (kWh) under the battery's **Configure**, and tick *Replace the existing dashboard*. The
+PV series of every chart then show it: instead of the battery's own PV while that has produced
+nothing, or beside it as *PV external* when the battery has panels of its own. *Battery and grid*
+on the Price Control tab gets a tile for it, next to the battery power.
 
 Home Assistant has no public call for an integration to add a dashboard. The integration uses
 the same route the frontend uses when you create one; should that route ever be missing, the
@@ -247,8 +281,8 @@ verify under **Developer tools → States** filtered on `zendure` if cards come 
 
 ![Price Control view of the dashboard](images/dashboard_price.png)
 
-*The Price Control view: the day plan for today and tomorrow, which quarters charge and which
-discharge, and the expected margin. With net metering on, the export price follows the import price.*
+*The Price Control view: the day plan for today and tomorrow, measured up to now and planned after
+it, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Steering on dynamic tariffs, built in, in two ways:
 
@@ -449,11 +483,11 @@ Two prerequisites, both from HACS:
 | | For | Install |
 |---|---|---|
 | **Nord Pool** (integration) | the day-ahead prices; without it no day plan | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration), or **HACS → search *Nord Pool* → Download**; restart Home Assistant |
-| **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
+| **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab and the charts on the *History* tab | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
 
-Install ApexCharts Card **before** the dashboard is created: the integration adds the chart only
-when the card is there. Already have the dashboard? Delete it and tick the option again, or paste
-the chart from `dashboard/zendure_restapi.yaml`.
+Install ApexCharts Card **before** the dashboard is created: the integration adds the charts only
+when the card is there. Already have the dashboard? Tick *Replace the existing dashboard* under
+the battery's **Configure**.
 
 **1. Install** both, as above.
 
@@ -511,9 +545,10 @@ shows which list it found in the attribute `price_format`.
 | **Zonneplan** | *Current quarter-hourly electricity tariff* (`…_current_quarter_hourly_electricity_tariff`) | `forecast` | `zonneplan` | **Import price (whole tariff)** |
 | ENTSO-e (HACS) | the *current price* sensor | `prices_today`, `prices_tomorrow` | `entso_e` | as set up in ENTSO-e |
 | Frank Energie (HACS) | the current electricity price | `prices` | `frank_energie` | as set up |
+| Tibber | a template sensor with the list from `tibber.get_prices` | `prices` | `tibber` | **Import price (whole tariff)** — Tibber gives the total price |
 | Energi Data Service | the price sensor | `raw_today`, `raw_tomorrow` | `energi_data_service` | as set up |
 
-Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; the other three are read
+Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; the other four are read
 from their documented attributes. A list that is recognised but not named shows
 `price_format: other`.
 
@@ -739,13 +774,12 @@ The **Meter source** select decides which meter feeds both loops:
 | `auto` | **Default.** The external reader while it delivers telegrams; the Zendure meter as soon as it has been silent for 5 s; back again on the next telegram. Without an external reader configured this is exactly `zendure`. |
 
 The controller status carries `meter_source` (the setting) and `meter_active` (the meter in use
-at this moment). The sensor **Grid power (in control)** on the battery shows the reading itself:
-the grid power the loops act on, sample for sample, with the meter it came from as attribute
-`meter` (`zendure`, `external`) and `meter_kind` (`zendure`, `youless`, `shelly_pro_3em`, ...).
-It is unavailable exactly when the loops have no reading they accept. The dashboard's grid gauge,
-the grid tile under Price Control and the grid line in the day plan chart use it, so what you see
-is what steers; the sections *Zendure P1 Meter* and *External P1 Meter* keep showing each meter
-on its own, for comparison. Both meters stay subscribed whatever the setting, and the choice is made per
+at this moment). The dashboard's grid gauge, the grid tile under Price Control and the Grid line
+of the charts read the meter that *Meter source* picks — the Zendure P1 meter's *Grid power
+total*, or the external meter's *Power* (with `auto`, the external one) — so what you see is
+what steers, with that meter's own history. After switching *Meter source* or *External meter*,
+tick *Replace the existing dashboard* under **Configure** to follow. The sections *Zendure P1
+Meter* and *External P1 Meter* keep showing each meter on its own, for comparison. Both meters stay subscribed whatever the setting, and the choice is made per
 sample, so a fallback takes effect on the next Zendure sample rather than after a resubscription.
 On every change of meter the trim loop's previous reading is dropped: the step between two meters
 is their offset and their lag, not movement of the grid.
@@ -867,7 +901,7 @@ which is where 40 comes from.
 
 Both are settings rather than constants because the right value is a property of the house: the
 wander measured on this one varied between 4 and 146 W median over a single afternoon, a factor
-of thirty-five. Raising them is worth trying and easy to undo — see the notes under [v1.3.0](#v130--two-write-thresholds-you-can-set) for
+of thirty-five. Raising them is worth trying and easy to undo — see the notes under [v1.3.0–v1.3.5](#v130v135--two-write-thresholds-you-can-set) for
 what was measured at 125 and 350 W, and why it is not the recommendation it first appeared to
 be.
 
@@ -1269,7 +1303,7 @@ those figures can be checked against the battery itself. Nothing here steers: co
 the settings yourself.
 
 The sensors sit on the battery device as diagnostics; *Realized margin* sits on the Price Control
-device. The dashboard shows them in a view of their own, *Measured*, each with its trend. They survive a restart, and the
+device. The dashboard shows them on the *History* view, below the charts, each with its trend. They survive a restart, and the
 diagnostics download carries them with the blocks and cycles they rest on.
 
 | Sensor | What it measures | Counts | Use it for |
@@ -1366,7 +1400,7 @@ are named *Pack 1 …*, *Pack 2 …*, with entity IDs to match, for example
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 20 | Operation mode, Meter source, External meter, Controller status, Grid power (in control), Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first three. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1621,6 +1655,42 @@ or more Zendure batteries are welcome in the [Discussions](https://github.com/wi
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.6 — History charts and solar from outside the battery
+
+The control loop decides as before; the dashboard, the battery's options and one entity change. After
+updating, restart Home Assistant, then tick *Replace the existing dashboard* under the battery's
+**Configure** to get the new view. Your own changes to that dashboard are lost; a copy of it in
+another dashboard keeps them.
+
+- **History.** The view *Measured* is now *History*: four charts on top — the last 30 minutes
+  live, the last 4 hours, the last 24 hours and 30 days of daily
+  totals — and the measured diagnostics under them. See [Dashboard](#dashboard). Its address is
+  now `/zendure-restapi/history`.
+- **Solar from outside the battery.** Under **Configure**, a power and an energy sensor of a
+  micro inverter or second inverter. The PV series of the charts show it, instead of the battery's
+  own PV while that has produced nothing, or beside it. Display only; control does not need it.
+- **The grid reading in the dashboard is the meter's own sensor.** *Grid power (in control)* of
+  v1.6.5 is gone again: it repeated a meter's reading under a new entity, without that meter's
+  history. The grid gauge, the grid tile and the Grid line of the charts now name the sensor of
+  the meter *Meter source* picks — the Zendure P1 meter or the external one — with its history.
+  After switching meters, replace the dashboard to follow.
+- **Pack names.** A pack entity that kept its old name *Battery N …* in the entity registry after
+  the move to *Pack N …* gets the integration's name again. A name you chose yourself stays.
+- **Price list on the price sensors.** *Import price* and *Export price* carry the price of every
+  quarter of today and tomorrow as attribute `prices` (not recorded), for automations and your own
+  dashboards.
+- **History without the text block.** The explanation above the measured diagnostics is gone; it
+  is in [Measured diagnostics](#measured-diagnostics).
+- **Replace the dashboard.** A new option under **Configure** replaces the existing dashboard with
+  a fresh one, instead of deleting it first.
+- **Price Control tab.** The text block under *Decision* is gone (the choices are explained in
+  [Price control](#price-control)). With solar from outside the battery, *Battery and grid* shows
+  it next to the battery power. The day plan text and chart have a row of their own, full width;
+  the chart shows today and tomorrow. Its state of charge axis reads 0, 25, 50, 75, 100 %; PV and state of charge there come from the 5-minute statistics, so their line no
+  longer starts late when the value stood still.
+- **Tibber.** Price Control names a Tibber price list (`price_format: tibber`), read from a
+  template sensor filled by `tibber.get_prices`. Thanks @Noxeus (#6).
 
 ### v1.6.5 — The grid reading that steers; meters from Home Assistant; EPEX Spot and Zonneplan prices
 
@@ -1994,137 +2064,34 @@ A second meter for both control loops; with the default setting nothing changes.
 - **The README is split in two.** `README.md` is the short version with supported products and
   three-step installation, shown by HACS; this page, `README2.md`, is the full technical reference.
 
-### v1.4.3 — Measurements added to the documentation, and `soc_limit` in the trace
+### v1.4.0–v1.4.3 — A rest state, no settling hold, and settings from measurement
 
-One column added to the trace; the control loops are untouched.
+- **No settling hold.** `holding` follows `Direction change delay` (default 0) instead of a
+  constant of its own that was armed on every start: it followed `starting` in 28 of 28
+  observations, 17 of them from standstill, some 280 seconds of doing nothing on a busy evening.
+  Measured in `manual` first: a reversal costs no more dead time than an ordinary step (1–5 s
+  against 1–6 s), and 2000 W charge to 2000 W discharge in one command took 1 second.
+- **A rest state.** With both of its own limits at zero over two consecutive polls, the controller
+  hands `smartMode` back so the inverter can drop to its low-power state: 30 W from the cells with
+  the flag set, 5 W with it clear (Backup mode `closed`). Waking costs nothing measurable; every
+  limit write sets the flag first. The first version could never enter (it gated on a flag that
+  goes false on every wind-down); found on trace and fixed in v1.4.1. A `Rest delay` setting from
+  a first attempt did nothing measurable and was removed.
+- **Defaults from measurement (v1.4.2).** `Start discharging at import` 5 W instead of 30 (median
+  error 3 W over a night, 89% of the time within 10 W); `Mode threshold` and `Trim threshold` up to
+  200 W; `Max charge power`, `Max discharge power` and `Manual power` in steps of 100 W.
+- **Trace.** Files roll over at about 5,000 rows (an hour at a one-second meter, some 150 kB)
+  instead of 100,000, at a point drawn per file; one recording keeps one timestamp with a sequence
+  number per file. `soc_limit` was added as a twenty-first column (v1.4.3): read the CSV by name,
+  not by position.
+- **Findings documented (v1.4.3).** Conversion loss on discharge `P_DC = 1.027 × P_AC + 32.9`, a
+  fixed 33 W and 97.4% at the margin; 143 to 146 W of loss when charging at 3000 W; usable
+  capacity 93.2 Wh at the AC port and 88.3 Wh at the cells per percentage point; 5 W idle at a SOC
+  limit, 29 W only in the seconds before the rest state takes over; when `SOC limit status`
+  changes against what the device accepts. Known limitation: at a SOC limit the controller keeps
+  ordering, so the rest state does not engage there.
 
-- **`soc_limit` is now a trace column**, carrying the raw `socLimit` value — 0 none, 1 upper
-  limit, 2 lower limit — next to `soc`. The value was already in the polled payload, so nothing
-  extra is requested and the poll load is unchanged. It makes the relation between the flag and
-  what the device actually accepts readable straight from the file instead of having to be
-  reconstructed from Home Assistant history. **The header gains a twenty-first column:** anything
-  reading the CSV by position needs adjusting, reading by name does not.
-
-- **The fixed and proportional parts of the conversion loss are now separated.** Measured on
-  thirty-three AC/DC pairs that each held still for at least five seconds, so both readings
-  describe the same moment: `P_DC = 1.027 × P_AC + 32.9`. A fixed term of 33 W and a marginal
-  conversion of 97.4%. The loss itself sits between 36 and 40 W across the whole 31–190 W range —
-  there is no poor efficiency at low power, there is one fixed cost that dominates when little is
-  flowing. See [Conversion efficiency](#conversion-efficiency).
-- **The charge side does not follow that line.** Three `quick_charge` windows at 3000 W, on two
-  days and across a state of charge from 26% to 99%, gave 143 to 146 W of loss where the discharge
-  fit predicts about 100 W. Documented as its own characteristic rather than folded into one curve.
-- **Usable capacity derived from charge windows:** 93.2 Wh at the AC port per percentage point,
-  88.3 Wh on the cell side — 9.3 kWh to fill from empty, 8.8 kWh available from the cells. Both
-  figures are given because the right one depends on the question.
-- **Idle draw corrected.** At a state-of-charge limit the device drops to 5 W by itself, flag or no
-  flag: 78,762 samples with a limit set and the device refusing. The 29 W figure is real but lives
-  only in the ten seconds between the controller releasing a direction and the rest state taking
-  effect — 101 samples in 58.9 hours. A standing-loss estimate that multiplies 29 W by all awake
-  time overstates it by a wide margin.
-- **`SOC limit status` documented.** All three values occur; `upper_limit` arrives one second
-  before the device stops accepting charge, `lower_limit` in the same sample as the meter. Treat
-  `unavailable` separately from `none`.
-- **New known limitation:** at either state-of-charge limit the controller keeps ordering and
-  reports success, because it reads the limit back rather than the power. Nothing breaks, but the
-  opposite direction stays unavailable and the rest state never engages.
-
-### v1.4.2 — Settings brought in line with what the measurements showed
-
-- **`Start discharging at import` now defaults to 5 W instead of 30.** Two days of traces
-  show the loop tracks a 5 W threshold without hunting: median error 3 W over a full
-  night, 89% of the time within 10 W. The old 30 W was a guess made before any of that
-  was measured, and it leaves the base load on the grid for no reason.
-- **`Mode threshold` and `Trim threshold` now stop at 200 W instead of 500.** No measured
-  configuration has ever needed more than 40 W, and a range that runs to 500 makes the
-  useful part of the slider unusably small.
-- **`Max charge power`, `Max discharge power` and `Manual power` now step in 100 W
-  instead of 5 W.** These are ceilings and setpoints, not trim values; nobody sets a
-  ceiling to 1,645 W, and a 5 W step over a 3,600 W range means dragging the slider
-  through 720 positions.
-- No behaviour changes. The control loop, the rest state and the trace writer are
-  untouched.
-
-### v1.4.1 — The rest state now actually enters
-
-- **Fixed: the rest state could never fire.** It gated on `_owns_limits`, a
-  flag meaning "this controller currently holds a nonzero limit" — which
-  goes False on every path that winds a direction down, including the ones
-  this controller performs itself, so it could never be True at the same
-  moment both limits read zero. The idle test now uses `_last_direction`,
-  which is already set to "none" on exactly the paths where no direction is
-  running and nowhere else, and which three other branches in the same loop
-  already rely on for the same question.
-- **Found on trace, not by inspection.** A recording taken straight after
-  the v1.4.0 restart showed a mode switch wind a discharge down through the
-  forbidden-direction path — a fully legitimate, self-caused zero — after
-  which `smartMode` sat at 1 for the next 745 seconds with both limits at
-  zero, and no rest was ever entered. A second stretch of 288 seconds in the
-  same recording did the same. Both are explained by the flag, not by
-  anything about the hardware or the load.
-- No other behaviour changes. `_owns_limits` is untouched and keeps its
-  original meaning for standby bookkeeping.
-
-### v1.4.0 — No settling hold, a rest state, and smaller trace files
-
-- **`holding` is now governed by `Direction change delay`**, the same setting the quick and manual
-  modes already obeyed. At zero — the default on hardware that does not need it — there is no
-  settling state at all. It used to come from a constant of its own and was armed on every start,
-  which is why `holding` followed `starting` in 28 of 28 observations, 17 of them from standstill
-  where no direction had changed and there was nothing to settle from. On a busy evening that was
-  280 seconds of doing nothing in two and a half hours.
-- **Measured before it was changed**, in `manual` with PV and the largest intermittent load
-  switched off: three reversals against eight same-direction steps of equal amplitude. Dead time 1
-  to 5 s for the reversals against 1 to 6 s for the plain steps, and not one sample resting near
-  zero on the way through. The largest reversal — 2000 W charge to 2000 W discharge in a single
-  command, 4000 W across zero — had the shortest dead time of the whole run at 1 second. So on
-  this inverter a reversal costs nothing that an ordinary step does not, `Direction change delay`
-  belongs at 0, and with it there is no reason to hold. On hardware that does need a pause, set
-  the delay and both paths observe it.
-- **With both of its own limits at zero across two consecutive polls, the controller hands
-  `smartMode` back to the device** so the inverter can drop to its low-power state. There is no
-  setting: the poll rate is the hysteresis. A limit passing through zero during a direction change
-  lasts a sample, not a poll, so it never triggers this. Leaving needed no code — every limit
-  write already sets the flag first, in every mode, so the first order out of rest carries the
-  wake-up with it. Entering is written once and never held down; repeating it is what turned
-  v0.5.0 into a square wave against the device's own manager.
-- **What that is worth on a 3000 Mix AC+ with Backup mode closed.** With both limits at zero the
-  cells give 30 W with the flag set and 5 W with it clear — 25 W. While actually converting the
-  flag changes nothing: 453 W from the cells at 500 W of charging either way, so the saving exists
-  only at a zero limit. Waking costs nothing measurable — the same 500 W order responded in 6 s
-  from rest and 6 s from awake.
-- **The rest state has not yet been seen in production.** It is built and tested — eight
-  behavioural checks against the real module — but no idle stretch since it went live has lasted
-  the two polls it needs. Over five hours of clean trace both limits sat at zero for 17.2% of the
-  time, but almost all of that was a single stretch of 44 minutes with the battery held in a mode
-  that could not act; three hours of ordinary operation gave stretches with a median of 6 seconds
-  and a maximum of 12, and nine hours of night gave none at all. So: nothing while actively
-  regulating, and 25 W times however long the battery structurally has nothing to do. That second
-  figure needs a day without interventions to establish, and it is saved cell energy rather than
-  avoided import, so what it is worth is whatever that charge displaces later. Treat the yield as
-  undetermined.
-- **Trace files roll over at roughly 5,000 rows** instead of 100,000 — about an hour at a
-  one-second meter, some 150 kB. The old limit was more than a day and some fifteen megabytes per
-  file, which is exactly the file you cannot copy off a running system or recover after a crash.
-  The rollover point is drawn per file within ±400 rows of the nominal size rather than fixed:
-  files that all break on the same minute and second look like a pattern in the data when read
-  back, and a load that happens to be periodic with the file length would otherwise fall in the
-  same place in every file. Each recording stays one series — the timestamp is taken once when the
-  switch goes on and every file of that recording carries it with a sequence number,
-  `trace_<date>_<time>_001.csv` and up — so a rollover remains distinguishable from a new
-  recording. The row count includes the unflushed buffer, so a file lands on its limit rather than
-  up to one flush past it.
-- The control loops are otherwise untouched. Documentation corrected in the same release: the
-  conversion-efficiency figures now distinguish the two Backup mode settings, carry an eight-hour
-  measurement at a stable discharge, and warn that efficiency cannot be read off a trace
-  containing transients.
-- *A first attempt at the rest state shipped a `Rest delay` setting in seconds. Measurement showed
-  it did nothing: the check runs on the battery poll, entering needs two polls inside one idle
-  stretch, and at a ten second poll that means nothing under about eleven seconds could ever fire
-  — so every value from 0 to 10 behaved identically. The setting is gone; a constant floor of ten
-  seconds keeps the hysteresis intact when the poll interval is set short for a comparison run.*
-
-### v1.3.0 — Two write thresholds you can set
+### v1.3.0–v1.3.5 — Two write thresholds you can set
 
 - **Added `Mode threshold` and `Trim threshold`**, the smallest adjustment each loop bothers to
   write. They replace two constants of 10 and 40 W and default to those values, so nothing
@@ -2157,7 +2124,7 @@ One column added to the trace; the control loops are untouched.
   of surplus went to the grid. The test harness now mirrors the real signatures — it had been the
   lenient one, which is why the call passed there and raised on the device.
 
-### v1.2.0 — Standby lets the device sleep
+### v1.2.0–v1.2.2 — Standby lets the device sleep
 
 - **Standby now hands the flash flag back.** The smart modes force `smartMode` to 1 so their
   frequent limit writes stay out of flash, and nothing put it back, so the device stayed awake at

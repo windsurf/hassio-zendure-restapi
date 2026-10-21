@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.5"
+INTEGRATION_VERSION = "1.6.6"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -229,6 +229,18 @@ OPT_CREATE_DASHBOARD = "create_dashboard"
 # Set once the dashboard was created, found, or tried without being asked
 # (v1.6.3): it is made by default, once, and never again after a user deleted it.
 OPT_DASHBOARD_OFFERED = "dashboard_offered"
+# A one-off request to replace the existing dashboard with a fresh one (v1.6.6).
+# The user's own edits to it are lost; the options say so.
+OPT_REBUILD_DASHBOARD = "rebuild_dashboard"
+# Solar from outside the device, for the dashboard only (v1.6.6): a smart plug
+# on a micro inverter, a second inverter. Control needs none of it, the grid
+# meter already sees that power. The dashboard's PV series point at these.
+OPT_SOLAR_POWER = "solar_power_entity"
+OPT_SOLAR_ENERGY = "solar_energy_entity"
+# The device's own PV counts as in use once its PV energy passed this; below it
+# an external sensor replaces the device's PV series rather than joining them.
+# A 3000 Mix AC has PV inputs that may never see a panel.
+OWN_PV_MIN_KWH = 0.5
 
 # ── Price control (v1.6.0) ───────────────────────────────────────────────
 # The Operation mode of one battery set from the electricity price: an entry
@@ -269,6 +281,10 @@ SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 # until removed by hand; the integration removes them when their entry is set
 # up. Listed by platform and the unique id after the entry id, so only these
 # go: an entity that still exists but is disabled stays.
+# "Grid power (in control)" of v1.6.5 duplicated a meter's reading under a new
+# entity without its history; the dashboard now names the meter's own sensor
+# (v1.6.6).
+RETIRED_BATTERY_ENTITIES: tuple[tuple[str, str], ...] = (("sensor", "grid_power_in_control"),)
 RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
     ("select", "net_metering_mode"),    # v1.6.0; replaced by In-between mode in v1.6.1
 )

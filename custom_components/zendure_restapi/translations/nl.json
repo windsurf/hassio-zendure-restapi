@@ -117,7 +117,14 @@
         "title": "Opties",
         "data": {
           "scan_interval": "Seconden tussen bevragingen (1-60)",
-          "create_dashboard": "Zendure RestAPI-dashboard aanmaken (een bestaand dashboard blijft ongemoeid)"
+          "solar_power_entity": "Zonnevermogen van buiten de accu (optioneel, voor het dashboard)",
+          "solar_energy_entity": "Zonne-energie van buiten de accu (optioneel, voor het dashboard)",
+          "create_dashboard": "Zendure RestAPI-dashboard aanmaken (een bestaand dashboard blijft ongemoeid)",
+          "rebuild_dashboard": "Vervang het bestaande dashboard door een nieuw (je eigen wijzigingen daarin gaan verloren)"
+        },
+        "data_description": {
+          "solar_power_entity": "Een slimme stekker aan een micro-omvormer of een tweede omvormer. De PV-series van het dashboard tonen hem: in plaats van de eigen PV van de accu als die niet in gebruik is, anders ernaast. Voor het sturen is hij niet nodig, de netmeter ziet dit vermogen al.",
+          "solar_energy_entity": "De kWh-teller ervan, voor de dagtotalen op het tabblad History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "andere prijslijst"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Verloren schrijfacties"
-      },
-      "grid_power_in_control": {
-        "name": "Netvermogen (in regeling)"
       }
     },
     "binary_sensor": {

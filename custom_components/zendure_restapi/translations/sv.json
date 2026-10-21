@@ -117,7 +117,14 @@
         "title": "Alternativ",
         "data": {
           "scan_interval": "Sekunder mellan avläsningar (1-60)",
-          "create_dashboard": "Skapa instrumentpanelen Zendure RestAPI (en befintlig lämnas orörd)"
+          "solar_power_entity": "Solkraft utanför batteriet (valfritt, för instrumentpanelen)",
+          "solar_energy_entity": "Solenergi utanför batteriet (valfritt, för instrumentpanelen)",
+          "create_dashboard": "Skapa instrumentpanelen Zendure RestAPI (en befintlig lämnas orörd)",
+          "rebuild_dashboard": "Ersätt den befintliga instrumentpanelen med en ny (dina egna ändringar går förlorade)"
+        },
+        "data_description": {
+          "solar_power_entity": "En smart kontakt på en mikroväxelriktare eller en andra växelriktare. Instrumentpanelens PV-serier visar den: i stället för batteriets egen PV när den inte används, annars bredvid. Styrningen behöver den inte, nätmätaren ser redan denna effekt.",
+          "solar_energy_entity": "Dess kWh-räknare, för dagstotalerna på fliken History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "annan prislista"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Förlorade skrivningar"
-      },
-      "grid_power_in_control": {
-        "name": "Näteffekt (i reglering)"
       }
     },
     "binary_sensor": {

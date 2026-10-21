@@ -346,11 +346,27 @@ class PriceValueSensor(PriceEntity, SensorEntity):
 
 
 class PriceFormulaSensor(PriceEntity, SensorEntity):
-    """The import price or export value now, from the formulas."""
+    """The import price or export value now, from the formulas.
+
+    The attribute `prices` holds the same figure for every period of the price
+    list, today and tomorrow, as [start, value] pairs (v1.6.6), for automations
+    and dashboards. It changes every quarter and is not recorded.
+    """
+
+    _unrecorded_attributes = frozenset({"prices"})
 
     def __init__(self, entry, price, description, attribute: str) -> None:
         super().__init__(entry, price, description)
         self._attribute = attribute
+        self._column = 1 if attribute == "import_price" else 2
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "prices": [
+                [row[0].isoformat(), row[self._column]] for row in self._price.price_curve
+            ]
+        }
 
     @property
     def available(self) -> bool:

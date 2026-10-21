@@ -1,12 +1,18 @@
 """The Zendure RestAPI dashboard: created on request, never overwritten.
 
-The template is dashboard/zendure_restapi.yaml — two views, Zendure RestAPI
-and Price Control — shipped inside the integration as
+The template is dashboard/zendure_restapi.yaml — three views, Zendure
+RestAPI, Price Control and History — shipped inside the integration as
 dashboard_zendure_restapi.json because HACS installs only this folder. Before
 it is saved, the entity ids of the reference device are swapped for those of
 the devices actually set up, the power gauges get the device's own AC limit,
-and cards for entities that do not exist here are left out. The day plan
-chart needs apexcharts-card from HACS and appears only when it is installed.
+and cards for entities that do not exist here are left out. The charts need
+apexcharts-card from HACS and appear only when it is installed; without it a
+notice in their place says so (v1.6.6).
+
+A few template cards carry a `zendure` key with hints for this module, never
+saved: `only_without` keeps a card only when that custom card is missing (the
+notices), `plan_optional` keeps a chart whose plan series has dropped out,
+`needs` ties a text card to the entity it is about.
 
 Home Assistant has no public call for an integration to add a dashboard. The
 dashboards collection is reached through the handler of the websocket command
@@ -58,6 +64,9 @@ P1_TO_EXTERNAL = {
     "energy_exported": "energy_exported",
 }
 
+# The key on a template card with hints for build_config (v1.6.6).
+HINTS = "zendure"
+
 # Tiles and gauges show the entity name only, not "<device> <entity>" (v1.6.4).
 # Card naming objects arrived in Home Assistant 2025.11; on an older release
 # the cards keep the friendly name, as before.
@@ -70,7 +79,24 @@ CARD_NAMING = (MAJOR_VERSION, MINOR_VERSION) >= (2025, 11)
 PACK_HEADING = "Pack 1"
 PACK_TEMPLATE = "pack_1_"
 
+# Solar from outside the device (v1.6.6). The template's PV series read the
+# device's own PV; an external sensor replaces them when the device's PV is not
+# in use, and joins them otherwise: apexcharts cannot add two series up.
+PV_POWER = "pv_input_power"
+PV_ENERGY = "pv_energy"
+EXTERNAL_PV_NAME = "PV external"
+EXTERNAL_PV_DASH = 4
+EXTERNAL_PV_OPACITY = 0.35
+# The template's grid figures (gauge, tile, charts) carry this placeholder; the
+# builder puts the sensor of the meter that steers in its place, with that
+# sensor's own history (v1.6.6; v1.6.5 had an entity of its own for it).
+GRID_PLACEHOLDER = "grid_power_in_control"
+# The tile for solar from outside the battery, under Battery and grid; it goes
+# when no such sensor is chosen (v1.6.6).
+SOLAR_PLACEHOLDER = "external_solar_power"
+
 CREATED = "created"
+REPLACED = "replaced"
 EXISTS = "exists"
 FAILED = "failed"
 
@@ -87,6 +113,10 @@ def build_config(
     custom_cards: set[str] | None = None,
     card_naming: bool = True,
     external_ids: dict[str, str] | None = None,
+    solar_power: str | None = None,
+    solar_energy: str | None = None,
+    own_pv: bool = False,
+    grid: str | None = None,
 ) -> dict[str, Any]:
     """The template, fitted to the devices of this installation.
 
@@ -100,7 +130,10 @@ def build_config(
     2025.11, which do not know the naming object. `external_ids` maps the
     external meter's sensor keys (power, status, ...) to its real entity ids;
     a user's language or a renamed device can give it other ids than the
-    template's `sensor.external_p1_meter_*` (v1.6.4).
+    template's `sensor.external_p1_meter_*` (v1.6.4). `solar_power` and
+    `solar_energy` are sensors of solar from outside the device; `own_pv`
+    says whether the device's own PV is in use (v1.6.6). `grid` is the
+    sensor of the meter that steers; without one the grid figures go.
     """
     text = json.dumps(template)
     if price and price != TEMPLATE_PRICE:
@@ -117,8 +150,14 @@ def build_config(
     external_ids = external_ids or {}
     for key, entity_id in external_ids.items():
         text = text.replace(f'"sensor.{EXTERNAL}{key}"', f'"{entity_id}"')
+    # Without a meter the placeholder stays: no such entity, so its cards go.
+    if grid:
+        text = text.replace(f'"sensor.{battery}{GRID_PLACEHOLDER}"', f'"{grid}"')
+    if solar_power:
+        text = text.replace(f'"sensor.{battery}{SOLAR_PLACEHOLDER}"', f'"{solar_power}"')
     config = json.loads(text)
     _add_packs(config, battery, known)
+    _add_solar(config, battery, solar_power, solar_energy, own_pv)
 
     # The external meter's own section is hidden by its visibility condition
     # and is left alone; only the grid figures swapped in above must exist.
@@ -151,7 +190,19 @@ def build_config(
             # text that explains them.
             had = any(_has_entity(c) for c in section.get("cards", []))
             cards = []
+            anchored = False
             for card in section.get("cards", []):
+                hints = card.pop(HINTS, None) or {}
+                if "only_without" in hints and (
+                    custom_cards is None or hints["only_without"] in custom_cards
+                ):
+                    continue
+                # A text about an entity, without an entity field of its own:
+                # it goes with that entity and keeps its section like a tile.
+                if "needs" in hints:
+                    if not present(hints["needs"]):
+                        continue
+                    anchored = True
                 if not present(card.get("entity")):
                     continue
                 kind = str(card.get("type", ""))
@@ -159,10 +210,13 @@ def build_config(
                     continue
                 if "series" in card:
                     # A chart: series of missing entities go; without the
-                    # generated series, which is what the chart is for, all of it.
+                    # generated series, which is what the chart is for, all of it,
+                    # unless the plan is only one series among others (History).
                     kept = [x for x in card["series"] if present(x.get("entity"))]
-                    if any("data_generator" in x for x in card["series"]) and not any(
-                        "data_generator" in x for x in kept
+                    if (
+                        not hints.get("plan_optional")
+                        and any("data_generator" in x for x in card["series"])
+                        and not any("data_generator" in x for x in kept)
                     ):
                         continue
                     card["series"] = kept
@@ -188,7 +242,7 @@ def build_config(
                         card["min"] = -ceiling
                 cards.append(card)
             if any(c.get("type") != "heading" for c in cards) and (
-                not had or any(_has_entity(c) for c in cards)
+                not had or anchored or any(_has_entity(c) for c in cards)
             ):
                 section["cards"] = cards
                 sections.append(section)
@@ -202,16 +256,62 @@ def _scale_power_axis(card: dict[str, Any], ceiling: int) -> None:
     The template fixes it at -3000 to 4000 W in steps of 1000: a full charge
     below zero, a full discharge plus the house above (v1.6.5). The same shape
     for a smaller device: from minus its limit, rounded up to a step, to one
-    step above that, so an 800 W battery does not draw a flat line.
+    step above that, so an 800 W battery does not draw a flat line. A free
+    axis (History) keeps following the data, in steps of the same size.
     """
+    step = 1000 if ceiling >= 2000 else 500 if ceiling >= 1000 else 200
     for axis in card.get("yaxis") or []:
-        if axis.get("id") != "power" or axis.get("min") != -TEMPLATE_CEILING:
+        if axis.get("id") != "power":
             continue
-        step = 1000 if ceiling >= 2000 else 500 if ceiling >= 1000 else 200
+        if "align_to" in axis:
+            # A free axis follows the data in whole steps (History, v1.6.6).
+            axis["align_to"] = step
+            axis.setdefault("apex_config", {})["stepSize"] = step
+            continue
+        if axis.get("min") != -TEMPLATE_CEILING:
+            continue
         low = -math.ceil(ceiling / step) * step
         high = -low + step
         axis["min"], axis["max"] = low, high
         axis.setdefault("apex_config", {})["tickAmount"] = (high - low) // step
+
+
+def _add_solar(
+    config: dict[str, Any],
+    battery: str,
+    power: str | None,
+    energy: str | None,
+    own_pv: bool,
+) -> None:
+    """Point the PV series of every chart at the external solar sensors.
+
+    Without the device's own PV the external sensor takes the series over,
+    name and colour included; with it, the external one follows as a series
+    of its own: dashed in the power charts, a paler column in the totals.
+    """
+    swap = {f"sensor.{battery}{PV_POWER}": power, f"sensor.{battery}{PV_ENERGY}": energy}
+    for view in config.get("views", []):
+        for section in view.get("sections", []):
+            for card in section.get("cards", []):
+                if "series" not in card:
+                    continue
+                series = []
+                for item in card["series"]:
+                    target = swap.get(str(item.get("entity", "")))
+                    if not target:
+                        series.append(item)
+                        continue
+                    external = {**copy.deepcopy(item), "entity": target}
+                    if not own_pv:
+                        series.append(external)
+                        continue
+                    external["name"] = EXTERNAL_PV_NAME
+                    if item.get("type") == "column":
+                        external["opacity"] = EXTERNAL_PV_OPACITY
+                    else:
+                        external["stroke_dash"] = EXTERNAL_PV_DASH
+                    series.extend([item, external])
+                card["series"] = series
 
 
 def _pack_numbers(battery: str, known: set[str]) -> list[int]:
@@ -310,16 +410,26 @@ async def async_create_dashboard(
     ceiling: int,
     price: str | None = None,
     external_ids: dict[str, str] | None = None,
+    solar_power: str | None = None,
+    solar_energy: str | None = None,
+    own_pv: bool = False,
+    replace: bool = False,
+    grid: str | None = None,
 ) -> str:
-    """Create the dashboard unless one exists at its address."""
+    """Create the dashboard unless one exists at its address.
+
+    With `replace`, an existing one gets a fresh configuration instead: the
+    user asked for it in the options, which say that their edits are lost.
+    """
     try:
         dashboards = _dashboards(hass)
         if dashboards is None:
             return FAILED
-        if DASHBOARD_URL in dashboards:
+        existing = dashboards.get(DASHBOARD_URL)
+        if existing is not None and not replace:
             return EXISTS
-        collection = _collection(hass)
-        if collection is None:
+        collection = None if existing is not None else _collection(hass)
+        if existing is None and collection is None:
             return FAILED
         template = await hass.async_add_executor_job(_load_template)
         config = build_config(
@@ -328,7 +438,14 @@ async def async_create_dashboard(
             custom_cards=await _custom_cards(hass),
             card_naming=CARD_NAMING,
             external_ids=external_ids,
+            solar_power=solar_power,
+            solar_energy=solar_energy,
+            own_pv=own_pv,
+            grid=grid,
         )
+        if existing is not None:
+            await existing.async_save(config)
+            return REPLACED
         await collection.async_create_item(
             {
                 "url_path": DASHBOARD_URL,
@@ -356,10 +473,15 @@ def notify(hass: HomeAssistant, result: str, battery: str) -> None:
             f"The dashboard **{DASHBOARD_TITLE}** is in the sidebar. It is an ordinary "
             "dashboard: edit it as you like; the integration will not touch it again."
         )
+    elif result == REPLACED:
+        message = (
+            f"The dashboard **{DASHBOARD_TITLE}** was replaced by a fresh one. "
+            "Refresh the browser to see it."
+        )
     elif result == EXISTS:
         message = (
             f"A dashboard at `/{DASHBOARD_URL}` already exists and was left as it is. "
-            "To rebuild it, delete it and tick the option again."
+            "To rebuild it, tick *Replace the existing dashboard* in the battery's options."
         )
     else:
         message = (

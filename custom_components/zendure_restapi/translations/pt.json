@@ -117,7 +117,14 @@
         "title": "Opções",
         "data": {
           "scan_interval": "Segundos entre consultas (1-60)",
-          "create_dashboard": "Criar o painel Zendure RestAPI (um existente fica inalterado)"
+          "solar_power_entity": "Potência solar externa à bateria (opcional, para o painel)",
+          "solar_energy_entity": "Energia solar externa à bateria (opcional, para o painel)",
+          "create_dashboard": "Criar o painel Zendure RestAPI (um existente fica inalterado)",
+          "rebuild_dashboard": "Substituir o painel existente por um novo (as suas alterações perdem-se)"
+        },
+        "data_description": {
+          "solar_power_entity": "Uma tomada inteligente num microinversor ou um segundo inversor. As séries PV do painel mostram-no: em vez do PV da própria bateria se não estiver em uso, ao lado caso contrário. O controlo não precisa dele, o contador de rede já vê esta potência.",
+          "solar_energy_entity": "O seu contador de kWh, para os totais diários do separador History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "outra lista de preços"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Escritas perdidas"
-      },
-      "grid_power_in_control": {
-        "name": "Potência da rede (em controlo)"
       }
     },
     "binary_sensor": {

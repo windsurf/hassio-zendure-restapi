@@ -17,7 +17,7 @@ Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS i
 
 ![Zendure-Dashboard](images/dashboard.png)
 
-*`smart_matching` hält das Netz auf null: Das Haus braucht 79 W, die Batterie liefert sie, und die Regelung hält den Zähler auf 10 W genau bei null. Die Integration legt dieses Dashboard für dich an, mit zwei weiteren Ansichten: Price Control und Measured.*
+*`smart_matching` lädt den Solarüberschuss in die Batterie: Sie lädt mit 902 W, und die Regelung hält das Netz auf 10 W genau bei null, mit dem externen Zähler als Regelzähler. Die Integration legt dieses Dashboard für dich an, mit zwei weiteren Ansichten: Price Control und History.*
 
 **Schnellstart unten** · alle Details in der [technischen Referenz](#-technische-referenz) (Englisch)
 
@@ -125,7 +125,7 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 
 ![Price-Control-Ansicht des Dashboards](images/dashboard_price.png)
 
-*Die Ansicht Price Control: der Tagesplan für heute und morgen, welche Viertelstunden laden und welche entladen, und die erwartete Marge. Mit Saldierung folgt der Einspeisepreis dem Bezugspreis.*
+*Die Ansicht Price Control: der Tagesplan für heute und morgen, gemessen bis jetzt und geplant danach, welche Viertelstunden laden und welche entladen, und die erwartete Marge. Mit Saldierung folgt der Einspeisepreis dem Bezugspreis.*
 
 Zwei Wege, die Batterie nach einem dynamischen Tarif zu steuern, in einem eigenen Gerät:
 
@@ -179,7 +179,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.6.5:** das Dashboard zeigt den Netzwert, nach dem tatsächlich geregelt wird, **Netzleistung (in Regelung)**, gleich von welchem Zähler; der Tagesplan liest auch **EPEX-Spot**-Preise; jeder Zähler, der schon in Home Assistant ist, lässt sich als ganzes Gerät wählen. **v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
+**Vorabversion – v1.6.6** (in HACS *Pre-release* für dieses Repository einschalten): eine Ansicht **History** mit vier Diagrammen — 30 Minuten live, 4 Stunden, die letzten 24 Stunden, 30 Tage Tagessummen; Solar von einem **Mikrowechselrichter oder zweiten Wechselrichter** lässt sich in den Diagrammen zeigen; das Dashboard lässt sich in den Optionen **ersetzen**. **v1.6.5:** das Dashboard zeigt den Netzwert, nach dem tatsächlich geregelt wird, **Netzleistung (in Regelung)**, gleich von welchem Zähler; der Tagesplan liest auch **EPEX-Spot**-Preise; jeder Zähler, der schon in Home Assistant ist, lässt sich als ganzes Gerät wählen. **v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
 
 **Demnächst in 1.7:** mehrere Akkus an einem Anschluss als ein Cluster — Tester mit zwei oder mehr Zendure-Akkus sind in den [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions) willkommen.
 

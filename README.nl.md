@@ -17,7 +17,7 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 
 ![Zendure-dashboard](images/dashboard.png)
 
-*`smart_matching` houdt het net op nul: het huis vraagt 79 W, de accu levert het, en de regeling houdt de meter binnen 10 W van nul. De integratie maakt dit dashboard voor je aan, met nog twee tabbladen: Price Control en Measured.*
+*`smart_matching` zet het zonne-overschot in de accu: die laadt met 902 W en de regeling houdt het net binnen 10 W van nul, met de externe meter als stuurmeter. De integratie maakt dit dashboard voor je aan, met nog twee tabbladen: Price Control en History.*
 
 **Snel aan de slag hieronder** · alle details in de [Technische referentie](#-technische-referentie) (Engels)
 
@@ -125,7 +125,7 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 
 ![Price Control-tabblad van het dashboard](images/dashboard_price.png)
 
-*Het tabblad Price Control: het dagplan voor vandaag en morgen, welke kwartieren laden en welke ontladen, en de verwachte marge. Met salderen aan volgt de terugleverprijs de afnameprijs.*
+*Het tabblad Price Control: het dagplan voor vandaag en morgen, gemeten tot nu en gepland daarna, welke kwartieren laden en welke ontladen, en de verwachte marge. Met salderen aan volgt de terugleverprijs de afnameprijs.*
 
 Twee manieren om de accu te sturen op een dynamisch tarief, in een eigen apparaat:
 
@@ -179,7 +179,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.6.5:** het dashboard toont de netmeting waarop echt gestuurd wordt, **Netvermogen (in regeling)**, van welke meter ook; het dagplan leest ook **EPEX Spot**- en **Zonneplan**-prijzen; elke meter die al in Home Assistant zit is als heel apparaat te kiezen. **v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
+**Pre-release – v1.6.6** (zet in HACS *Pre-release* aan voor deze repository): een tabblad **History** met vier grafieken — 30 minuten live, 4 uur, de afgelopen 24 uur, 30 dagen dagtotalen; zon van een **micro-omvormer of tweede omvormer** is in de grafieken te tonen; het dashboard is vanuit de opties te **vervangen**. **v1.6.5:** het dashboard toont de netmeting waarop echt gestuurd wordt, **Netvermogen (in regeling)**, van welke meter ook; het dagplan leest ook **EPEX Spot**- en **Zonneplan**-prijzen; elke meter die al in Home Assistant zit is als heel apparaat te kiezen. **v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
 
 **Binnenkort in 1.7:** meerdere accu's achter één aansluiting als één cluster — testers met twee of meer Zendure-accu's zijn welkom in de [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 

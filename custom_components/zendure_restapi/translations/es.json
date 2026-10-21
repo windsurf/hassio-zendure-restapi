@@ -117,7 +117,14 @@
         "title": "Opciones",
         "data": {
           "scan_interval": "Segundos entre consultas (1-60)",
-          "create_dashboard": "Crear el panel Zendure RestAPI (uno existente no se modifica)"
+          "solar_power_entity": "Potencia solar externa a la batería (opcional, para el panel)",
+          "solar_energy_entity": "Energía solar externa a la batería (opcional, para el panel)",
+          "create_dashboard": "Crear el panel Zendure RestAPI (uno existente no se modifica)",
+          "rebuild_dashboard": "Sustituir el panel existente por uno nuevo (se pierden tus cambios)"
+        },
+        "data_description": {
+          "solar_power_entity": "Un enchufe inteligente en un microinversor o un segundo inversor. Las series PV del panel lo muestran: en lugar del PV propio de la batería si no se usa, junto a él en otro caso. El control no lo necesita, el contador de red ya ve esta potencia.",
+          "solar_energy_entity": "Su contador de kWh, para los totales diarios de la pestaña History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "otra lista de precios"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Escrituras perdidas"
-      },
-      "grid_power_in_control": {
-        "name": "Potencia de red (en control)"
       }
     },
     "binary_sensor": {

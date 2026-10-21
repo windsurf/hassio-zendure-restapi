@@ -315,7 +315,8 @@ def read_prices(attributes: dict[str, Any]) -> list[Period]:
     """The price list of a price sensor: today, and tomorrow when known.
 
     Recognises the lists of Nord Pool (HACS), EPEX Spot, Zonneplan, ENTSO-e,
-    Frank Energie and Energi Data Service (PRICE_FAMILIES). Values per kWh in
+    Frank Energie, Tibber (a template sensor) and Energi Data Service
+    (PRICE_FAMILIES). Values per kWh in
     the currency's main unit, whatever the sensor's own scale. Entries without
     a usable start or value are left out; a missing end is the next start.
     Sorted by start, duplicates dropped.

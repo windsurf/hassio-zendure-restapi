@@ -117,7 +117,14 @@
         "title": "Options",
         "data": {
           "scan_interval": "Secondes entre les interrogations (1-60)",
-          "create_dashboard": "Créer le tableau de bord Zendure RestAPI (un tableau existant reste intact)"
+          "solar_power_entity": "Puissance solaire hors batterie (facultatif, pour le tableau de bord)",
+          "solar_energy_entity": "Énergie solaire hors batterie (facultatif, pour le tableau de bord)",
+          "create_dashboard": "Créer le tableau de bord Zendure RestAPI (un tableau existant reste intact)",
+          "rebuild_dashboard": "Remplacer le tableau de bord existant par un nouveau (vos modifications sont perdues)"
+        },
+        "data_description": {
+          "solar_power_entity": "Une prise connectée sur un micro-onduleur ou un second onduleur. Les séries PV du tableau de bord l'affichent : à la place du PV de la batterie s'il n'est pas utilisé, à côté sinon. La régulation n'en a pas besoin, le compteur réseau voit déjà cette puissance.",
+          "solar_energy_entity": "Son compteur kWh, pour les totaux journaliers de l'onglet History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "autre liste de prix"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Écritures perdues"
-      },
-      "grid_power_in_control": {
-        "name": "Puissance réseau (en régulation)"
       }
     },
     "binary_sensor": {

@@ -133,7 +133,6 @@ ALIGN_KEYS = (
     "measured_charge_efficiency", "measured_discharge_efficiency",
     "round_trip_ac", "round_trip_dc", "usable_capacity", "full_cycles",
     "standby_draw", "response_time", "grid_tracking_error", "lost_writes",
-    "grid_power_in_control",
 )
 
 
@@ -183,11 +182,34 @@ _RENAMED_TAILS = {"pack_type": "type"}
 _RENAMED_IDS = {"_battery_module_count": "_pack_count"}
 
 
+# A name set in the registry wins over the integration's own. One that is
+# still the old "Battery N …" form kept a pack entity on its old name after the
+# move (v1.6.6); it is cleared, a name chosen otherwise stays.
+_OLD_PACK_NAME = re.compile(r"^(?:Battery|Batterij|Batterie) (\d+) (.+)$")
+_OLD_NAMES = {"_packNum": ("Battery module count",)}
+
+
+def _old_pack_name(entity: er.RegistryEntry) -> bool:
+    name = entity.name or ""
+    unique_id = entity.unique_id or ""
+    for suffix, names in _OLD_NAMES.items():
+        if unique_id.endswith(suffix):
+            return name in names
+    match = _OLD_PACK_NAME.match(name)
+    if match is None or f"_{PACK_PREFIX}{match.group(1)}_" not in unique_id:
+        return False
+    original = re.sub(r"^(?:Pack|Battery) \d+ ", "", entity.original_name or "")
+    return match.group(2) in {original, "Pack type" if original == "Type" else original}
+
+
 def migrate_pack_entity_ids(hass: HomeAssistant, entry_id: str) -> int:
     """Rename …_battery_N_… pack entities to …_pack_N_…; the number moved."""
     registry = er.async_get(hass)
     moved = 0
     for entity in er.async_entries_for_config_entry(registry, entry_id):
+        if entity.name and _old_pack_name(entity):
+            registry.async_update_entity(entity.entity_id, name=None)
+            _LOGGER.info("Cleared the old name '%s' of %s", entity.name, entity.entity_id)
         old = next((o for o in _RENAMED_IDS if entity.entity_id.endswith(o)), None)
         if old is not None and (entity.unique_id or "").endswith("_packNum"):
             wanted = entity.entity_id[: -len(old)] + _RENAMED_IDS[old]

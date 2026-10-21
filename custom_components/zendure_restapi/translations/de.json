@@ -117,7 +117,14 @@
         "title": "Optionen",
         "data": {
           "scan_interval": "Sekunden zwischen Abfragen (1-60)",
-          "create_dashboard": "Zendure-RestAPI-Dashboard anlegen (ein vorhandenes bleibt unverändert)"
+          "solar_power_entity": "Solarleistung von außerhalb des Speichers (optional, für das Dashboard)",
+          "solar_energy_entity": "Solarenergie von außerhalb des Speichers (optional, für das Dashboard)",
+          "create_dashboard": "Zendure-RestAPI-Dashboard anlegen (ein vorhandenes bleibt unverändert)",
+          "rebuild_dashboard": "Vorhandenes Dashboard durch ein neues ersetzen (eigene Änderungen daran gehen verloren)"
+        },
+        "data_description": {
+          "solar_power_entity": "Eine smarte Steckdose an einem Mikrowechselrichter oder ein zweiter Wechselrichter. Die PV-Reihen des Dashboards zeigen sie: statt der eigenen PV des Speichers, wenn diese nicht genutzt wird, sonst daneben. Für die Regelung ist sie nicht nötig, der Netzzähler sieht diese Leistung bereits.",
+          "solar_energy_entity": "Ihr kWh-Zähler, für die Tagessummen im Tab History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "andere Preisliste"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Verlorene Schreibbefehle"
-      },
-      "grid_power_in_control": {
-        "name": "Netzleistung (in Regelung)"
       }
     },
     "binary_sensor": {

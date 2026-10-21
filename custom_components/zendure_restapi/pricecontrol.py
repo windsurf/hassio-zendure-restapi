@@ -207,6 +207,9 @@ class PriceControl:
         self.target: str | None = None
         self.import_price: float | None = None
         self.export_value: float | None = None
+        # Import price and export value per period of the price list, today
+        # and tomorrow (v1.6.6): [(start, import, export)].
+        self.price_curve: list[tuple[Any, float, float]] = []
         self.plan: Plan | None = None
         self._generation = 0
         # Decision and Net metering as last seen; None until the first update,
@@ -416,6 +419,14 @@ class PriceControl:
             spot = tariff.spot(self.price)
             self.import_price = round(tariff.import_price(spot), 5)
             self.export_value = round(tariff.export_value(spot), 5)
+        self.price_curve = [
+            (
+                period.start,
+                round(tariff.import_price(tariff.spot(period.value)), 5),
+                round(tariff.export_value(tariff.spot(period.value)), 5),
+            )
+            for period in read_prices(attributes)
+        ]
 
         self._generation += 1
         if self._settings.get(OPT_PRICE_DECISION) != DECISION_PLAN:

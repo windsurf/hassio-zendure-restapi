@@ -117,7 +117,14 @@
         "title": "Možnosti",
         "data": {
           "scan_interval": "Sekundy mezi dotazy (1-60)",
-          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI (existující zůstane beze změny)"
+          "solar_power_entity": "Solární výkon mimo baterii (volitelné, pro nástěnku)",
+          "solar_energy_entity": "Solární energie mimo baterii (volitelné, pro nástěnku)",
+          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI (existující zůstane beze změny)",
+          "rebuild_dashboard": "Nahradit stávající nástěnku novou (vaše úpravy se ztratí)"
+        },
+        "data_description": {
+          "solar_power_entity": "Chytrá zásuvka na mikroměniči nebo druhý měnič. Řady PV na nástěnce ji ukazují: místo vlastního PV baterie, pokud se nepoužívá, jinak vedle něj. Řízení ji nepotřebuje, síťový elektroměr tento výkon už vidí.",
+          "solar_energy_entity": "Její počítadlo kWh, pro denní součty na kartě History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "jiný ceník"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Ztracené zápisy"
-      },
-      "grid_power_in_control": {
-        "name": "Výkon sítě (v regulaci)"
       }
     },
     "binary_sensor": {

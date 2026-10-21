@@ -117,7 +117,14 @@
         "title": "Opzioni",
         "data": {
           "scan_interval": "Secondi tra le interrogazioni (1-60)",
-          "create_dashboard": "Crea la dashboard Zendure RestAPI (una esistente resta invariata)"
+          "solar_power_entity": "Potenza solare esterna alla batteria (facoltativo, per la dashboard)",
+          "solar_energy_entity": "Energia solare esterna alla batteria (facoltativo, per la dashboard)",
+          "create_dashboard": "Crea la dashboard Zendure RestAPI (una esistente resta invariata)",
+          "rebuild_dashboard": "Sostituisci la dashboard esistente con una nuova (le tue modifiche vanno perse)"
+        },
+        "data_description": {
+          "solar_power_entity": "Una presa smart su un microinverter o un secondo inverter. Le serie PV della dashboard la mostrano: al posto del PV della batteria se non è in uso, accanto altrimenti. Il controllo non ne ha bisogno, il contatore di rete vede già questa potenza.",
+          "solar_energy_entity": "Il suo contatore kWh, per i totali giornalieri della scheda History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "altro elenco prezzi"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Scritture perse"
-      },
-      "grid_power_in_control": {
-        "name": "Potenza di rete (in controllo)"
       }
     },
     "binary_sensor": {

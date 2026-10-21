@@ -117,7 +117,14 @@
         "title": "Indstillinger",
         "data": {
           "scan_interval": "Sekunder mellem aflæsninger (1-60)",
-          "create_dashboard": "Opret dashboardet Zendure RestAPI (et eksisterende forbliver uændret)"
+          "solar_power_entity": "Solcelleeffekt uden for batteriet (valgfrit, til dashboardet)",
+          "solar_energy_entity": "Solenergi uden for batteriet (valgfrit, til dashboardet)",
+          "create_dashboard": "Opret dashboardet Zendure RestAPI (et eksisterende forbliver uændret)",
+          "rebuild_dashboard": "Erstat det eksisterende dashboard med et nyt (dine egne ændringer går tabt)"
+        },
+        "data_description": {
+          "solar_power_entity": "Et smartstik på en mikroinverter eller en anden inverter. Dashboardets PV-serier viser det: i stedet for batteriets egen PV, når den ikke bruges, ellers ved siden af. Styringen behøver det ikke, netmåleren ser allerede denne effekt.",
+          "solar_energy_entity": "Dens kWh-tæller, til dagstotalerne på fanen History."
         }
       },
       "external": {
@@ -341,6 +348,7 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
+              "tibber": "Tibber",
               "energi_data_service": "Energi Data Service",
               "other": "anden prisliste"
             }
@@ -612,9 +620,6 @@
       },
       "lost_writes": {
         "name": "Tabte skrivninger"
-      },
-      "grid_power_in_control": {
-        "name": "Neteffekt (i regulering)"
       }
     },
     "binary_sensor": {

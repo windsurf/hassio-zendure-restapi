@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.5
+# ZENDURE RESTAPI DASHBOARD - v1.6.6
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -10,13 +10,16 @@
 #                     external P1 meter, the controller
 #   Price Control   - the Price Control device: on/off, status,
 #                     decision, the day plan with its periods
-#                     and a chart (apexcharts-card, HACS), the
+#                     and a chart of today and tomorrow
+#                     (apexcharts-card, HACS), the
 #                     fixed prices and the mode per band, the
-#                     tariff, losses and margin as sliders
-#                     (entity ids price_control_*)
-#   Measured        - the measured diagnostics (v1.6.3) with a
-#                     trend under each: efficiency, battery,
-#                     control and the realized margin
+#                     tariff, losses and margin as sliders,
+#                     battery and grid (entity ids
+#                     price_control_*)
+#   History         - four charts (apexcharts-card, HACS): the
+#                     last 30 minutes live, 4 hours, 24
+#                     hours, 30 days of daily totals; then the
+#                     measured diagnostics (v1.6.3)
 #
 # INSTALL:
 #   Automatic: tick "Create the Zendure RestAPI dashboard" when
@@ -42,6 +45,12 @@
 #   (suffix _2) or after the device is renamed. Verify under
 #   Developer tools -> States, filtered on "zendure".
 #
+#   The grid gauge, the grid tile and the Grid line of the
+#   charts read the meter that steers. Here that is the Zendure
+#   P1 meter; when an external meter steers, replace
+#   sensor.zendure_p1_meter_3_phase_grid_power_total there with
+#   its Power sensor (sensor.external_p1_meter_power).
+#
 # SECTIONS, view Zendure RestAPI:
 #   Home Battery     - state of charge, power, state, SOC limit
 #   Operation mode   - what the controller does and why, the
@@ -65,9 +74,11 @@
 #   Mix AC+. The automatic dashboard takes the limit from the
 #   device; by hand, lower max: to 2400 or 1600 for a 2400 AC or
 #   1600 AC+, or raise it to 4000 for the 4000 Mix models.
-#   The day plan chart's power axis runs from -3000 to 4000 W
-#   in steps of 1000; for a 2400 AC keep it, for an 800 W
-#   device use -800 to 1000 (the automatic dashboard scales it).
+#   The power axis of the day plan chart and of the History
+#   chart "Last 24 hours" runs from -3000 to 4000 W in steps of 1000; for a
+#   2400 AC keep it, for an 800 W device use -800 to 1000. The
+#   first two charts step by 1000 W; use 200 for 800 W (the
+#   automatic dashboard scales both).
 #
 # BATTERY PACKS:
 #   The section Pack 1 covers one battery pack. With more packs,
@@ -220,7 +231,7 @@ views:
       heading_style: title
       icon: mdi:gauge
     - type: gauge
-      entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
+      entity: sensor.zendure_p1_meter_3_phase_grid_power_total
       name:
         type: entity
       min: -3000
@@ -900,19 +911,6 @@ views:
       features:
       - type: select-options
       features_position: inline
-    - type: markdown
-      content: |-
-        **Decision** chooses how price control decides.
-
-        - **Fixed prices**: at or below the *cheap price* the battery charges, at or above the *expensive price* it discharges, in between it follows the meter or rests.
-        - **Day plan**: over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan and others), it works out per quarter whether to charge, discharge or neither, and makes a cycle only when it earns at least the *minimum margin* per kWh after conversion losses and wear.
-
-        Both take the modes chosen per band below: the cheap price mode, the expensive price mode, and the in-between mode for everything else. The day plan also plans with them: *quick_charge* charges from the grid, *smart_charge_only* does not; *quick_discharge* sells at full power, *smart_discharge_only* covers the house only. Switching *Decision* or *Net metering* fills the three in once with the presets for that choice; change them freely after that. Price control writes the Operation mode only when that changes, so a mode set by hand holds until then. Leave it **off** when another automation already steers the Operation mode.
-
-        Not there yet? Add it under *Settings > Devices & services > Zendure RestAPI > Add device > Price control*, choose the battery and the price sensor, then rebuild this dashboard. Setting up a price sensor: see *Price control* in the README.
-      grid_options:
-        columns: full
-        rows: auto
   - type: grid
     column_span: 2
     cards:
@@ -944,6 +942,9 @@ views:
       name:
         type: entity
       icon: mdi:cash-check
+  - type: grid
+    column_span: 4
+    cards:
     - type: markdown
       content: |
         {% set p = 'sensor.price_control_plan' %}
@@ -968,7 +969,7 @@ views:
         columns: full
         rows: auto
     - type: custom:apexcharts-card
-      graph_span: 24h
+      graph_span: 48h
       span:
         start: day
       now:
@@ -988,6 +989,8 @@ views:
         min: 0
         max: 100
         decimals: 0
+        apex_config:
+          tickAmount: 4
       apex_config:
         chart:
           height: 240
@@ -997,7 +1000,7 @@ views:
           x:
             format: dd-MM HH:mm
       series:
-      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
+      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
         name: Grid
         type: area
         unit: W
@@ -1059,13 +1062,13 @@ views:
         curve: smooth
         float_precision: 0
         extend_to: now
-        group_by:
-          func: avg
-          duration: 5min
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
       - entity: sensor.price_control_plan
         name: Plan
         type: line
@@ -1099,14 +1102,14 @@ views:
         float_precision: 0
         extend_to: now
         yaxis_id: soc
-        group_by:
-          func: avg
-          duration: 5min
         show:
           in_header: false
           legend_value: false
+        statistics:
+          type: mean
+          period: 5minute
       grid_options:
-        columns: 24
+        columns: full
         rows: auto
       hours_12: false
   - type: grid
@@ -1341,7 +1344,7 @@ views:
         type: entity
       icon: mdi:flash
     - type: tile
-      entity: sensor.zendure_solarflow_3000_mix_ac_grid_power_in_control
+      entity: sensor.zendure_p1_meter_3_phase_grid_power_total
       name:
         type: entity
       icon: mdi:transmission-tower
@@ -1355,26 +1358,452 @@ views:
       name:
         type: entity
       icon: mdi:cog-sync-outline
-- title: Measured
-  path: measured
-  icon: mdi:clipboard-pulse-outline
+- title: History
+  path: history
+  icon: mdi:chart-timeline-variant
   type: sections
   max_columns: 4
   sections:
   - type: grid
     column_span: 4
     cards:
-    - type: markdown
-      content: >-
-        Measured while the battery runs, whoever steers it, to check the settings
-        against the battery itself. A value stays *unknown* until there is something
-        to measure: standby draw and response time within the hour, the efficiencies
-        after a block of 1 kWh, round trip and usable capacity after a full cycle from
-        one SOC bound back to the same one. Trends show the last 7 days, standby draw,
-        response time and grid tracking the last 24 hours. Set the efficiencies of
-        Price Control from the round trip AC: both at its square root.
+    - type: heading
+      heading: Last 30 minutes
+      heading_style: title
+      icon: mdi:pulse
+    - type: custom:apexcharts-card
+      graph_span: 30min
+      update_interval: 10s
+      now:
+        show: true
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+        align_to: 1000
+        apex_config:
+          stepSize: 1000
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: HH:mm:ss
+      series:
+      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+        name: Grid
+        type: area
+        unit: W
+        color: '#1E88E5'
+        opacity: 0.2
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        opacity: 0.2
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        opacity: 0.2
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        transform: return x * -1;
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.2
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+        name: SoC
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 3
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        yaxis_id: soc
+        show:
+          in_header: false
+          legend_value: false
       grid_options:
         columns: full
+        rows: auto
+      hours_12: false
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 4 hours
+      heading_style: title
+      icon: mdi:clock-outline
+    - type: custom:apexcharts-card
+      graph_span: 4h
+      update_interval: 1min
+      now:
+        show: true
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+        align_to: 1000
+        apex_config:
+          stepSize: 1000
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: HH:mm
+      series:
+      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+        name: Grid
+        type: area
+        unit: W
+        color: '#1E88E5'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 1min
+      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 1min
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        transform: return x * -1;
+        yaxis_id: power
+        group_by:
+          func: avg
+          duration: 1min
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+        name: SoC
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 3
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        yaxis_id: soc
+        show:
+          in_header: false
+          legend_value: false
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 24 hours
+      heading_style: title
+      icon: mdi:history
+    - type: custom:apexcharts-card
+      graph_span: 24h
+      header:
+        show: false
+      yaxis:
+      - id: power
+        min: -3000
+        max: 4000
+        decimals: 0
+        apex_config:
+          tickAmount: 7
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: dd-MM HH:mm
+      series:
+      - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
+        name: Grid
+        type: area
+        unit: W
+        color: '#1E88E5'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        transform: return x * -1;
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.2
+        stroke_width: 2
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+        name: SoC
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 3
+        curve: smooth
+        float_precision: 0
+        extend_to: now
+        yaxis_id: soc
+        show:
+          in_header: false
+          legend_value: false
+        statistics:
+          type: mean
+          period: 5minute
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 30 days
+      heading_style: title
+      icon: mdi:calendar-month
+    - type: custom:apexcharts-card
+      graph_span: 30d
+      span:
+        end: day
+      stacked: false
+      header:
+        show: false
+      yaxis:
+      - id: energy
+        min: 0
+        decimals: 0
+        align_to: 5
+        apex_config:
+          stepSize: 5
+      apex_config:
+        chart:
+          height: 220
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: dd-MM
+      series:
+      - entity: sensor.zendure_solarflow_3000_mix_ac_energy_charged
+        name: Charged
+        type: column
+        unit: kWh
+        color: '#E53935'
+        opacity: 0.7
+        float_precision: 1
+        statistics:
+          type: change
+          period: day
+          align: middle
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: energy
+      - entity: sensor.zendure_solarflow_3000_mix_ac_energy_discharged
+        name: Discharged
+        type: column
+        unit: kWh
+        color: '#4CAF50'
+        opacity: 0.7
+        float_precision: 1
+        statistics:
+          type: change
+          period: day
+          align: middle
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: energy
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_energy
+        name: PV
+        type: column
+        unit: kWh
+        color: '#FFB300'
+        opacity: 0.7
+        float_precision: 1
+        statistics:
+          type: change
+          period: day
+          align: middle
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: energy
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
   - type: grid
     column_span: 2
     cards:
