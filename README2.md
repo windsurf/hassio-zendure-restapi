@@ -28,7 +28,7 @@ included — the battery, Price Control and Measured — see [Dashboard](#dashbo
 - **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
 - **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard) · [Measured diagnostics](#measured-diagnostics)
 - **Reference:** [Supported Entities](#supported-entities) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
-- **History:** [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
+- **History:** [Coming in 1.7](#coming-in-17-clusters) · [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
 ---
 
@@ -1601,6 +1601,19 @@ otherwise clean night, 43% and 104% on bands with 70 and 130 samples. Only long 
 stable power level give a usable number, and the shape of the curve above 200 W is not
 established under `closed`. That needs a run holding several fixed power levels for long enough
 to average out the sampling offset between the AC and cell readings.
+
+---
+
+## Coming in 1.7: clusters
+
+Several Zendure batteries behind one grid connection work as one cluster: one
+controller regulates the net on the measured properties of each battery, with
+no fixed master/slave relation. Roles (primary, secondary) follow from the
+regulation at each moment. A single battery behaves as in 1.6.x; existing
+entities and automations keep working.
+
+Status: tested on a simulator, not yet with real batteries. Testers with two
+or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 
 ---
 
