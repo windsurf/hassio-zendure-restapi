@@ -69,7 +69,15 @@ from .const import (
 )
 from .hadevice import Candidate, MeterPlan, fast_route, plan as device_plan, summary
 from .p1meter import ADAPTERS, HaSensorMeter, state_power
-from .registry import is_known_model, meter_name, model_name, parse_service_name
+from .registry import (
+    SMART_METER_3CT,
+    is_known_model,
+    is_meter_report,
+    meter_name,
+    model_name,
+    normalise,
+    parse_service_name,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,12 +110,16 @@ class ProbeResult:
         self.product: str | None = payload.get("product")
         self.version: Any = payload.get("version")
 
-        meter_type = payload.get(METER_MARKER_KEY, props.get(METER_MARKER_KEY))
-        self.is_meter = meter_type is not None
+        # meterType first (P1 meter); a Smart Meter 3CT has none and is
+        # recognised by its fields (issue #7).
+        self.meter_type = payload.get(METER_MARKER_KEY, props.get(METER_MARKER_KEY))
+        self.is_meter = is_meter_report(payload)
         self.device_type = DEVICE_TYPE_METER if self.is_meter else DEVICE_TYPE_BATTERY
 
         if self.is_meter:
-            self.model = meter_name(meter_type)
+            # Without meterType the generic meter name, unless the mDNS token
+            # names the 3CT (async_step_zeroconf).
+            self.model = meter_name(self.meter_type)
         else:
             # The product field is authoritative when present; the mDNS token
             # is only a fallback.
@@ -561,6 +573,14 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "continuing as generic SolarFlow. Entities are unaffected.",
                     token,
                 )
+
+        # A meter without meterType: the mDNS token names it when it is the
+        # Smart Meter 3CT's; anything else keeps the generic meter name.
+        if (
+            result.is_meter and result.meter_type is None
+            and token and normalise(token) == SMART_METER_3CT
+        ):
+            result.model = model_name(token)
 
         if not result.identity:
             result.identity = serial_hint

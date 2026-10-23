@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Potenza"
       },
-      "external_telegram_age": {
-        "name": "Età del telegramma"
-      },
       "factory_mode_state": {
         "name": "Modalità di fabbrica"
       },

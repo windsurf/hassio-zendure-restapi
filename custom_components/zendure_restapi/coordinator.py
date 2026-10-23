@@ -16,10 +16,10 @@ from .const import (
     IDENTITY_KEYS,
     DEVICE_TYPE_METER,
     DOMAIN,
-    METER_MARKER_KEY,
     PACK_PREFIX,
 )
 from .properties import PACK_KEYS
+from .registry import is_meter_report
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.firmware = str(version)
 
         self.device_type = (
-            DEVICE_TYPE_METER if METER_MARKER_KEY in flat else DEVICE_TYPE_BATTERY
+            DEVICE_TYPE_METER if is_meter_report(payload) else DEVICE_TYPE_BATTERY
         )
 
     # ── Payload normalisation ────────────────────────────────────────────

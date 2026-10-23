@@ -250,30 +250,37 @@ def build_config(
     return config
 
 
+def power_labels(every: int) -> str:
+    """A y-axis label on every other grid line: "0", "1000", "2000" ...
+
+    The grid follows the data in steps of 500 W; a label on each of them
+    crowds a 240 px chart (v1.6.7). apexcharts-card runs an "EVAL:" string
+    as JavaScript; the tooltip keeps the card's own format.
+    """
+    return (
+        "EVAL:function (v) { return Math.round(v) %% %d === 0 ? Math.round(v) : \"\"; }" % every
+    )
+
+
 def _scale_power_axis(card: dict[str, Any], ceiling: int) -> None:
     """The chart's power axis for another device than the template's 3000 W.
 
-    The template fixes it at -3000 to 4000 W in steps of 1000: a full charge
-    below zero, a full discharge plus the house above (v1.6.5). The same shape
-    for a smaller device: from minus its limit, rounded up to a step, to one
-    step above that, so an 800 W battery does not draw a flat line. A free
-    axis (History) keeps following the data, in steps of the same size.
+    Every power axis follows the data, rounded to a whole step, and reaches
+    at least a full charge below zero (v1.6.7): "~-3000" is a soft bound,
+    so a larger export moves the axis one step down instead of cutting the
+    line off. A smaller device gets its own limit and a smaller step, so an
+    800 W battery does not draw a flat line.
     """
-    step = 1000 if ceiling >= 2000 else 500 if ceiling >= 1000 else 200
+    step = 500 if ceiling >= 1000 else 200
     for axis in card.get("yaxis") or []:
-        if axis.get("id") != "power":
+        if axis.get("id") != "power" or "align_to" not in axis:
             continue
-        if "align_to" in axis:
-            # A free axis follows the data in whole steps (History, v1.6.6).
-            axis["align_to"] = step
-            axis.setdefault("apex_config", {})["stepSize"] = step
-            continue
-        if axis.get("min") != -TEMPLATE_CEILING:
-            continue
-        low = -math.ceil(ceiling / step) * step
-        high = -low + step
-        axis["min"], axis["max"] = low, high
-        axis.setdefault("apex_config", {})["tickAmount"] = (high - low) // step
+        axis["align_to"] = step
+        apex = axis.setdefault("apex_config", {})
+        apex["stepSize"] = step
+        apex.setdefault("labels", {})["formatter"] = power_labels(2 * step)
+        if isinstance(axis.get("min"), str) and axis["min"].startswith("~"):
+            axis["min"] = f"~{-math.ceil(ceiling / step) * step}"
 
 
 def _add_solar(

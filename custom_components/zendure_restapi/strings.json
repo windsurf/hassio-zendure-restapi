@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Power"
       },
-      "external_telegram_age": {
-        "name": "Telegram age"
-      },
       "factory_mode_state": {
         "name": "Factory mode state"
       },

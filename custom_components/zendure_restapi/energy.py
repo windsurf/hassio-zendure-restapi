@@ -83,3 +83,40 @@ def split_signed(value: Any, positive: bool) -> float:
     if positive:
         return power if power > 0 else 0.0
     return -power if power < 0 else 0.0
+
+
+# ── How often a counter is written to Home Assistant (v1.6.7) ────────────
+# A kWh counter that moves by a watt-hour writes a database row each time:
+# a meter register in steps of 0.001 kWh did so once a second or more. The
+# statistics and the Energy dashboard take an hourly total and lose nothing
+# when the state moves in steps of 0.01 kWh or once a minute instead.
+ENERGY_WRITE_STEP = 0.01      # kWh
+ENERGY_WRITE_INTERVAL = 60.0  # seconds
+
+
+class WriteGate:
+    """Whether a counter's new value is worth a state write.
+
+    Due on the first value, on a change of availability, on a step of at
+    least `step`, or when the value moved and `interval` seconds passed.
+    The value itself is always kept up to date; only the writes are spaced.
+    """
+
+    def __init__(self, step: float = ENERGY_WRITE_STEP, interval: float = ENERGY_WRITE_INTERVAL) -> None:
+        self._step = step
+        self._interval = interval
+        self._value: float | None = None
+        self._available: bool | None = None
+        self._at = 0.0
+
+    def due(self, value: float | None, available: bool, now: float) -> bool:
+        if self._available is None or available != self._available:
+            return True
+        if value is None or self._value is None:
+            return value != self._value
+        if abs(value - self._value) >= self._step:
+            return True
+        return value != self._value and now - self._at >= self._interval
+
+    def mark(self, value: float | None, available: bool, now: float) -> None:
+        self._value, self._available, self._at = value, available, now

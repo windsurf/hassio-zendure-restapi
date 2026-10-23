@@ -40,6 +40,7 @@ MODEL_NAMES: dict[str, str] = {
     "solarflow4000mixacplus": "SolarFlow 4000 Mix AC+",
     "solarflow4000pro": "SolarFlow 4000 Mix Pro",
     "solarflow4000mixpro": "SolarFlow 4000 Mix Pro",
+    # Reports no meterType; recognised as a meter by its fields (issue #7).
     "smartmeter3ct": "Smart Meter 3CT",
     "hyper2000": "Hyper 2000",
     "aio2400": "AIO 2400",
@@ -53,6 +54,24 @@ MODEL_NAMES: dict[str, str] = {
 METER_TYPES: dict[int, str] = {
     3: "P1 Meter (3-phase)",
 }
+
+# Keys only a battery reports. A meter's report is flat and has none of them.
+BATTERY_KEYS = ("product", "sn", "properties", "packData")
+SMART_METER_3CT = "smartmeter3ct"
+
+
+def is_meter_report(payload: dict) -> bool:
+    """Whether a report comes from a Zendure meter rather than a battery.
+
+    The P1 meter carries `meterType`, which decides first. The Smart Meter 3CT
+    reports no `meterType` (issue #7): it has the P1 meter's flat fields, with
+    `total_power` and none of the battery's keys.
+    """
+    props = payload.get("properties")
+    props = props if isinstance(props, dict) else {}
+    if payload.get("meterType") is not None or props.get("meterType") is not None:
+        return True
+    return "total_power" in payload and not any(key in payload for key in BATTERY_KEYS)
 
 _SERVICE_RE = re.compile(r"^zendure[-_]([^-_]+)(?:[-_](.+))?$", re.IGNORECASE)
 

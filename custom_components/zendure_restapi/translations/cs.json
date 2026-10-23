@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Výkon"
       },
-      "external_telegram_age": {
-        "name": "Stáří telegramu"
-      },
       "factory_mode_state": {
         "name": "Tovární režim"
       },

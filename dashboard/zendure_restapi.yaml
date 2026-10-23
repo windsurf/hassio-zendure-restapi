@@ -979,11 +979,13 @@ views:
         show: false
       yaxis:
       - id: power
-        min: -3000
-        max: 4000
+        min: '~-3000'
         decimals: 0
+        align_to: 500
         apex_config:
-          tickAmount: 7
+          stepSize: 500
+          labels:
+            formatter: 'EVAL:function (v) { return Math.round(v) % 1000 === 0 ? Math.round(v) : ""; }'
       - id: soc
         opposite: true
         min: 0
@@ -1380,10 +1382,13 @@ views:
         show: false
       yaxis:
       - id: power
+        min: '~-3000'
         decimals: 0
-        align_to: 1000
+        align_to: 500
         apex_config:
-          stepSize: 1000
+          stepSize: 500
+          labels:
+            formatter: 'EVAL:function (v) { return Math.round(v) % 1000 === 0 ? Math.round(v) : ""; }'
       - id: soc
         opposite: true
         min: 0
@@ -1424,16 +1429,13 @@ views:
         color: '#4CAF50'
         opacity: 0.2
         stroke_width: 2
-        curve: straight
+        curve: stepline
         float_precision: 0
         extend_to: now
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
-        group_by:
-          func: avg
-          duration: 10s
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
@@ -1441,7 +1443,7 @@ views:
         color: '#E53935'
         opacity: 0.2
         stroke_width: 2
-        curve: straight
+        curve: stepline
         float_precision: 0
         extend_to: now
         show:
@@ -1449,9 +1451,6 @@ views:
           legend_value: false
         transform: return x * -1;
         yaxis_id: power
-        group_by:
-          func: avg
-          duration: 10s
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
         type: area
@@ -1499,10 +1498,13 @@ views:
         show: false
       yaxis:
       - id: power
+        min: '~-3000'
         decimals: 0
-        align_to: 1000
+        align_to: 500
         apex_config:
-          stepSize: 1000
+          stepSize: 500
+          labels:
+            formatter: 'EVAL:function (v) { return Math.round(v) % 1000 === 0 ? Math.round(v) : ""; }'
       - id: soc
         opposite: true
         min: 0
@@ -1543,16 +1545,13 @@ views:
         color: '#4CAF50'
         opacity: 0.2
         stroke_width: 2
-        curve: smooth
+        curve: stepline
         float_precision: 0
         extend_to: now
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
-        group_by:
-          func: avg
-          duration: 1min
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
@@ -1560,7 +1559,7 @@ views:
         color: '#E53935'
         opacity: 0.2
         stroke_width: 2
-        curve: smooth
+        curve: stepline
         float_precision: 0
         extend_to: now
         show:
@@ -1568,9 +1567,6 @@ views:
           legend_value: false
         transform: return x * -1;
         yaxis_id: power
-        group_by:
-          func: avg
-          duration: 1min
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
         type: area
@@ -1615,11 +1611,13 @@ views:
         show: false
       yaxis:
       - id: power
-        min: -3000
-        max: 4000
+        min: '~-3000'
         decimals: 0
+        align_to: 500
         apex_config:
-          tickAmount: 7
+          stepSize: 500
+          labels:
+            formatter: 'EVAL:function (v) { return Math.round(v) % 1000 === 0 ? Math.round(v) : ""; }'
       - id: soc
         opposite: true
         min: 0

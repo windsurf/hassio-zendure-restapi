@@ -473,10 +473,9 @@ class ZendureMeterExternal(ExternalMeter):
     """Zendure P1 meter or Smart Meter 3CT, read as an external meter.
 
     Same endpoint and field as the meter entry this integration has always
-    had: ``/properties/report``, `total_power`. Offered here as well because
-    the Smart Meter 3CT has never been seen by this integration and may not
-    carry the `meterType` marker the meter entry is recognised by; read this
-    way it needs nothing but the power field.
+    had: ``/properties/report``, `total_power`. The Smart Meter 3CT reports no
+    `meterType` (issue #7); since v1.6.7 the meter entry recognises it by its
+    fields. Read this way it needs nothing but the power field.
     """
 
     manufacturer = "Zendure"

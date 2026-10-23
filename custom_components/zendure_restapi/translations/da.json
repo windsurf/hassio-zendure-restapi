@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Effekt"
       },
-      "external_telegram_age": {
-        "name": "Telegrammets alder"
-      },
       "factory_mode_state": {
         "name": "Fabrikstilstand"
       },

@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Vermogen"
       },
-      "external_telegram_age": {
-        "name": "Leeftijd telegram"
-      },
       "factory_mode_state": {
         "name": "Fabrieksmodus"
       },

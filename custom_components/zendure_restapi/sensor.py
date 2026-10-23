@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -26,7 +27,8 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
@@ -46,7 +48,7 @@ from .const import (
 )
 from .p1meter import ExternalMeter
 from .registry import pack_model
-from .energy import EnergyAccumulator, split_signed
+from .energy import EnergyAccumulator, WriteGate, split_signed
 from .coordinator import ZendureCoordinator
 from .entity import align_entity_ids, device_prefix, TranslatedName, ZendureEntity
 from .properties import (
@@ -728,6 +730,7 @@ class ZendureEnergySensor(ZendureEntity, SensorEntity, RestoreEntity):
     ) -> None:
         super().__init__(coordinator, description, device_id, model)
         self._accumulator = EnergyAccumulator()
+        self._gate = WriteGate()
 
     async def async_added_to_hass(self) -> None:
         """Pick up where the previous run left off."""
@@ -741,6 +744,20 @@ class ZendureEnergySensor(ZendureEntity, SensorEntity, RestoreEntity):
         # Fold in the reading that is already present, so the first poll after a
         # restart does not start from a blank previous value.
         self._accumulate()
+        # The total between two spaced writes must not be lost on a stop.
+        self.async_on_remove(
+            self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._flush)
+        )
+
+    @callback
+    def _flush(self, _event: Event | None = None) -> None:
+        self._gate.mark(self.native_value, self.available, time.monotonic())
+        self.async_write_ha_state()
+
+    async def async_internal_will_remove_from_hass(self) -> None:
+        # A reload: the restore data is taken from the state written last.
+        self._flush()
+        await super().async_internal_will_remove_from_hass()
 
     @property
     def available(self) -> bool:
@@ -753,8 +770,12 @@ class ZendureEnergySensor(ZendureEntity, SensorEntity, RestoreEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        # Accumulated on every poll, written in steps (v1.6.7).
         self._accumulate()
-        super()._handle_coordinator_update()
+        now = time.monotonic()
+        if self._gate.due(self.native_value, self.available, now):
+            self._gate.mark(self.native_value, self.available, now)
+            self.async_write_ha_state()
 
     def _accumulate(self) -> None:
         watts = self._current_power()
@@ -1126,15 +1147,6 @@ EXTERNAL_SENSORS: tuple[ExternalSensorDescription, ...] = (
         icon="mdi:access-point-check",
         value=lambda m: m.status,
     ),
-    ExternalSensorDescription(
-        key="telegram_age",
-        name="Telegram age",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:timer-sand",
-        value=lambda m: m.telegram_age(),
-    ),
 )
 
 # Readers that report cumulative registers. The others get no energy sensors
@@ -1154,8 +1166,9 @@ class ExternalMeterSensor(TranslatedName, SensorEntity):
     """One reading of an external P1 meter.
 
     Updated on every new telegram, and every five seconds besides, so the
-    status and the telegram age keep moving while the meter is silent — which
-    is when they matter.
+    status keeps moving while the meter is silent — which is when it matters.
+    The energy registers are written in steps (v1.6.7); the age of the last
+    telegram is in the diagnostics download, no longer a sensor.
     """
 
     _attr_has_entity_name = True
@@ -1169,6 +1182,7 @@ class ExternalMeterSensor(TranslatedName, SensorEntity):
     ) -> None:
         self.entity_description = description
         self._meter = meter
+        self._gate = WriteGate() if description.key.startswith("energy_") else None
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._set_name(description, "external_")
         self._attr_device_info = DeviceInfo(
@@ -1188,10 +1202,21 @@ class ExternalMeterSensor(TranslatedName, SensorEntity):
 
     @callback
     def _refresh(self) -> None:
-        self.async_write_ha_state()
+        self._write()
 
     @callback
     def _tick(self, _now: Any) -> None:
+        self._write()
+
+    @callback
+    def _write(self) -> None:
+        """Every reading for power and status; a meter register in steps (v1.6.7)."""
+        if self._gate is not None:
+            now = time.monotonic()
+            value, available = self.native_value, self.available
+            if not self._gate.due(value, available, now):
+                return
+            self._gate.mark(value, available, now)
         self.async_write_ha_state()
 
     @property

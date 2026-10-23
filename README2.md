@@ -27,7 +27,7 @@ included — the battery, Price Control and History — see [Dashboard](#dashboa
 - **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter)
 - **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
 - **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard) · [Measured diagnostics](#measured-diagnostics)
-- **Reference:** [Supported Entities](#supported-entities) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
+- **Reference:** [Supported Entities](#supported-entities) · [The database](#the-database) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
 - **History:** [Coming in 1.7](#coming-in-17-clusters) · [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
 ---
@@ -49,7 +49,7 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 | HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second |
 | Shelly Pro 3EM (external grid meter) | – | **tested** | user report: grid meter for the control loop, 11,350 readings, 3 failures |
 | EcoTracker (external grid meter) | – | **experimental** | documented local API |
-| Smart Meter 3CT | – | **experimental** | same `/properties/report` and `total_power` as the P1 meter; read it as external meter type *Zendure* |
+| Smart Meter 3CT | – | **experimental** | reports no `meterType`; recognised as a meter by its fields since v1.6.7, user report (issue #7). Same `/properties/report` and `total_power` as the P1 meter; can also be read as external meter type *Zendure* |
 | Hyper 2000, Hub 1200/2000, AIO 2400, Ace 1500 | – | **not possible** | no local HTTP API; MQTT or Bluetooth only |
 
 **Own one of these?** Every model above the line *not possible* is worth trying — install it, and open a
@@ -232,9 +232,9 @@ daily totals.*
 | Last 24 hours | the past day, from the 5-minute statistics |
 | Last 30 days | energy charged, discharged and from PV, per day |
 
-The power axis of the first two follows what happens, in whole steps; the third keeps a fixed
-axis, as the day plan chart on *Price Control* does: from a full charge below zero to a full
-discharge plus the house above. Without apexcharts-card a note takes the place of the
+Every power axis, the day plan chart on *Price Control* included, follows the data in steps of
+500 W and reaches at least a full charge below zero; a larger export moves it one step further
+down instead of cutting the line off. Without apexcharts-card a note takes the place of the
 charts. The charts read the recorder: if you filter it, include the grid power of the meter
 that steers, *Home output power*, *Grid input power*, *PV input power*, *State of charge*, *Energy charged*,
 *Energy discharged* and *PV energy*, or their lines stay empty.
@@ -570,6 +570,8 @@ sensor carries a list of today and tomorrow, all-in, exactly what Zonneplan bill
 
 Compare **Import price** with your supplier's price for the current quarter, as in step 5.
 
+**When the price source drops out.** A price sensor that depends on your supplier's web service goes *unavailable* when that service is down, sometimes for hours: for maintenance, or when web services are taken offline to install emergency security fixes, as many were for the PHP2Shell vulnerabilities in PHP (CVE-2026-109618 and CVE-2026-109619, fixed in PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35; see [Help Net Security](https://helpnetsecurity.com/2026/10/21/php2shell-php-vulnerabilities-patched-cve-2026-109618-cve-2026-109619)). This integration runs inside Home Assistant, in Python, and does not use PHP. Without a price list Price Control shows `no_price` and uses the In-between mode. To keep the day plan running, choose **Nord Pool** or **EPEX Spot** (both HACS) as the price sensor: they read the day-ahead market prices themselves and keep working when a supplier's service is down. With your supplier's surcharge set as in [Your tariff](#your-tariff), they give the same import price. Coming in v1.6.9: Price Control holds the last price list it read until it runs out.
+
 #### Your tariff
 
 Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor*
@@ -629,7 +631,7 @@ configured and the meter source on `auto` (the default), the smart modes run on 
 |---|---|---|---|---|---|
 | HomeWizard P1 meter, local API v1 | `/api/v1/data` | `active_power_w` | no | 1 s | supported; documented local API |
 | YouLess LS120 | `/e?f=j` | `pwr` | yes, `tm` | 250 ms (100–1000) | measured by the author |
-| Zendure P1 meter / Smart Meter 3CT | `/properties/report` | `total_power` | no | 1 s | P1 measured by the author; 3CT same API, unseen |
+| Zendure P1 meter / Smart Meter 3CT | `/properties/report` | `total_power` | no | 1 s | P1 measured by the author; 3CT: user report |
 | EcoTracker (everHome) | `/v1/json` | `power` | no | 1 s | experimental |
 | Shelly Pro 3EM | `/rpc/EM.GetStatus?id=0` | `total_act_power` | no | 1 s | tested by a user; the clamps must sit on the grid connection |
 
@@ -648,8 +650,10 @@ The entry is a device named **External P1 meter**, whatever the reader, with the
 |---|---|---|
 | Power | `sensor.external_p1_meter_power` | W, import positive; unavailable unless status is `live` |
 | Status | `sensor.external_p1_meter_status` | `live` (telegram younger than 5 s), `stale`, or `unreachable` (eight failed polls in a row) |
-| Telegram age | `sensor.external_p1_meter_telegram_age` | seconds since the last new telegram; diagnostic |
-| Energy imported / exported | `sensor.external_p1_meter_energy_imported` / `_exported` | kWh, HomeWizard and YouLess only; usable in the Energy dashboard |
+| Energy imported / exported | `sensor.external_p1_meter_energy_imported` / `_exported` | kWh, HomeWizard and YouLess only; usable in the Energy dashboard; written in steps of 0.01 kWh or once a minute |
+
+The age of the last telegram, in seconds, is in the diagnostics download (Device → Download
+diagnostics); until v1.6.6 it was a sensor of its own.
 
 ### Several external meters
 
@@ -1403,7 +1407,7 @@ are named *Pack 1 …*, *Pack 2 …*, with entity IDs to match, for example
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
-| **External P1 meter entry** | 3–5 | Power, Status, Telegram age · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first three. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
+| **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
 
 Entities appear only when the device reports the underlying key. `PV string 3`–`6`, `Fan level` and `Fan` are documented in zenSDK but absent from the 3000 Mix AC+ payload, so they are never created on that model.
 
@@ -1439,6 +1443,52 @@ those three days. Anything keying off this entity should distinguish "no limit a
 value", or a brief gap will read as the limit having cleared.
 
 ---
+
+## The database
+
+Home Assistant writes a row to its database every time a state changes, and keeps those rows for
+10 days (`purge_keep_days`). The statistics behind the Energy dashboard and the longer charts are
+kept apart, per 5 minutes and per hour, and stay small.
+
+**What this integration writes.** Every reading the control loops use is kept at full
+resolution: the power of the meters and the battery, the state of charge, the limits. Figures
+derived from them are written sparingly (since v1.6.7):
+
+| Entity | Written | Rows per day, roughly |
+|---|---|---|
+| Power of an external meter | every new reading, about once a second | 60,000–80,000 |
+| Grid power total of the Zendure P1 meter | every new reading | 50,000–60,000 |
+| Battery powers, state of charge, status | every battery poll (10 s) | a few thousand each |
+| Energy counters (meters and battery) | per 0.01 kWh or once a minute | up to 1,440 each |
+| Timestamps, message id, protocol type | disabled by default | — |
+
+With one external meter and the battery that comes to some 150 MB over the 10 days, almost all of
+it the meter's power.
+
+**Making it smaller is your choice.** An integration cannot leave entities out of the recorder;
+only your `configuration.yaml` can. Two ways:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      # a meter that does not steer, once you no longer compare the two
+      - sensor.zendure_p1_meter_3_phase_grid_power_total
+```
+
+or keep a busy entity for a shorter time, with an automation that runs daily:
+
+```yaml
+action: recorder.purge_entities
+target:
+  entity_id: sensor.zendure_p1_meter_3_phase_grid_power_total
+data:
+  keep_days: 2
+```
+
+The statistics are not affected by either. For the raw readings at full resolution beyond those
+days, switch on **Trace recording**: it writes every sample of the meters and the battery to CSV,
+one file per hour, outside the database.
 
 ## Debug logging
 
@@ -1655,6 +1705,32 @@ or more Zendure batteries are welcome in the [Discussions](https://github.com/wi
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the
 findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.7 — A smaller database
+
+The control loop decides as before, and every reading it uses is still recorded at full
+resolution. What changes is how often figures derived from those readings are written.
+
+- **Energy counters in steps.** The energy registers of an external meter (YouLess, HomeWizard)
+  and the counters the integration integrates itself (battery, Zendure P1 meter) are written per
+  0.01 kWh or once a minute, instead of on every watt-hour. A register in steps of 0.001 kWh wrote
+  a database row once a second or more. The statistics and the Energy dashboard take hourly totals
+  and are unchanged; on a stop or reload the latest total is written first.
+- **Telegram age is no longer a sensor.** It wrote a row with every telegram, a figure the
+  timestamp of each power reading already holds. The age of the last telegram, in seconds, is in
+  the diagnostics download (Device → Download diagnostics); the entity is removed on the first
+  start.
+- **Chart axes follow the data.** The power axis of every chart moves in steps of 500 W, with a
+  label per 1000 W, and reaches at least a full charge below zero. A fixed axis cut off an export
+  larger than a full discharge; a step of 1000 W added an empty band for a reading of 3003 W. In
+  the 30-minute and 4-hour charts, charging and discharging are drawn as steps from the raw
+  readings, so a start after a quiet spell shows as a straight edge. Recreate the dashboard to
+  get it.
+- **The database, documented.** A section on what the integration writes per day, and how to make
+  it smaller yourself with the recorder's `exclude` or `recorder.purge_entities`. See
+  [The database](#the-database).
+- **The Zendure Smart Meter 3CT is recognised as a meter** instead of a generic SolarFlow (#7). It reports no `meterType`; a report with `total_power` and none of a battery's keys is a meter now. An entry made before this release becomes a meter entry by itself at the next start; it keeps the old entry's names, and adding the meter again gives the right ones.
+- **Docs: when the price source drops out.** What Price Control does without a price list, why a supplier's price service can be down for hours (as during the PHP2Shell emergency patches), and Nord Pool or EPEX Spot as a price source that keeps working.
 
 ### v1.6.6 — History charts and solar from outside the battery
 

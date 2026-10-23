@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.6"
+INTEGRATION_VERSION = "1.6.7"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -285,6 +285,10 @@ SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 # entity without its history; the dashboard now names the meter's own sensor
 # (v1.6.6).
 RETIRED_BATTERY_ENTITIES: tuple[tuple[str, str], ...] = (("sensor", "grid_power_in_control"),)
+# "Telegram age" of an external meter wrote a row with every telegram, a figure
+# the timestamp of each power reading already holds (v1.6.7). Still in the
+# diagnostics download as telegram_age_s.
+RETIRED_EXTERNAL_ENTITIES: tuple[tuple[str, str], ...] = (("sensor", "telegram_age"),)
 RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
     ("select", "net_metering_mode"),    # v1.6.0; replaced by In-between mode in v1.6.1
 )

@@ -426,9 +426,6 @@
       "external_power": {
         "name": "Moc"
       },
-      "external_telegram_age": {
-        "name": "Wiek telegramu"
-      },
       "factory_mode_state": {
         "name": "Tryb fabryczny"
       },

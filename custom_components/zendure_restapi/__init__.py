@@ -67,6 +67,7 @@ from .const import (
     DEFAULT_EXTERNAL_TYPE,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_TYPE_EXTERNAL,
+    DEVICE_TYPE_BATTERY,
     DEVICE_TYPE_METER,
     DOMAIN,
     EXTERNAL_NONE,
@@ -87,6 +88,7 @@ from .const import (
     CONF_EXPORT_ENTITY,
     CONF_SOURCE_ENTITY,
     RETIRED_BATTERY_ENTITIES,
+    RETIRED_EXTERNAL_ENTITIES,
     RETIRED_PRICE_ENTITIES,
     CONF_INVERT,
     CONF_METER_PLAN,
@@ -144,6 +146,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     store = hass.data.setdefault(DOMAIN, {})
     store[entry.entry_id] = coordinator
+
+    # Before v1.6.7 a Smart Meter 3CT was added as a battery: it reports no
+    # meterType (issue #7). Its report now says meter, so the entry follows.
+    # Its names stay those of the old entry; adding it again gives the right ones.
+    if (
+        coordinator.device_type == DEVICE_TYPE_METER
+        and entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_BATTERY
+    ):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DEVICE_TYPE: DEVICE_TYPE_METER}
+        )
+        _LOGGER.info("%s reports as a meter; its entry is now a meter entry", entry.title)
 
     # Only a battery gets a controller; a meter has nothing to control.
     if coordinator.device_type != DEVICE_TYPE_METER:
@@ -260,6 +274,7 @@ async def _async_setup_external(hass: HomeAssistant, entry: ConfigEntry) -> bool
 
     _link_meters(hass)
 
+    _remove_retired(hass, entry.entry_id, RETIRED_EXTERNAL_ENTITIES)
     await hass.config_entries.async_forward_entry_setups(entry, EXTERNAL_PLATFORMS)
     # The interval and the address belong to the poller, which is cheapest to
     # rebuild by reloading the entry; nothing else hangs off it.
@@ -562,7 +577,7 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if ext_ids:
             ext_id = ext_ids[0]
             if ext_id:
-                for key in ("power", "status", "telegram_age", "energy_imported", "energy_exported"):
+                for key in ("power", "status", "energy_imported", "energy_exported"):
                     found = registry.async_get_entity_id("sensor", DOMAIN, f"{ext_id}_{key}")
                     if found:
                         external_ids[key] = found
