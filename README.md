@@ -1,15 +1,10 @@
 # Zendure RestAPI – Home Assistant Integration
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
-[![100% local](https://img.shields.io/badge/100%25-local-brightgreen.svg)](#why-this-integration)
-[![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-supported-meters)
-[![Dynamic tariffs](https://img.shields.io/badge/dynamic-tariffs-f5a623.svg)](#-price-control)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![100% local](https://img.shields.io/badge/100%25-local-brightgreen.svg)](#why-this-integration) [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-supported-meters) [![Dynamic tariffs](https://img.shields.io/badge/dynamic-tariffs-f5a623.svg)](#-price-control)
 
 🇳🇱 [Nederlandse versie](README.nl.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
-**Your Zendure SolarFlow battery in Home Assistant, 100% local, in three steps.**
-No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS, add your battery, pick a mode — the battery holds your grid at zero, once a second.
+**Your Zendure SolarFlow battery in Home Assistant, 100% local, in three steps.** No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS, add your battery, pick a mode — the battery holds your grid at zero, once a second.
 
 **🔌 Works with HomeWizard.** Already have a HomeWizard P1 meter? That is all you need — no Zendure meter required. YouLess, EcoTracker, Shelly Pro 3EM and the Zendure meters work too.
 
@@ -30,15 +25,13 @@ No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS
 | **SolarFlow 3000 Mix AC+** | ✅ Tested daily by the author |
 | **SolarFlow 4000 Mix AC+** | ✅ Supported — same platform and battery as the 3000 Mix |
 | **SolarFlow 2400 AC** | ✅ Tested by a user — read-out and `smart_matching` confirmed |
-| **SolarFlow 2400 AC+ · 1600 AC+** | ✅ Supported — same AC-coupled design as the 2400 AC |
+| **SolarFlow 2400 AC+** | ✅ Tested by a user — read-out with a Zendure Smart Meter 3CT |
+| **SolarFlow 1600 AC+** | ✅ Supported — same AC-coupled design as the 2400 AC |
 | **SolarFlow 800 · 800 Plus · 800 Pro · 800 Pro 2 · 2400 Pro** | 🧪 Works, smart modes experimental (solar panels on the device) |
 | **SolarFlow 4000 Mix Pro** | 🧪 Works, smart modes experimental (solar panels on the device) |
 | Hyper 2000 · Hub 1200/2000 · AIO 2400 · Ace 1500 | ❌ No local API on these models |
 
-**🙋 Own a model marked ✅ or 🧪? You are exactly who this project needs.**
-Install it, and if anything looks off — or if it all just works — open a
-[New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
-with the diagnostics download attached. One report is enough to move a model from 🧪 to ✅.
+**🙋 Own a model marked ✅ or 🧪? You are exactly who this project needs.** Install it, and if anything looks off — or if it all just works — open a [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml) with the diagnostics download attached. One report is enough to move a model from 🧪 to ✅.
 
 ---
 
@@ -56,8 +49,7 @@ The battery needs to know what your home draws from or returns to the grid. Use 
 | **Shelly Pro 3EM** (clamps on the grid connection) | ✅ Tested by a user as grid meter for the control loop, one reading per second |
 | **Any meter in Home Assistant** (Shelly, DSMR, SMA, Huawei, Zonneplan, …) | 🧪 Choose the device, its sensors are recognised (v1.6.5); steers only if it updates every second or two |
 
-Set it up in one go: **Add integration → Zendure RestAPI → External grid meter over IP**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away.
-HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
+Set it up in one go: **Add integration → Zendure RestAPI → External grid meter over IP**, choose your meter, enter its IP address. A HomeWizard P1 meter shows up under *Discovered* by itself. It becomes a device of its own with power, status and energy sensors, and since the **Meter source** select is on `auto`, the battery uses it straight away. HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 
 *Not affiliated with HomeWizard, YouLess, everHome or Shelly; these are compatibility notes.*
 
@@ -84,13 +76,11 @@ HomeWizard: switch on *Local API* in the HomeWizard Energy app first.
 
 ## 🚀 Get started
 
-**1. Enable the local API and switch Zendure's own control off** — under EN 18031 the API is off by default.
-In the Zendure app:
+**1. Enable the local API and switch Zendure's own control off** — under EN 18031 the API is off by default. In the Zendure app:
 - add **HEMS** — this switches the local API on;
 - on the device page, switch **Add to HEMS** off — so Zendure's own control stays out of the way. Other ways and the app's power settings: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-Then exit the app. Check it from any browser:
-`http://<battery-ip>/properties/report` should show a result in JSON format: text in braces `{ … }` with `"properties"` in it.
+Then exit the app. Check it from any browser: `http://<battery-ip>/properties/report` should show a result in JSON format: text in braces `{ … }` with `"properties"` in it.
 
 **2. Install via HACS**
 
@@ -100,8 +90,7 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 
 [![Add integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
-**3. Add your devices**
-Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure battery** (the first option) and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
+**3. Add your devices** Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure battery** (the first option) and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
 **Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: **External grid meter from Home Assistant**. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
@@ -180,7 +169,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Pre-release – v1.6.7** (switch on *Pre-release* for this repository in HACS to get it): a smaller database: energy counters are written per 0.01 kWh or once a minute, *Telegram age* is no longer a sensor, and the README explains how to keep the database small; the chart axes follow the data and no longer cut a line off. **v1.6.6:** a **History** view with four charts — 30 minutes live, 4 hours, the last 24 hours, 30 days of daily totals; solar from a **micro inverter or second inverter** can be shown in the charts; the dashboard can be **replaced** from the options. **v1.6.5:** the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
+**Latest release – v1.6.7:** a smaller database: energy counters are written per 0.01 kWh or once a minute, *Telegram age* is no longer a sensor, and the README explains how to keep the database small; the chart axes follow the data and no longer cut a line off. **v1.6.6:** a **History** view with four charts — 30 minutes live, 4 hours, the last 24 hours, 30 days of daily totals; solar from a **micro inverter or second inverter** can be shown in the charts; the dashboard can be **replaced** from the options. **v1.6.5:** the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
 
 **Coming in 1.7:** several batteries behind one connection as one cluster — testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 

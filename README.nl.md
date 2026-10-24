@@ -1,15 +1,10 @@
 # Zendure RestAPI – Home Assistant-integratie
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
-[![100% lokaal](https://img.shields.io/badge/100%25-lokaal-brightgreen.svg)](#waarom-deze-integratie)
-[![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-ondersteunde-meters)
-[![Dynamische tarieven](https://img.shields.io/badge/dynamische-tarieven-f5a623.svg)](#-prijssturing)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![100% lokaal](https://img.shields.io/badge/100%25-lokaal-brightgreen.svg)](#waarom-deze-integratie) [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-ondersteunde-meters) [![Dynamische tarieven](https://img.shields.io/badge/dynamische-tarieven-f5a623.svg)](#-prijssturing)
 
 🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
-**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.**
-Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde: nul op de meter.
+**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.** Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde: nul op de meter.
 
 **🔌 Works with HomeWizard.** Heb je al een HomeWizard P1-meter? Meer heb je niet nodig — een Zendure-meter is niet vereist. YouLess, EcoTracker, Shelly Pro 3EM en de Zendure-meters werken ook.
 
@@ -30,15 +25,13 @@ Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Install
 | **SolarFlow 3000 Mix AC+** | ✅ Dagelijks getest door de maker |
 | **SolarFlow 4000 Mix AC+** | ✅ Ondersteund — zelfde platform en accu als de 3000 Mix |
 | **SolarFlow 2400 AC** | ✅ Getest door een gebruiker — uitlezen en `smart_matching` bevestigd |
-| **SolarFlow 2400 AC+ · 1600 AC+** | ✅ Ondersteund — zelfde AC-gekoppelde opbouw als de 2400 AC |
+| **SolarFlow 2400 AC+** | ✅ Getest door een gebruiker — uitlezen met een Zendure Smart Meter 3CT |
+| **SolarFlow 1600 AC+** | ✅ Ondersteund — zelfde AC-gekoppelde opbouw als de 2400 AC |
 | **SolarFlow 800 · 800 Plus · 800 Pro · 800 Pro 2 · 2400 Pro** | 🧪 Werkt, slimme modi experimenteel (zonnepanelen op het apparaat) |
 | **SolarFlow 4000 Mix Pro** | 🧪 Werkt, slimme modi experimenteel (zonnepanelen op het apparaat) |
 | Hyper 2000 · Hub 1200/2000 · AIO 2400 · Ace 1500 | ❌ Geen lokale API op deze modellen |
 
-**🙋 Heb je een model met ✅ of 🧪? Dan ben jij precies wie dit project nodig heeft.**
-Installeer het, en als er iets niet klopt — of als alles gewoon werkt — open een
-[New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
-met de diagnostics-download als bijlage. Eén melding is genoeg om een model van 🧪 naar ✅ te brengen.
+**🙋 Heb je een model met ✅ of 🧪? Dan ben jij precies wie dit project nodig heeft.** Installeer het, en als er iets niet klopt — of als alles gewoon werkt — open een [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml) met de diagnostics-download als bijlage. Eén melding is genoeg om een model van 🧪 naar ✅ te brengen.
 
 ---
 
@@ -56,8 +49,7 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Shelly Pro 3EM** (klemmen op de netaansluiting) | ✅ Getest door een gebruiker als netmeter voor de regeling, één meting per seconde |
 | **Elke meter in Home Assistant** (Shelly, DSMR, SMA, Huawei, Zonneplan, …) | 🧪 Kies het apparaat, de sensoren worden herkend (v1.6.5); regelt alleen als hij elke seconde of twee ververst |
 
-In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen.
-HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
+In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen. HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 *Niet gelieerd aan HomeWizard, YouLess, everHome of Shelly; dit zijn compatibiliteitsnotities.*
 
@@ -84,13 +76,11 @@ HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 ## 🚀 Aan de slag
 
-**1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit.
-In de Zendure-app:
+**1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit. In de Zendure-app:
 - voeg **HEMS** toe — dat zet de lokale API aan;
 - zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-Sluit de app daarna af. Controleer het vanuit een browser:
-`http://<ip-accu>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
+Sluit de app daarna af. Controleer het vanuit een browser: `http://<ip-accu>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
 
 **2. Installeer via HACS**
 
@@ -100,8 +90,7 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 
 [![Integratie toevoegen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
-**3. Voeg je apparaten toe**
-Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-accu** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
+**3. Voeg je apparaten toe** Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-accu** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
 **Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Een meter die al in Home Assistant zit: **Externe netmeter uit Home Assistant**. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
@@ -180,7 +169,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Pre-release – v1.6.7** (zet in HACS *Pre-release* aan voor deze repository): een kleinere database: energietellers worden per 0,01 kWh of eens per minuut geschreven, *Telegram age* is geen sensor meer, en de README legt uit hoe je de database klein houdt; de assen van de grafieken volgen de data en snijden geen lijn meer af. **v1.6.6:** een tabblad **History** met vier grafieken — 30 minuten live, 4 uur, de afgelopen 24 uur, 30 dagen dagtotalen; zon van een **micro-omvormer of tweede omvormer** is in de grafieken te tonen; het dashboard is vanuit de opties te **vervangen**. **v1.6.5:** het dashboard toont de netmeting waarop echt gestuurd wordt, **Netvermogen (in regeling)**, van welke meter ook; het dagplan leest ook **EPEX Spot**- en **Zonneplan**-prijzen; elke meter die al in Home Assistant zit is als heel apparaat te kiezen. **v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
+**Laatste release – v1.6.7:** een kleinere database: energietellers worden per 0,01 kWh of eens per minuut geschreven, *Telegram age* is geen sensor meer, en de README legt uit hoe je de database klein houdt; de assen van de grafieken volgen de data en snijden geen lijn meer af. **v1.6.6:** een tabblad **History** met vier grafieken — 30 minuten live, 4 uur, de afgelopen 24 uur, 30 dagen dagtotalen; zon van een **micro-omvormer of tweede omvormer** is in de grafieken te tonen; het dashboard is vanuit de opties te **vervangen**. **v1.6.5:** het dashboard toont de netmeting waarop echt gestuurd wordt, **Netvermogen (in regeling)**, van welke meter ook; het dagplan leest ook **EPEX Spot**- en **Zonneplan**-prijzen; elke meter die al in Home Assistant zit is als heel apparaat te kiezen. **v1.6.4:** een **richtingswissel in één schrijfactie** in plaats van maximaal vier, en een nieuwe gemeten diagnostiek, **Verloren schrijfacties**, die elke limietschrijfactie toetst aan het volgende rapport van het apparaat; hoe snel het apparaat een schrijfactie volgt is gedocumenteerd; het setupmenu begint nu met de accu. **v1.6.3:** **gemeten diagnostiek** — wat de accu werkelijk doet, naast wat de instellingen aannemen: laad- en ontlaadrendement per blok, rondritrendement per cyclus, bruikbare capaciteit, volle cycli, standby-verbruik, reactietijd en regelafwijking, en de **gerealiseerde marge** per dag naast de verwachte; een waarschuwing als de accu in rust te veel verbruikt. **v1.6.2:** een waarschuwing als iets anders de accu ook aanstuurt (de Zendure-app niet op Aangepaste modus, of een eigen automation); prijssturing blijft schrijven na herladen of een trage herstart.
 
 **Binnenkort in 1.7:** meerdere accu's achter één aansluiting als één cluster — testers met twee of meer Zendure-accu's zijn welkom in de [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 

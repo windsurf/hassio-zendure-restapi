@@ -1,15 +1,10 @@
 # Zendure RestAPI – Home-Assistant-Integration
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
-[![100% lokal](https://img.shields.io/badge/100%25-lokal-brightgreen.svg)](#warum-diese-integration)
-[![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-unterstützte-zähler)
-[![Dynamische Tarife](https://img.shields.io/badge/dynamische-Tarife-f5a623.svg)](#-preissteuerung)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![100% lokal](https://img.shields.io/badge/100%25-lokal-brightgreen.svg)](#warum-diese-integration) [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-unterstützte-zähler) [![Dynamische Tarife](https://img.shields.io/badge/dynamische-Tarife-f5a623.svg)](#-preissteuerung)
 
 🇬🇧 [English version](README.md) · 🇳🇱 [Nederlandse versie](README.nl.md)
 
-**Deine Zendure-SolarFlow-Batterie in Home Assistant, 100 % lokal, in drei Schritten.**
-Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS installieren, Batterie hinzufügen, Modus wählen – die Batterie hält deinen Netzbezug auf null, einmal pro Sekunde: Nulleinspeisung ohne Cloud.
+**Deine Zendure-SolarFlow-Batterie in Home Assistant, 100 % lokal, in drei Schritten.** Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS installieren, Batterie hinzufügen, Modus wählen – die Batterie hält deinen Netzbezug auf null, einmal pro Sekunde: Nulleinspeisung ohne Cloud.
 
 **🔌 Works with HomeWizard.** Du hast schon einen HomeWizard-P1-Zähler? Mehr brauchst du nicht – ein Zendure-Zähler ist nicht nötig. YouLess, EcoTracker, Shelly Pro 3EM und die Zendure-Zähler funktionieren ebenfalls.
 
@@ -30,15 +25,13 @@ Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS i
 | **SolarFlow 3000 Mix AC+** | ✅ Täglich vom Autor getestet |
 | **SolarFlow 4000 Mix AC+** | ✅ Unterstützt – gleiche Plattform und Batterie wie der 3000 Mix |
 | **SolarFlow 2400 AC** | ✅ Von einem Nutzer getestet – Auslesen und `smart_matching` bestätigt |
-| **SolarFlow 2400 AC+ · 1600 AC+** | ✅ Unterstützt – gleicher AC-gekoppelter Aufbau wie der 2400 AC |
+| **SolarFlow 2400 AC+** | ✅ Von einem Nutzer getestet – Auslesen mit einem Zendure Smart Meter 3CT |
+| **SolarFlow 1600 AC+** | ✅ Unterstützt – gleicher AC-gekoppelter Aufbau wie der 2400 AC |
 | **SolarFlow 800 · 800 Plus · 800 Pro · 800 Pro 2 · 2400 Pro** | 🧪 Funktioniert, Smart-Modi experimentell (Solarmodule am Gerät) |
 | **SolarFlow 4000 Mix Pro** | 🧪 Funktioniert, Smart-Modi experimentell (Solarmodule am Gerät) |
 | Hyper 2000 · Hub 1200/2000 · AIO 2400 · Ace 1500 | ❌ Keine lokale API bei diesen Modellen |
 
-**🙋 Du hast ein Modell mit ✅ oder 🧪? Dann bist du genau die Person, die dieses Projekt braucht.**
-Installiere es, und wenn etwas nicht stimmt – oder wenn einfach alles funktioniert – eröffne einen
-[New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml)
-mit dem Diagnose-Download im Anhang. Ein Bericht genügt, um ein Modell von 🧪 auf ✅ zu bringen. Deutsch ist willkommen.
+**🙋 Du hast ein Modell mit ✅ oder 🧪? Dann bist du genau die Person, die dieses Projekt braucht.** Installiere es, und wenn etwas nicht stimmt – oder wenn einfach alles funktioniert – eröffne einen [New model report](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml) mit dem Diagnose-Download im Anhang. Ein Bericht genügt, um ein Modell von 🧪 auf ✅ zu bringen. Deutsch ist willkommen.
 
 ---
 
@@ -56,8 +49,7 @@ Die Batterie muss wissen, was dein Haus aus dem Netz bezieht oder einspeist. Nut
 | **Shelly Pro 3EM** (Klemmen am Netzanschluss) | ✅ Von einem Nutzer als Netzzähler für die Regelung getestet, ein Messwert pro Sekunde |
 | **Jeder Zähler in Home Assistant** (Shelly, DSMR, SMA, Huawei, …) | 🧪 Gerät wählen, die Sensoren werden erkannt (v1.6.5); regelt nur, wenn er jede oder jede zweite Sekunde aktualisiert |
 
-In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort.
-HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
+In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, Zähler wählen, IP-Adresse eingeben. Ein HomeWizard-P1-Zähler erscheint von selbst unter *Entdeckt*. Er wird ein eigenes Gerät mit Sensoren für Leistung, Status und Energie, und da der Select **Meter source** auf `auto` steht, nutzt die Batterie ihn sofort. HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 
 *Keine Verbindung zu HomeWizard, YouLess, everHome oder Shelly; dies sind Kompatibilitätshinweise.*
 
@@ -84,13 +76,11 @@ HomeWizard: Zuerst in der HomeWizard-Energy-App *Lokale API* einschalten.
 
 ## 🚀 Loslegen
 
-**1. Lokale API einschalten und Zendures eigene Steuerung aus** – unter EN 18031 ist die API standardmäßig aus.
-In der Zendure-App:
+**1. Lokale API einschalten und Zendures eigene Steuerung aus** – unter EN 18031 ist die API standardmäßig aus. In der Zendure-App:
 - **HEMS** hinzufügen – das schaltet die lokale API ein;
 - auf der Geräteseite **Add to HEMS** ausschalten – dann hält sich Zendures eigene Steuerung heraus. Andere Wege und die Leistungseinstellungen der App: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-Die App danach schließen. Im Browser prüfen:
-`http://<IP-der-Batterie>/properties/report` muss ein Ergebnis im JSON-Format zeigen: Text in geschweiften Klammern `{ … }` mit `"properties"` darin.
+Die App danach schließen. Im Browser prüfen: `http://<IP-der-Batterie>/properties/report` muss ein Ergebnis im JSON-Format zeigen: Text in geschweiften Klammern `{ … }` mit `"properties"` darin.
 
 **2. Über HACS installieren**
 
@@ -100,8 +90,7 @@ Oder: HACS → Drei-Punkte-Menü → Benutzerdefinierte Repositories → `https:
 
 [![Integration hinzufügen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
-**3. Geräte hinzufügen**
-Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Batterie** (die erste Option) wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
+**3. Geräte hinzufügen** Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Batterie** (die erste Option) wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
 
 **Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Ein Zähler, der schon in Home Assistant ist: **Externer Netzzähler aus Home Assistant**. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
 
@@ -180,7 +169,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Vorabversion – v1.6.7** (in HACS *Pre-release* für dieses Repository einschalten): eine kleinere Datenbank: Energiezähler werden je 0,01 kWh oder einmal pro Minute geschrieben, *Telegram age* ist kein Sensor mehr, und die README erklärt, wie die Datenbank klein bleibt; die Achsen der Diagramme folgen den Daten und schneiden keine Linie mehr ab. **v1.6.6:** eine Ansicht **History** mit vier Diagrammen — 30 Minuten live, 4 Stunden, die letzten 24 Stunden, 30 Tage Tagessummen; Solar von einem **Mikrowechselrichter oder zweiten Wechselrichter** lässt sich in den Diagrammen zeigen; das Dashboard lässt sich in den Optionen **ersetzen**. **v1.6.5:** das Dashboard zeigt den Netzwert, nach dem tatsächlich geregelt wird, **Netzleistung (in Regelung)**, gleich von welchem Zähler; der Tagesplan liest auch **EPEX-Spot**-Preise; jeder Zähler, der schon in Home Assistant ist, lässt sich als ganzes Gerät wählen. **v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
+**Neueste Version – v1.6.7:** eine kleinere Datenbank: Energiezähler werden je 0,01 kWh oder einmal pro Minute geschrieben, *Telegram age* ist kein Sensor mehr, und die README erklärt, wie die Datenbank klein bleibt; die Achsen der Diagramme folgen den Daten und schneiden keine Linie mehr ab. **v1.6.6:** eine Ansicht **History** mit vier Diagrammen — 30 Minuten live, 4 Stunden, die letzten 24 Stunden, 30 Tage Tagessummen; Solar von einem **Mikrowechselrichter oder zweiten Wechselrichter** lässt sich in den Diagrammen zeigen; das Dashboard lässt sich in den Optionen **ersetzen**. **v1.6.5:** das Dashboard zeigt den Netzwert, nach dem tatsächlich geregelt wird, **Netzleistung (in Regelung)**, gleich von welchem Zähler; der Tagesplan liest auch **EPEX-Spot**-Preise; jeder Zähler, der schon in Home Assistant ist, lässt sich als ganzes Gerät wählen. **v1.6.4:** ein **Richtungswechsel in einem Schreibbefehl** statt bis zu vier, und eine neue gemessene Diagnose, **Verlorene Schreibbefehle**, die jeden Limit-Schreibbefehl mit dem nächsten Bericht des Geräts vergleicht; wie schnell das Gerät einem Schreibbefehl folgt, ist dokumentiert; das Einrichtungsmenü beginnt jetzt mit der Batterie. **v1.6.3:** **gemessene Diagnose** — was die Batterie tatsächlich tut, neben dem, was ihre Einstellungen annehmen: Lade- und Entladewirkungsgrad je Block, Zyklenwirkungsgrad je Zyklus, nutzbare Kapazität, Vollzyklen, Standby-Verbrauch, Reaktionszeit und Regelabweichung, und die **realisierte Marge** pro Tag neben der erwarteten; eine Warnung, wenn die Batterie im Ruhezustand zu viel verbraucht. **v1.6.2:** eine Warnung, wenn noch etwas anderes die Batterie steuert (die Zendure-App nicht auf „Benutzerdefinierter Modus“ oder eine eigene Automation); die Preissteuerung schreibt nach einem Neuladen oder einem langsamen Neustart weiter.
 
 **Demnächst in 1.7:** mehrere Akkus an einem Anschluss als ein Cluster — Tester mit zwei oder mehr Zendure-Akkus sind in den [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions) willkommen.
 
