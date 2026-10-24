@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} rapporterar var {seconds}:e s",
       "description": "Regleringen accepterar ett nätvärde i 5 sekunder, så en mätare som rapporterar var {seconds}:e s styr batteriet bara en del av tiden. För en mätare från Home Assistant är det dess integrations hastighet. Läs den via IP där den här integrationen kan (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), eller reglera på Zendure-mätaren med *Meter source*. Meddelandet försvinner av sig självt när värdena kommer snabbare."
+    },
+    "restart_limits": {
+      "title": "{device} startade om med en gräns",
+      "description": "Efter en omstart (firmwareuppdatering eller strömavbrott) kom {device} tillbaka med de gränser den själv senast sparade: laddning {input} W, urladdning {output} W, medan Operation mode står på standby. Integrationen skriver ingenting efter en omstart, eftersom en uppdatering kan pågå. När den är klar, välj standby igen: då skickas standby-kommandot på nytt och batteriet stannar. Meddelandet försvinner av sig självt när båda gränserna är 0 eller ett annat läge väljs."
+    },
+    "new_property": {
+      "title": "{device} rapporterar nya egenskaper",
+      "description": "{device} rapporterar {keys}, som den inte rapporterade tidigare. Det kommer oftast efter en firmwareuppdatering. Den här versionen har ingen entitet för dem än. Ladda ner diagnostiken (enhetssidan → Ladda ner diagnostik) och rapportera dem i ett issue så att de kan läggas till. Ignorera meddelandet för att stänga det."
     }
   }
 }

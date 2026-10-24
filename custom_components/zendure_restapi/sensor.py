@@ -123,6 +123,7 @@ DEVICE_SENSORS: tuple[ZendureSensorDescription, ...] = (
     ZendureSensorDescription(
         key="remainOutTime",
         name="Remaining discharge time",
+        converter="remain_minutes",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         device_class=SensorDeviceClass.DURATION,
         icon="mdi:battery-clock",

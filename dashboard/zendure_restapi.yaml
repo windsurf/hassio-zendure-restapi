@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.6
+# ZENDURE RESTAPI DASHBOARD - v1.6.8
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -993,6 +993,9 @@ views:
         decimals: 0
         apex_config:
           tickAmount: 4
+          labels:
+            style:
+              fontSize: 10px
       apex_config:
         chart:
           height: 240
@@ -1001,67 +1004,20 @@ views:
         tooltip:
           x:
             format: dd-MM HH:mm
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
       series:
       - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
         name: Grid
         type: area
         unit: W
         color: '#1E88E5'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
-        float_precision: 0
-        extend_to: now
-        group_by:
-          func: avg
-          duration: 5min
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
-        name: Discharging
-        type: area
-        unit: W
-        color: '#4CAF50'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
-        float_precision: 0
-        extend_to: now
-        group_by:
-          func: avg
-          duration: 5min
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
-        name: Charging
-        type: area
-        unit: W
-        color: '#E53935'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
-        float_precision: 0
-        extend_to: now
-        group_by:
-          func: avg
-          duration: 5min
-        show:
-          in_header: false
-          legend_value: false
-        transform: return x * -1;
-        yaxis_id: power
-      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
-        name: PV
-        type: area
-        unit: W
-        color: '#FFB300'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         show:
@@ -1071,11 +1027,67 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
+      - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        transform: return x * -1;
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
       - entity: sensor.price_control_plan
         name: Plan
         type: line
         unit: W
-        stroke_width: 2
+        stroke_width: 1.5
         curve: stepline
         float_precision: 0
         color: '#757575'
@@ -1099,8 +1111,8 @@ views:
         type: line
         unit: '%'
         color: '#9575CD'
-        stroke_width: 3
-        curve: smooth
+        stroke_width: 2
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         yaxis_id: soc
@@ -1110,6 +1122,8 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
+        stroke_dash: 4
       grid_options:
         columns: full
         rows: auto
@@ -1396,6 +1410,9 @@ views:
         decimals: 0
         apex_config:
           tickAmount: 4
+          labels:
+            style:
+              fontSize: 10px
       apex_config:
         chart:
           height: 240
@@ -1404,14 +1421,19 @@ views:
         tooltip:
           x:
             format: HH:mm:ss
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
       series:
       - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
         name: Grid
         type: area
         unit: W
         color: '#1E88E5'
-        opacity: 0.2
-        stroke_width: 2
+        opacity: 0.3
+        stroke_width: 1
         curve: straight
         float_precision: 0
         extend_to: now
@@ -1422,28 +1444,33 @@ views:
         group_by:
           func: avg
           duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
         name: Discharging
         type: area
         unit: W
         color: '#4CAF50'
-        opacity: 0.2
-        stroke_width: 2
-        curve: stepline
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
         unit: W
         color: '#E53935'
-        opacity: 0.2
-        stroke_width: 2
-        curve: stepline
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
@@ -1451,13 +1478,17 @@ views:
           legend_value: false
         transform: return x * -1;
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
         type: area
         unit: W
         color: '#FFB300'
-        opacity: 0.2
-        stroke_width: 2
+        opacity: 0.3
+        stroke_width: 1
         curve: straight
         float_precision: 0
         extend_to: now
@@ -1465,12 +1496,16 @@ views:
           in_header: false
           legend_value: false
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
         name: SoC
         type: line
         unit: '%'
         color: '#9575CD'
-        stroke_width: 3
+        stroke_width: 2
         curve: straight
         float_precision: 0
         extend_to: now
@@ -1478,6 +1513,11 @@ views:
         show:
           in_header: false
           legend_value: false
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+        stroke_dash: 4
       grid_options:
         columns: full
         rows: auto
@@ -1512,6 +1552,9 @@ views:
         decimals: 0
         apex_config:
           tickAmount: 4
+          labels:
+            style:
+              fontSize: 10px
       apex_config:
         chart:
           height: 240
@@ -1520,15 +1563,20 @@ views:
         tooltip:
           x:
             format: HH:mm
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
       series:
       - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
         name: Grid
         type: area
         unit: W
         color: '#1E88E5'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
@@ -1537,29 +1585,34 @@ views:
         yaxis_id: power
         group_by:
           func: avg
-          duration: 1min
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
         name: Discharging
         type: area
         unit: W
         color: '#4CAF50'
-        opacity: 0.2
-        stroke_width: 2
-        curve: stepline
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
         unit: W
         color: '#E53935'
-        opacity: 0.2
-        stroke_width: 2
-        curve: stepline
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
@@ -1567,33 +1620,46 @@ views:
           legend_value: false
         transform: return x * -1;
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
         type: area
         unit: W
         color: '#FFB300'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: straight
         float_precision: 0
         extend_to: now
         show:
           in_header: false
           legend_value: false
         yaxis_id: power
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
         name: SoC
         type: line
         unit: '%'
         color: '#9575CD'
-        stroke_width: 3
-        curve: smooth
+        stroke_width: 2
+        curve: straight
         float_precision: 0
         extend_to: now
         yaxis_id: soc
         show:
           in_header: false
           legend_value: false
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+        stroke_dash: 4
       grid_options:
         columns: full
         rows: auto
@@ -1625,6 +1691,9 @@ views:
         decimals: 0
         apex_config:
           tickAmount: 4
+          labels:
+            style:
+              fontSize: 10px
       apex_config:
         chart:
           height: 240
@@ -1633,15 +1702,20 @@ views:
         tooltip:
           x:
             format: dd-MM HH:mm
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
       series:
       - entity: sensor.zendure_p1_meter_3_phase_grid_power_total
         name: Grid
         type: area
         unit: W
         color: '#1E88E5'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         show:
@@ -1651,14 +1725,15 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
       - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
         name: Discharging
         type: area
         unit: W
         color: '#4CAF50'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         show:
@@ -1668,14 +1743,15 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
         type: area
         unit: W
         color: '#E53935'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         show:
@@ -1686,14 +1762,15 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
         type: area
         unit: W
         color: '#FFB300'
-        opacity: 0.2
-        stroke_width: 2
-        curve: smooth
+        opacity: 0.3
+        stroke_width: 1
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         show:
@@ -1703,13 +1780,14 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
       - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
         name: SoC
         type: line
         unit: '%'
         color: '#9575CD'
-        stroke_width: 3
-        curve: smooth
+        stroke_width: 2
+        curve: monotoneCubic
         float_precision: 0
         extend_to: now
         yaxis_id: soc
@@ -1719,6 +1797,8 @@ views:
         statistics:
           type: mean
           period: 5minute
+          align: middle
+        stroke_dash: 4
       grid_options:
         columns: full
         rows: auto
@@ -1752,13 +1832,16 @@ views:
         tooltip:
           x:
             format: dd-MM
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
       series:
       - entity: sensor.zendure_solarflow_3000_mix_ac_energy_charged
         name: Charged
         type: column
         unit: kWh
         color: '#E53935'
-        opacity: 0.7
+        opacity: 0.5
         float_precision: 1
         statistics:
           type: change
@@ -1768,12 +1851,13 @@ views:
           in_header: false
           legend_value: false
         yaxis_id: energy
+        stroke_width: 1
       - entity: sensor.zendure_solarflow_3000_mix_ac_energy_discharged
         name: Discharged
         type: column
         unit: kWh
         color: '#4CAF50'
-        opacity: 0.7
+        opacity: 0.5
         float_precision: 1
         statistics:
           type: change
@@ -1783,12 +1867,13 @@ views:
           in_header: false
           legend_value: false
         yaxis_id: energy
+        stroke_width: 1
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_energy
         name: PV
         type: column
         unit: kWh
         color: '#FFB300'
-        opacity: 0.7
+        opacity: 0.5
         float_precision: 1
         statistics:
           type: change
@@ -1798,6 +1883,7 @@ views:
           in_header: false
           legend_value: false
         yaxis_id: energy
+        stroke_width: 1
       grid_options:
         columns: full
         rows: auto

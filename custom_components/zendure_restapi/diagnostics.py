@@ -95,6 +95,8 @@ async def async_get_config_entry_diagnostics(
         "pack_count": coordinator.pack_count,
         "packs": _packs(coordinator.data or {}, coordinator.pack_count),
         "unknown_keys": sorted(coordinator.unknown_keys),
+        "unknown_keys_first_seen": dict(sorted(coordinator.first_seen.items())),
+        "restarts": list(coordinator.restarts),
         "flat_data": _redact_flat(coordinator.data or {}),
         "raw_report": async_redact_data(dict(coordinator.raw or {}), REDACT),
         "mqtt_status": _summarise_mqtt(mqtt_status),

@@ -211,6 +211,16 @@ class ZendureOperationMode(ZendureEntity, SelectEntity):
         if option not in OPERATION_MODES:
             _LOGGER.error("Unknown operation mode %s", option)
             return
+        if option == self._settings.get(OPT_OPERATION_MODE):
+            # The same mode again: send its command again (v1.6.8). After a
+            # device restart this is how standby stops a limit from flash.
+            entry = getattr(self.coordinator, "config_entry", None)
+            entry_id = self.coordinator.entry_id or (entry.entry_id if entry else None)
+            runtime = self.hass.data.get(DOMAIN, {}).get(f"{entry_id}_runtime")
+            if runtime is not None:
+                runtime["controller"].reapply_mode()
+                await self.coordinator.async_request_refresh()
+            return
         self._settings.set(OPT_OPERATION_MODE, option)
         self.async_write_ha_state()
 

@@ -138,6 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     api = ZendureLocalApi(session, host, port, sn)
     coordinator = ZendureCoordinator(hass, api, scan_interval)
+    await coordinator.async_load_seen(entry.entry_id, entry.title)
 
     try:
         await coordinator.async_config_entry_first_refresh()

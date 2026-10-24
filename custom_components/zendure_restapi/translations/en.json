@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} reports every {seconds} s",
       "description": "The control loops accept a grid reading for 5 seconds, so a meter that reports every {seconds} s steers the battery only part of the time. For a meter added from Home Assistant this is the speed of its integration. Read it over IP where this integration can (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), or steer on the Zendure meter with *Meter source*. This message disappears by itself when readings come faster."
+    },
+    "restart_limits": {
+      "title": "{device} restarted holding a limit",
+      "description": "After a restart (a firmware upgrade or a power cut) {device} came back with the limits it last stored itself: charge {input} W, discharge {output} W, while Operation mode is standby. The integration writes nothing after a restart, because an upgrade may still be running. Once it is done, choose standby again: that sends the standby command again and stops the battery. This message disappears by itself when both limits are 0 or another mode is chosen."
+    },
+    "new_property": {
+      "title": "{device} reports new properties",
+      "description": "{device} reports {keys}, which it did not report before. This usually follows a firmware upgrade. This version has no entity for them yet. Download the diagnostics (device page → Download diagnostics) and report them in an issue, so they can be added. Ignore this message to dismiss it."
     }
   }
 }

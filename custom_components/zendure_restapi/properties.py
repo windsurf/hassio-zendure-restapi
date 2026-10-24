@@ -64,12 +64,26 @@ def conv_signed_deci_amp(value: Any) -> float | None:
     return round(raw / 10.0, 1)
 
 
+# The device reports 59940 minutes (999 hours) when no discharge time applies:
+# full and resting, or charging. A filler, not a time (v1.6.8).
+REMAIN_PLACEHOLDER_MIN = 59940
+
+
+def conv_remain_minutes(value: Any) -> int | None:
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return None
+    return None if minutes >= REMAIN_PLACEHOLDER_MIN else minutes
+
+
 CONVERTERS = {
     "identity": conv_identity,
     "decikelvin": conv_decikelvin,
     "centi": conv_centi,
     "deci": conv_deci,
     "signed_deci_amp": conv_signed_deci_amp,
+    "remain_minutes": conv_remain_minutes,
 }
 
 

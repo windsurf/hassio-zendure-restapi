@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} meldt elke {seconds} s",
       "description": "De regellussen accepteren een netmeting 5 seconden, dus een meter die elke {seconds} s meldt stuurt de accu maar een deel van de tijd. Bij een meter uit Home Assistant is dit de snelheid van zijn integratie. Lees hem via IP waar deze integratie dat kan (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), of stuur op de Zendure-meter met *Meter source*. Deze melding verdwijnt vanzelf zodra de metingen sneller komen."
+    },
+    "restart_limits": {
+      "title": "{device} herstartte met een limiet",
+      "description": "Na een herstart (een firmware-upgrade of stroomuitval) kwam {device} terug met de limieten die hij zelf als laatste had opgeslagen: laden {input} W, ontladen {output} W, terwijl Operation mode op standby staat. De integratie schrijft na een herstart niets, want een upgrade kan nog bezig zijn. Is die klaar, kies dan opnieuw standby: dat stuurt de standby-opdracht opnieuw en stopt de accu. Deze melding verdwijnt vanzelf als beide limieten 0 zijn of een andere modus is gekozen."
+    },
+    "new_property": {
+      "title": "{device} meldt nieuwe eigenschappen",
+      "description": "{device} meldt {keys}, die hij eerder niet meldde. Meestal komt dat na een firmware-upgrade. Deze versie heeft er nog geen entiteit voor. Download de diagnostiek (apparaatpagina → Diagnostiek downloaden) en meld ze in een issue, zodat ze kunnen worden toegevoegd. Negeer deze melding om haar weg te halen."
     }
   }
 }

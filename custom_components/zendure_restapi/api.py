@@ -17,12 +17,13 @@ Two hard constraints from the zenSDK documentation drive this module:
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import logging
 from typing import Any
 
 import aiohttp
-import async_timeout
 
 from .const import (
     HTTP_TIMEOUT,
@@ -158,7 +159,7 @@ class ZendureLocalApi:
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         try:
-            async with async_timeout.timeout(HTTP_TIMEOUT):
+            async with asyncio.timeout(HTTP_TIMEOUT):
                 if method == "GET":
                     response = await self._session.get(url)
                 else:

@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} transmet toutes les {seconds} s",
       "description": "Les boucles de régulation acceptent une mesure réseau pendant 5 secondes : un compteur qui transmet toutes les {seconds} s ne pilote la batterie qu'une partie du temps. Pour un compteur ajouté depuis Home Assistant, c'est la vitesse de son intégration. Lisez-le via IP lorsque cette intégration le peut (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), ou régulez sur le compteur Zendure avec *Meter source*. Ce message disparaît de lui-même dès que les mesures arrivent plus vite."
+    },
+    "restart_limits": {
+      "title": "{device} a redémarré avec une limite",
+      "description": "Après un redémarrage (mise à jour du firmware ou coupure de courant), {device} est revenu avec les limites qu'il avait lui-même enregistrées en dernier : charge {input} W, décharge {output} W, alors que Operation mode est sur standby. L'intégration n'écrit rien après un redémarrage, car une mise à jour peut encore être en cours. Une fois terminée, choisissez à nouveau standby : la commande de standby est renvoyée et la batterie s'arrête. Ce message disparaît de lui-même quand les deux limites sont à 0 ou qu'un autre mode est choisi."
+    },
+    "new_property": {
+      "title": "{device} signale de nouvelles propriétés",
+      "description": "{device} signale {keys}, qu'il ne signalait pas auparavant. Cela suit généralement une mise à jour du firmware. Cette version n'a pas encore d'entité pour elles. Téléchargez les diagnostics (page de l'appareil → Télécharger les diagnostics) et signalez-les dans un issue pour qu'elles puissent être ajoutées. Ignorez ce message pour le fermer."
     }
   }
 }

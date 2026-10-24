@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} comunica a cada {seconds} s",
       "description": "Os ciclos de controlo aceitam uma leitura da rede durante 5 segundos, por isso um contador que comunica a cada {seconds} s só controla a bateria parte do tempo. Para um contador adicionado a partir do Home Assistant é a velocidade da sua integração. Leia-o por IP onde esta integração o permite (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), ou controle com o contador Zendure através de *Meter source*. Esta mensagem desaparece sozinha quando as leituras chegarem mais depressa."
+    },
+    "restart_limits": {
+      "title": "{device} reiniciou com um limite",
+      "description": "Após um reinício (atualização de firmware ou falha de energia), {device} voltou com os limites que guardou por último: carga {input} W, descarga {output} W, enquanto Operation mode está em standby. A integração não escreve nada após um reinício, porque uma atualização pode ainda estar a decorrer. Quando terminar, escolha standby de novo: o comando de standby é enviado novamente e a bateria para. Esta mensagem desaparece sozinha quando ambos os limites forem 0 ou for escolhido outro modo."
+    },
+    "new_property": {
+      "title": "{device} reporta novas propriedades",
+      "description": "{device} reporta {keys}, que antes não reportava. Normalmente acontece após uma atualização de firmware. Esta versão ainda não tem entidade para elas. Descarregue os diagnósticos (página do dispositivo → Descarregar diagnósticos) e reporte-as num issue para que possam ser adicionadas. Ignore esta mensagem para a fechar."
     }
   }
 }

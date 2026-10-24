@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} hlásí každých {seconds} s",
       "description": "Regulační smyčky přijímají hodnotu sítě po dobu 5 sekund, takže elektroměr hlásící každých {seconds} s řídí baterii jen část času. U elektroměru přidaného z Home Assistant je to rychlost jeho integrace. Čtěte ho přes IP, kde to tato integrace umí (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), nebo regulujte podle elektroměru Zendure pomocí *Meter source*. Tato zpráva zmizí sama, jakmile budou hodnoty přicházet rychleji."
+    },
+    "restart_limits": {
+      "title": "{device} se restartoval s limitem",
+      "description": "Po restartu (aktualizace firmwaru nebo výpadek proudu) se {device} vrátil s limity, které si naposledy sám uložil: nabíjení {input} W, vybíjení {output} W, zatímco Operation mode je ve standby. Integrace po restartu nic nezapisuje, protože aktualizace může ještě probíhat. Až skončí, zvolte znovu standby: příkaz standby se odešle znovu a baterie se zastaví. Tato zpráva zmizí sama, jakmile budou oba limity 0 nebo bude zvolen jiný režim."
+    },
+    "new_property": {
+      "title": "{device} hlásí nové vlastnosti",
+      "description": "{device} hlásí {keys}, které dříve nehlásil. Obvykle to následuje po aktualizaci firmwaru. Tato verze pro ně zatím nemá entitu. Stáhněte diagnostiku (stránka zařízení → Stáhnout diagnostiku) a nahlaste je v issue, aby mohly být přidány. Ignorujte tuto zprávu, chcete-li ji zavřít."
     }
   }
 }

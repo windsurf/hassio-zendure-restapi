@@ -65,7 +65,7 @@ COLUMNS = (
     "ac_mode",           # 1 charge, 2 discharge
     "smart_mode",        # RAM storage flag
     "battery_age_s",     # age of the battery payload at this sample
-    "writer",            # none | mode | trim | foreign
+    "writer",            # none | mode | trim | foreign | restart
     "trim_direction",    # direction the trim loop is allowed to work in
     "pending_w",         # ordered and not yet seen back
     "trim_writes",       # cumulative, this controller

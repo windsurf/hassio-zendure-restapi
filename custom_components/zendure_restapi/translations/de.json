@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} meldet alle {seconds} s",
       "description": "Die Regelkreise akzeptieren einen Netzwert 5 Sekunden lang, ein Zähler, der alle {seconds} s meldet, steuert die Batterie also nur einen Teil der Zeit. Bei einem Zähler aus Home Assistant ist das die Geschwindigkeit seiner Integration. Lies ihn über IP, wo diese Integration das kann (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), oder regle mit *Meter source* auf den Zendure-Zähler. Diese Meldung verschwindet von selbst, sobald die Messwerte schneller kommen."
+    },
+    "restart_limits": {
+      "title": "{device} hat mit einem Limit neu gestartet",
+      "description": "Nach einem Neustart (Firmware-Update oder Stromausfall) kam {device} mit den Limits zurück, die es zuletzt selbst gespeichert hatte: Laden {input} W, Entladen {output} W, während Operation mode auf Standby steht. Die Integration schreibt nach einem Neustart nichts, weil ein Update noch laufen kann. Ist es fertig, wähle Standby erneut: Das sendet den Standby-Befehl erneut und stoppt die Batterie. Diese Meldung verschwindet von selbst, wenn beide Limits 0 sind oder ein anderer Modus gewählt ist."
+    },
+    "new_property": {
+      "title": "{device} meldet neue Eigenschaften",
+      "description": "{device} meldet {keys}, die es vorher nicht meldete. Meist folgt das auf ein Firmware-Update. Diese Version hat dafür noch keine Entität. Lade die Diagnose herunter (Geräteseite → Diagnose herunterladen) und melde sie in einem Issue, damit sie ergänzt werden können. Ignoriere diese Meldung, um sie zu schließen."
     }
   }
 }

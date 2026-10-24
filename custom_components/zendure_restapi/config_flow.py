@@ -863,7 +863,12 @@ def _device_meter(hass, device_id: str) -> dict[str, Any]:
     fast = None
     if device is not None:
         model = " ".join(str(x) for x in (device.model, getattr(device, "model_id", None)) if x)
-        for entry_id in device.config_entries:
+        # A device belongs to one config entry (HA 2026.x); `config_entries`
+        # is deprecated and stops working in 2027.10 (v1.6.8). Older cores
+        # without `config_entry_id` still read the set.
+        single = getattr(device, "config_entry_id", None)
+        entry_ids = [single] if single else list(device.config_entries)
+        for entry_id in entry_ids:
             config_entry = hass.config_entries.async_get_entry(entry_id)
             if config_entry is not None and config_entry.domain == platform:
                 fast = fast_route(platform, model, dict(config_entry.data))

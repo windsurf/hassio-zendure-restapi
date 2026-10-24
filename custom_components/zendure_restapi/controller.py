@@ -103,7 +103,7 @@ from .const import (
     OPT_TRIM_FACTOR,
     SMART_MODES,
 )
-from .coordinator import ZendureCoordinator
+from .coordinator import RESTART_KEYS, ZendureCoordinator
 from .measure import BatteryMeasure, Sample
 from .p1meter import ExternalMeter
 from .registry import pack_model
@@ -150,6 +150,9 @@ DEVICE_CAP_KEY = {True: "chargeMaxLimit", False: "inverseMaxPower"}
 # only that a value written long ago and later set by something else is
 # credited here, which is the mild direction to be wrong in.
 WRITE_HISTORY = 6
+# A smartMode 0 that this controller wrote within this many seconds is its own,
+# not the trace of a restart (v1.6.8).
+SMART_RESET_GRACE_S = 60
 
 # A second controller: something else moving the limits while this one steers
 # (v1.6.2). The on-device energy manager, left on in the Zendure app, moved
@@ -273,6 +276,17 @@ class ZendureController:
         self._foreign_values: list[int] = []
         self._foreign_times: deque[datetime] = deque()
         self.second_controller = False
+
+        # ── Device restarts (v1.6.8) ─────────────────────────────────
+        # Recognised and shown, never answered with a write: whether an
+        # upgrade or a calibration is still running cannot be read from the
+        # report. The user chooses the mode again once it is done.
+        self._restart_seen = 0
+        self._restart_mismatch = False
+        self._smart_checked_at: datetime | None = None
+        self._prev_smart: int | None = None
+        self._prev_snapshot: dict[str, Any] = {}
+        self._smart_off_at: datetime | None = None
 
         # ── Measured diagnostics (v1.6.3) ────────────────────────────
         # Fed from every battery poll, every meter sample and every limit
@@ -547,6 +561,8 @@ class ZendureController:
         mode = self.settings.get(OPT_OPERATION_MODE)
         if mode not in SMART_MODES:
             self._release_grid()
+        if self._restart_mismatch:
+            self._restart_check(data)
 
         # Without a meter there are no meter samples to watch the limits on.
         if self.meter is None:
@@ -1832,6 +1848,15 @@ class ZendureController:
             "outputLimit": _as_int(data.get("outputLimit")),
         }
         self._foreign_values = []
+        self._watch_smart_reset(data)
+        if self.coordinator.restart_seq != self._restart_seen:
+            # Limits that moved across a restart are what the device kept in
+            # flash. Nobody wrote them: not this controller, not a second one.
+            self._restart_seen = self.coordinator.restart_seq
+            self._seen_limits = dict(limits)
+            self._writer = "restart"
+            self._restart_check(data, after_restart=True)
+            return
         self._writer = self._classify_writer(limits)
         now = dt_util.utcnow()
         if self._writer == "foreign" and self.settings.get(OPT_OPERATION_MODE) != MODE_STANDBY:
@@ -1839,6 +1864,84 @@ class ZendureController:
             if not (at_bound and all(v == 0 for v in self._foreign_values)):
                 self._foreign_times.append(now)
         self._update_second_controller(now)
+
+    def _watch_smart_reset(self, data: dict[str, Any]) -> None:
+        """A smartMode that drops from 1 to 0 by itself is a restart too.
+
+        The device starts with smartMode 0. Without a gap in the reports and
+        without a new messageId sequence, this is the remaining trace of a
+        restart. A 0 that this controller wrote itself (standby) is not one.
+        """
+        updated = self.coordinator.updated_at
+        if updated is None or updated == self._smart_checked_at:
+            return
+        self._smart_checked_at = updated
+        smart = _as_int(data.get("smartMode"))
+        own = (
+            self._smart_off_at is not None
+            and (updated - self._smart_off_at).total_seconds() < SMART_RESET_GRACE_S
+        )
+        if (
+            self._prev_smart == 1
+            and smart == 0
+            and not own
+            and self.coordinator.restart_seq == self._restart_seen
+        ):
+            self.coordinator.note_restart("smartMode", self._prev_snapshot, data)
+        self._prev_smart = smart
+        self._prev_snapshot = {key: data.get(key) for key in RESTART_KEYS}
+
+    def _restart_check(self, data: dict[str, Any], after_restart: bool = False) -> None:
+        """One repair while standby holds a limit the device brought back.
+
+        Only standby: every other mode writes its own limit on its next cycle.
+        The repair goes away once the limits are 0 again or another mode is
+        chosen. Choosing standby again sends the standby command again.
+        """
+        mode = self.settings.get(OPT_OPERATION_MODE)
+        limit_in = _as_int(data.get("inputLimit")) or 0
+        limit_out = _as_int(data.get("outputLimit")) or 0
+        holding = mode == MODE_STANDBY and (limit_in > 0 or limit_out > 0)
+        if after_restart and holding and not self._restart_mismatch:
+            self._restart_mismatch = True
+            self._restart_issue(True, limit_in, limit_out)
+        elif self._restart_mismatch and not holding:
+            self._restart_mismatch = False
+            self._restart_issue(False)
+
+    def _restart_issue(self, create: bool, limit_in: int = 0, limit_out: int = 0) -> None:
+        entry = getattr(self.coordinator, "config_entry", None)
+        hass = self.coordinator.hass
+        if entry is None or hass is None:
+            return
+        issue_id = f"restart_limits_{entry.entry_id}"
+        if create:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="restart_limits",
+                translation_placeholders={
+                    "device": entry.title,
+                    "input": str(limit_in),
+                    "output": str(limit_out),
+                },
+            )
+        else:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+    def reapply_mode(self) -> None:
+        """Choosing the current mode again: send its command again (v1.6.8).
+
+        Standby sends its one-time command once per stay. After a restart the
+        device can hold a limit from flash while standby is still selected;
+        selecting standby again is how the user stops it. The command skips
+        what the device already holds, so it writes nothing when nothing is
+        wrong. Every other mode writes on its next cycle anyway.
+        """
+        self._standby_sent = False
 
     def _update_second_controller(self, now: datetime) -> None:
         times = self._foreign_times
@@ -1953,6 +2056,8 @@ class ZendureController:
     def _written(self, key: str, value: Any, data: dict[str, Any]) -> None:
         """Bookkeeping after a write the device accepted."""
         data[key] = value
+        if key == "smartMode" and _as_int(value) == 0:
+            self._smart_off_at = dt_util.utcnow()
         try:
             written = int(value)
         except (TypeError, ValueError):

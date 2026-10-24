@@ -86,7 +86,7 @@ PV_POWER = "pv_input_power"
 PV_ENERGY = "pv_energy"
 EXTERNAL_PV_NAME = "PV external"
 EXTERNAL_PV_DASH = 4
-EXTERNAL_PV_OPACITY = 0.35
+EXTERNAL_PV_OPACITY = 0.25
 # The template's grid figures (gauge, tile, charts) carry this placeholder; the
 # builder puts the sensor of the meter that steers in its place, with that
 # sensor's own history (v1.6.6; v1.6.5 had an entity of its own for it).

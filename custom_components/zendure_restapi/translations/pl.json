@@ -797,6 +797,14 @@
     "slow_meter": {
       "title": "{meter} raportuje co {seconds} s",
       "description": "Pętle regulacji akceptują odczyt sieci przez 5 sekund, więc licznik raportujący co {seconds} s steruje baterią tylko przez część czasu. Dla licznika dodanego z Home Assistant to szybkość jego integracji. Czytaj go przez IP, gdzie ta integracja to potrafi (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM), lub reguluj na liczniku Zendure przez *Meter source*. Ten komunikat zniknie sam, gdy odczyty będą przychodzić szybciej."
+    },
+    "restart_limits": {
+      "title": "{device} uruchomił się ponownie z limitem",
+      "description": "Po ponownym uruchomieniu (aktualizacja firmware lub zanik zasilania) {device} wrócił z limitami, które sam ostatnio zapisał: ładowanie {input} W, rozładowanie {output} W, podczas gdy Operation mode jest ustawiony na standby. Integracja nic nie zapisuje po ponownym uruchomieniu, bo aktualizacja może jeszcze trwać. Gdy się zakończy, wybierz ponownie standby: polecenie standby zostanie wysłane ponownie i bateria się zatrzyma. Ten komunikat zniknie sam, gdy oba limity będą równe 0 lub zostanie wybrany inny tryb."
+    },
+    "new_property": {
+      "title": "{device} zgłasza nowe właściwości",
+      "description": "{device} zgłasza {keys}, których wcześniej nie zgłaszał. Zwykle dzieje się tak po aktualizacji firmware. Ta wersja nie ma jeszcze dla nich encji. Pobierz diagnostykę (strona urządzenia → Pobierz diagnostykę) i zgłoś je w issue, aby można je było dodać. Zignoruj ten komunikat, aby go zamknąć."
     }
   }
 }

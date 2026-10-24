@@ -21,10 +21,10 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 ## Contents
 
 - **Install:** [Supported products](#-supported-products) · [Before you start](#before-you-start) · [Installation via HACS](#installation-via-hacs) · [Manual Installation](#manual-installation) · [Setup](#setup)
-- **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter)
+- **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter) · [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade)
 - **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
 - **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard) · [Measured diagnostics](#measured-diagnostics)
-- **Reference:** [Supported Entities](#supported-entities) · [The database](#the-database) · [Debug logging](#debug-logging) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
+- **Reference:** [Supported Entities](#supported-entities) · [The database](#the-database) · [Debug logging](#debug-logging) · [Tests](#tests) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
 - **History:** [Coming in 1.7](#coming-in-17-clusters) · [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
 ---
@@ -175,7 +175,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 | Chart | Shows |
 |---|---|
 | Last 30 minutes | live, every 10 s |
-| Last 4 hours | per minute |
+| Last 4 hours | every 10 s |
 | Last 24 hours | the past day, from the 5-minute statistics |
 | Last 30 days | energy charged, discharged and from PV, per day |
 
@@ -274,7 +274,7 @@ Price control is a device of its own, linked to one battery — this integration
 
 The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus 10 % and two cents. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
 
-**What the price sensor holds.** The day plan works back to the bare spot price, because the formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the whole import price. See [Setting up Nord Pool for the day plan](#setting-up-nord-pool-for-the-day-plan).
+**What the price sensor holds.** The day plan works back to the bare spot price, because the formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the whole import price. See [Setting up spot prices for the day plan](#setting-up-spot-prices-for-the-day-plan).
 
 ### How the day plan decides
 
@@ -321,16 +321,18 @@ This replay is simpler than the one above: it leaves out the standby draw and th
 
 **One writer.** Leave price control off when an automation or planner of your own already sets the Operation mode; two writers would undo each other's choices.
 
-### Setting up Nord Pool for the day plan
+<a id="setting-up-nord-pool-for-the-day-plan"></a>
 
-The day plan reads the price list of the **Nord Pool** integration from HACS ([custom-components/nordpool](https://github.com/custom-components/nordpool)): the attributes `raw_today` and `raw_tomorrow`, per quarter of an hour or per hour, with tomorrow's prices from about 13:00. Fixed prices work with any price sensor; the day plan needs a sensor with a price list: this one, or one of the [other sources](#other-price-sources-epex-spot-zonneplan-and-more).
+### Setting up spot prices for the day plan
 
-Two prerequisites, both from HACS:
+The day plan needs a price sensor with the prices of today and tomorrow. Fixed prices work with any price sensor. This section uses the **Nord Pool** integration from HACS ([custom-components/nordpool](https://github.com/custom-components/nordpool)), the quickest route: it carries the attributes `raw_today` and `raw_tomorrow`, per quarter of an hour or per hour, with tomorrow's prices from about 13:00. **EPEX Spot**, **Zonneplan** and others work as well, see [other price sources](#other-price-sources-epex-spot-zonneplan-and-more).
+
+What to install, both from HACS:
 
 | | For | Install |
 |---|---|---|
-| **Nord Pool** (integration) | the day-ahead prices; without it no day plan | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration), or **HACS → search *Nord Pool* → Download**; restart Home Assistant |
-| **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab and the charts on the *History* tab | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
+| **Nord Pool** (integration) | the day-ahead prices, or another [price source](#other-price-sources-epex-spot-zonneplan-and-more) | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration), or **HACS → search *Nord Pool* → Download**; restart Home Assistant |
+| **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab and the charts on the *History* tab (version 2.1 or later); without it the day plan runs and the dashboard shows a note instead | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
 
 Install ApexCharts Card **before** the dashboard is created: the integration adds the charts only when the card is there. Already have the dashboard? Tick *Replace the existing dashboard* under the battery's **Configure**.
 
@@ -543,6 +545,41 @@ Subclass `ExternalMeter` in `p1meter.py`, set `kind` and `path`, implement `pars
 
 ---
 
+## What happens with a Zendure firmware upgrade
+
+When the Zendure app installs new firmware, the battery is gone for a few minutes and comes back as if it had been switched off and on. Measured on a 3000 Mix AC+ with Operation mode on `standby` (battery pack firmware 4142 to 4144):
+
+| | What the battery does |
+|---|---|
+| Unreachable | about 4½ minutes without a report; Home Assistant shows the entities as unavailable |
+| Back | `messageId` starts again from a low number after the time unreachable, `smartMode` is 0 |
+| Limits | the ones it last stored in flash, not the ones it had a minute before: `acMode` 1, `inputLimit` 3000 W, while standby had set both limits to 0 |
+| First report | `socLimit` 2 (lower limit) at 94 %, 10 s later 0 again |
+| Then | it charges at 3000 W, from the grid, until 100 % |
+| Status keys | `socStatus` stays 0 (no calibration); `faultLevel` went to 2 at 100 %; `remainOutTime` reads 59940 |
+
+**Why the limits come back.** A limit written while `smartMode` is 1 stays in RAM, written while it is 0 it goes to flash as well. Standby writes its zeros while the smart modes still have the flag at 1, and sets it to 0 last; the first write after a standby, with the flag still at 0, is the one that ends up in flash. After a restart the battery runs that. Whether the flag counts as it stands when a request arrives or in the order of the request has not been measured; either way the standby zeros are not in flash.
+
+**What the integration does** (since v1.6.8):
+
+- **Nothing to the battery.** It cannot tell from the report whether an upgrade or a calibration is still running, so it writes nothing because of a restart.
+- **It recognises the restart:** a `messageId` lower than last time, or a `smartMode` that drops to 0 without being written. A report that is only late is not a restart. `messageId` counts in 8 bits and turns from 255 to 0 about every 41 minutes while the battery keeps running; a drop from a high to a low number that fits the time since the previous report, with no poll failed in between, is that turn and not a restart.
+- **It records it** in the diagnostics download under `restarts`: when, how long the battery was unreachable, and the limits and status keys before and after.
+- **One repair** when the battery came back with a limit while Operation mode is standby, with the limits it holds. In any other mode the controller writes its own limit on the next cycle.
+- **It passes on what the battery reports**, the wrong `socLimit` of the first report included. Automations that act on *SOC limit status* see it.
+
+**What you do:**
+
+1. Before the upgrade, switch off your own automations that steer the battery.
+2. Let the upgrade finish in the app.
+3. Check *Add to HEMS* is off and the energy plan is on *Custom Mode*; updates have switched these back before. The integration warns with a repair when something else steers.
+4. Choose the operation mode again. Choosing `standby` while it is already selected sends the standby command again (v1.6.8) and stops a limit the battery brought back. If the battery is still charging to full on its own and you want that, let it finish first.
+5. Switch your automations back on.
+
+New keys in the report after an upgrade raise a repair as well, see [Reporting an unsupported property](#reporting-an-unsupported-property).
+
+---
+
 ## How the controller works
 
 The strategy is a single `select` entity, `Operation mode`:
@@ -636,7 +673,9 @@ The limits go to zero whether or not this controller set them — selecting stan
 
 **Once, and only once.** A zero is still a command, and repeating it every poll would do harm: on a device running its own energy manager the manager sets its limit back a second later, the integration overwrites it on the next poll, and the two produce a square wave in grid power at the polling interval. After the command the controller is passive again, and a limit that appears afterwards is left alone.
 
-That is also what keeps the `writer` column in the trace meaningful: outside that one command, every limit change in `standby` came from somewhere else.
+That is also what keeps the `writer` column in the trace meaningful: outside that one command, every limit change in `standby` came from somewhere else. A change across a device restart reads `restart` (v1.6.8): those are the limits the battery kept in flash, see [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade).
+
+**Choosing standby again sends the command again** (v1.6.8). It skips what the battery already holds, so it writes nothing when nothing is wrong.
 
 ### The smart control loop
 
@@ -1105,9 +1144,31 @@ At one sample a second a day of recording is roughly 86,000 rows and some 15 MB.
 
 ---
 
+## Tests
+
+Since v1.6.8 the repository has a `tests/` folder. The tests pin four things:
+
+- **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again. The order decides what the battery keeps in flash.
+- **A device restart**: recognised from `messageId` or `smartMode`, recorded, shown as a repair in standby, and never answered with a write; a report that is only late is not a restart, and neither is `messageId` turning from 255 to 0.
+- **A meter recognised by its report** (v1.6.7, issue #7): the Smart Meter 3CT without `meterType` is a meter, the P1 meter is unchanged, and a battery stays a battery, also without `product`.
+- **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
+
+Run them from the root of the repository:
+
+```bash
+pip install homeassistant pytest
+pytest tests
+```
+
+No running Home Assistant is needed: the battery, the meter and the repairs are stand-ins. Measurements with real household load are not in the repository. HACS installs only `custom_components/zendure_restapi/`, so the tests never reach your Home Assistant.
+
+---
+
 ## Reporting an unsupported property
 
 The integration logs every reported key it has no entity for, once each, at `INFO` level. For a complete picture, download diagnostics from the device page: the file contains the device report plus the full list of unrecognised keys.
+
+**When a key first appeared** (v1.6.8). The diagnostics list each unrecognised key with the moment it was first reported (`unknown_keys_first_seen`), kept across restarts of Home Assistant. A key that appears later, usually after a firmware upgrade, raises one repair naming it. The first time v1.6.8 runs, the keys the battery already reports are written down without a repair.
 
 Diagnostics files end up attached to public issues, so identifying values are stripped first. That covers both the plain keys and their flattened per-pack form — `pack1.sn` is redacted along with `sn`, which an exact-match filter would miss. The MQTT status is summarised rather than copied, because its contents are undocumented and may carry a broker address or device key.
 
@@ -1173,6 +1234,20 @@ Status: tested on a simulator, not yet with real batteries. Testers with two or 
 ## Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.8 — What happens with a Zendure firmware upgrade
+
+A firmware upgrade restarts the battery, and it comes back with the limits it kept in flash. The control loop decides as before; nothing in this version writes to the battery by itself.
+
+- **Device restarts recognised.** A `messageId` that starts again, or a `smartMode` that drops to 0 without being written, is a restart; a report that is only late is not. `messageId` counts in 8 bits and turns from 255 to 0 about every 41 minutes; that alone is not a restart. The diagnostics download lists the last five under `restarts`, with the limits and status keys before and after. In the trace the limits that came back read `restart`, not `mode` or `foreign`.
+- **A repair when standby comes back with a limit.** Choosing standby again sends the standby command again and the repair goes away. In other modes the controller writes its own limit anyway.
+- **New keys in the report raise a repair**, with the moment each key was first seen in the diagnostics (`unknown_keys_first_seen`).
+- **Remaining discharge time** reads unknown instead of 59940 min, the value the battery reports when no discharge time applies.
+- **Loads on a clean Home Assistant.** The integration imported `async_timeout` without declaring it; recent Home Assistant releases no longer bring it along. It now uses Python's own `asyncio.timeout`.
+- **Ready for Home Assistant 2027.10.** The meter picker read `DeviceEntry.config_entries`, which stops working there; it reads `config_entry_id`.
+- **Tests in the repository.** `tests/` holds what the integration writes per mode and the restart case above, see [Tests](#tests).
+- **Calmer charts.** The power charts on *History* and *Price Control* draw grid, charging, discharging and solar as areas with an even fill and a 1 px line. The state of charge is a thinner dashed line, and the grid lines are light and solid. *Last 30 minutes* and *Last 4 hours* average every series per 10 s, so a battery that switches shows a straight edge and short peaks stay visible. *Last 24 hours* and the day plan chart read the 5-minute statistics, placed in the middle of each block, with a gentle curve (ApexCharts Card 2.1 or later). To get them, tick *Replace the existing dashboard* under the battery's **Configure**.
+- **Docs:** a section [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade).
 
 ### v1.6.7 — A smaller database
 
