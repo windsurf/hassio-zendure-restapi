@@ -105,6 +105,8 @@ If that returns JSON, the integration will work. If it times out or returns noth
 2. Add `https://github.com/windsurf/hassio-zendure-restapi`, category **Integration**
 3. Install **Zendure RestAPI**, then restart Home Assistant
 
+HACS shows the version it last downloaded. After a manual install, or a copy of the files over a HACS install, that is not the version that runs: the tile *Integration* on the first tab of the dashboard (since v1.6.9, the attribute `integration_version` of *Controller status*) and the integration's page under **Settings → Devices & services** show the one that runs. A *Redownload* in HACS puts its own version back.
+
 ---
 
 ## Manual Installation
@@ -181,7 +183,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 
 Every power axis, the day plan chart on *Price Control* included, follows the data in steps of 500 W and reaches at least a full charge below zero; a larger export moves it one step further down instead of cutting the line off. Without apexcharts-card a note takes the place of the charts. The charts read the recorder: if you filter it, include the grid power of the meter that steers, *Home output power*, *Grid input power*, *PV input power*, *State of charge*, *Energy charged*, *Energy discharged* and *PV energy*, or their lines stay empty.
 
-**Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the battery's **Configure**, the same option makes it again. It is an ordinary dashboard, editable like any other. Before saving it, the integration fits the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges up to the battery's own AC limit, and no cards for entities your model does not report; a section whose entities are all missing goes with its text. Without a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An existing dashboard at `/zendure-restapi` is left as it is, unless you tick *Replace the existing dashboard* under **Configure** (since v1.6.6): it then gets a fresh configuration, and your own changes to it are lost. A notification says what happened.
+**Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the battery's **Configure**, the same option makes it again if it is gone. It is an ordinary dashboard, editable like any other. Before saving it, the integration fits the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges up to the battery's own AC limit, and no cards for entities your model does not report; a section whose entities are all missing goes with its text. Without a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An existing dashboard at `/zendure-restapi` is left as it is. To rebuild it, tick both *Create the Zendure RestAPI dashboard* and *Replace the existing dashboard with a fresh one* under the battery's **Configure** (since v1.6.6): it gets a fresh configuration, and your own changes to it are lost. A notification says what happened.
 
 **Solar from outside the battery** (since v1.6.6). A micro inverter on a smart plug, or a second inverter, is not seen by the battery. Control does not need it: your grid meter already sees that power. To see it in the charts, choose its power sensor (W) and, for the daily totals, its energy sensor (kWh) under the battery's **Configure**, and tick *Replace the existing dashboard*. The PV series of every chart then show it: instead of the battery's own PV while that has produced nothing, or beside it as *PV external* when the battery has panels of its own. *Battery and grid* on the Price Control tab gets a tile for it, next to the battery power.
 
@@ -270,7 +272,7 @@ Price control is a device of its own, linked to one battery — this integration
 | Import price, Export price | now, from the formulas | — |
 | Plan | day plan: `charge`, `discharge` or `idle` now; the charge and discharge blocks ahead, each with the power its mode runs at, as attributes | — |
 | Expected margin | day plan: what the plan earns over the prices known, after losses and wear | — |
-| Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`; the target mode and both prices as attributes | — |
+| Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`; the target mode and both prices as attributes, and `prices_held` / `prices_held_until` while it runs on a held price list | — |
 
 The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus 10 % and two cents. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
 
@@ -314,6 +316,8 @@ Trading at full power is where the value is: while net metering lasts the day pl
 This replay is simpler than the one above: it leaves out the standby draw and the fixed discharge loss, so its figures run up to € 0.2 higher. Compare its rows with each other, not with the table above.
 
 ### When it writes
+
+**When the price sensor drops out.** A price list once read is held (since v1.6.9). When the sensor becomes unavailable, loses its list, or gives a shorter one, the day plan and the current price carry on from the held list until its last period has passed; the status keeps showing the band, and the attributes `prices_held` and `prices_held_until` say that it runs on the held list. A new list that reaches at least as far ahead replaces it, so the new day at midnight and a corrected list are taken over. Nothing is stored: after a restart of Home Assistant there is nothing to hold until the sensor gives a list again.
 
 **When it cannot plan.** Without a price list (`no_price`) or without battery data (`no_plan`), the in-between mode applies. So it does without a usable price, and with fixed prices when the cheap price is at or above the expensive one. The battery's own SOC limits still apply: the smart modes do not order into a full or empty battery, and the quick modes report the refusal.
 
@@ -379,21 +383,21 @@ Price Control recognises the price list itself; you only choose the sensor. The 
 | **Zonneplan** | *Current quarter-hourly electricity tariff* (`…_current_quarter_hourly_electricity_tariff`) | `forecast` | `zonneplan` | **Import price (whole tariff)** |
 | ENTSO-e (HACS) | the *current price* sensor | `prices_today`, `prices_tomorrow` | `entso_e` | as set up in ENTSO-e |
 | Frank Energie (HACS) | the current electricity price | `prices` | `frank_energie` | as set up |
-| Tibber | a template sensor with the list from `tibber.get_prices` | `prices` | `tibber` | **Import price (whole tariff)** — Tibber gives the total price |
+| Tibber | **via EPEX Spot** (HACS): where Tibber's price follows the EPEX day-ahead price, choose the EPEX Spot price sensor and enter Tibber's surcharge in [Your tariff](#your-tariff); tested by a user on v1.6.6 (#6). Alternative: a template sensor with the list from `tibber.get_prices` | `data` via EPEX Spot; `prices` for the template | `epex_spot`; `tibber` for the template | via EPEX Spot as for EPEX Spot; for the template **Import price (whole tariff)**, Tibber gives the total price |
 | Energi Data Service | the price sensor | `raw_today`, `raw_tomorrow` | `energi_data_service` | as set up |
 
-Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; the other four are read from their documented attributes. A list that is recognised but not named shows `price_format: other`.
+Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; Tibber via EPEX Spot is tested by a user; the other four (including the Tibber template) are read from their documented attributes. A list that is recognised but not named shows `price_format: other`.
 
 **EPEX Spot** ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)) fetches the day-ahead prices for many market areas, per quarter of an hour where the source has them. Install it from HACS ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)), restart, and add it under **Add integration → EPEX Spot** with your market area. It makes two sensors that both work:
 
-- **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import factor and surcharge in Price Control, as in [Your tariff](#your-tariff).
+- **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import factor and surcharge in Price Control, as in [Your tariff](#your-tariff). With **Tibber** as the source in the EPEX Spot options (API token), *Market price* is Tibber's total price, all-in: choose **Import price (whole tariff)** instead.
 - **Total price** — the market price with the surcharge, tax and VAT you enter in the EPEX Spot options. Choose **Import price (whole tariff)**; the import surcharge in Price Control is then only used to work back to the spot price for the export formula.
 
 **Zonneplan** customers already have their own prices: the Zonneplan integration's quarter tariff sensor carries a list of today and tomorrow, all-in, exactly what Zonneplan bills. Choose **Import price (whole tariff)**.
 
 Compare **Import price** with your supplier's price for the current quarter, as in step 5.
 
-**When the price source drops out.** A price sensor that depends on your supplier's web service goes *unavailable* when that service is down, sometimes for hours: for maintenance, or when web services are taken offline to install emergency security fixes, as many were for the PHP2Shell vulnerabilities in PHP (CVE-2026-109618 and CVE-2026-109619, fixed in PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35; see [Help Net Security](https://helpnetsecurity.com/2026/10/21/php2shell-php-vulnerabilities-patched-cve-2026-109618-cve-2026-109619)). This integration runs inside Home Assistant, in Python, and does not use PHP. Without a price list Price Control shows `no_price` and uses the In-between mode. To keep the day plan running, choose **Nord Pool** or **EPEX Spot** (both HACS) as the price sensor: they read the day-ahead market prices themselves and keep working when a supplier's service is down. With your supplier's surcharge set as in [Your tariff](#your-tariff), they give the same import price. Coming in v1.6.9: Price Control holds the last price list it read until it runs out.
+**When the price source drops out.** A price sensor that depends on your supplier's web service goes *unavailable* when that service is down, sometimes for hours: for maintenance, or when web services are taken offline to install emergency security fixes, as many were for the PHP2Shell vulnerabilities in PHP (CVE-2026-109618 and CVE-2026-109619, fixed in PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35; see [Help Net Security](https://helpnetsecurity.com/2026/10/21/php2shell-php-vulnerabilities-patched-cve-2026-109618-cve-2026-109619)). This integration runs inside Home Assistant, in Python, and does not use PHP. Without a price list from the start, Price Control shows `no_price` and uses the In-between mode. Once it has read a list, it holds that list through an outage until it runs out (since v1.6.9, see [When it writes](#when-it-writes)). To have prices from the start and beyond the held list, choose **Nord Pool** or **EPEX Spot** (both HACS) as the price sensor: they read the day-ahead market prices themselves and keep working when a supplier's service is down. With your supplier's surcharge set as in [Your tariff](#your-tariff), they give the same import price.
 
 #### Your tariff
 
@@ -1146,10 +1150,12 @@ At one sample a second a day of recording is roughly 86,000 rows and some 15 MB.
 
 ## Tests
 
-Since v1.6.8 the repository has a `tests/` folder. The tests pin four things:
+Since v1.6.8 the repository has a `tests/` folder. The tests pin six things:
 
 - **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again. The order decides what the battery keeps in flash.
 - **A device restart**: recognised from `messageId` or `smartMode`, recorded, shown as a repair in standby, and never answered with a write; a report that is only late is not a restart, and neither is `messageId` turning from 255 to 0.
+- **Prices held through an outage** (v1.6.9): a price list once read carries the day plan when the sensor drops out or gives a shorter list, until it runs out; a list that reaches as far replaces it.
+- **The dashboard template** (v1.6.9): the version tile next to *Error*, and the status card naming the controller entity once.
 - **A meter recognised by its report** (v1.6.7, issue #7): the Smart Meter 3CT without `meterType` is a meter, the P1 meter is unchanged, and a battery stays a battery, also without `product`.
 - **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
 
@@ -1234,6 +1240,16 @@ Status: tested on a simulator, not yet with real batteries. Testers with two or 
 ## Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.9 — Price Control holds the last prices
+
+The control loop decides as before. After updating, restart Home Assistant; to get the version tile and the shorter status card, tick *Replace the existing dashboard* under the battery's **Configure**.
+
+- **Prices held through an outage.** When the price sensor becomes unavailable, loses its list or gives a shorter one, Price Control carries on with the last list it read until that list has run out, instead of falling back to the in-between mode while the prices of the rest of the day were already known. The current price comes from the held list too, so *Import price*, *Export price* and the realized margin keep a value. A new list that reaches at least as far ahead replaces the held one. The status keeps showing the band; the new attributes `prices_held` and `prices_held_until` show when it runs on a held list. Nothing is stored across a restart. See [When it writes](#when-it-writes).
+- **The version that runs, on the dashboard.** *Controller status* carries the attribute `integration_version` (not recorded), and the first tab shows it as the tile *Integration*, next to *Error*. HACS shows the version it last downloaded, which differs after a manual install; see [Installation via HACS](#installation-via-hacs).
+- **A shorter status card.** The text card under *Operation mode* names the controller entity once; it shows the same.
+- **Docs: Tibber via EPEX Spot**, tested by a user; EPEX Spot *Market price* can be all-in; rebuilding the dashboard with *Replace the existing dashboard*. See [Other price sources](#other-price-sources-epex-spot-zonneplan-and-more) and [Dashboard](#dashboard).
+- **Tests.** `tests/test_pricecontrol.py`: an outage, a source that drops tomorrow again, a held list that runs out, and the new day at midnight. `tests/test_dashboard.py`: the version tile, the status card and the version attribute.
 
 ### v1.6.8 — What happens with a Zendure firmware upgrade
 

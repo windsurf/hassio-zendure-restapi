@@ -316,7 +316,12 @@
           "protecting": "Beskytter",
           "error": "Fejl"
         },
-        "name": "Regulatorstatus"
+        "name": "Regulatorstatus",
+        "state_attributes": {
+          "integration_version": {
+            "name": "Integrationsversion"
+          }
+        }
       },
       "external_status": {
         "state": {
@@ -352,6 +357,12 @@
               "energi_data_service": "Energi Data Service",
               "other": "anden prisliste"
             }
+          },
+          "prices_held": {
+            "name": "Priser bevaret"
+          },
+          "prices_held_until": {
+            "name": "Priser bevaret til"
           }
         }
       },

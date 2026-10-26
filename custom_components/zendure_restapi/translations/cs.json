@@ -316,7 +316,12 @@
           "protecting": "Ochrana",
           "error": "Chyba"
         },
-        "name": "Stav regulátoru"
+        "name": "Stav regulátoru",
+        "state_attributes": {
+          "integration_version": {
+            "name": "Verze integrace"
+          }
+        }
       },
       "external_status": {
         "state": {
@@ -352,6 +357,12 @@
               "energi_data_service": "Energi Data Service",
               "other": "jiný ceník"
             }
+          },
+          "prices_held": {
+            "name": "Ceny podrženy"
+          },
+          "prices_held_until": {
+            "name": "Ceny podrženy do"
           }
         }
       },

@@ -316,7 +316,12 @@
           "protecting": "Skyddar",
           "error": "Fel"
         },
-        "name": "Regulatorstatus"
+        "name": "Regulatorstatus",
+        "state_attributes": {
+          "integration_version": {
+            "name": "Integrationsversion"
+          }
+        }
       },
       "external_status": {
         "state": {
@@ -352,6 +357,12 @@
               "energi_data_service": "Energi Data Service",
               "other": "annan prislista"
             }
+          },
+          "prices_held": {
+            "name": "Priser behållna"
+          },
+          "prices_held_until": {
+            "name": "Priser behållna till"
           }
         }
       },

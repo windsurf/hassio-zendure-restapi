@@ -316,7 +316,12 @@
           "protecting": "Protection",
           "error": "Erreur"
         },
-        "name": "État du régulateur"
+        "name": "État du régulateur",
+        "state_attributes": {
+          "integration_version": {
+            "name": "Version de l'intégration"
+          }
+        }
       },
       "external_status": {
         "state": {
@@ -352,6 +357,12 @@
               "energi_data_service": "Energi Data Service",
               "other": "autre liste de prix"
             }
+          },
+          "prices_held": {
+            "name": "Prix conservés"
+          },
+          "prices_held_until": {
+            "name": "Prix conservés jusqu'à"
           }
         }
       },

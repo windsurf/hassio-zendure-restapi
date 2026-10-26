@@ -61,6 +61,13 @@
               "type": "tile",
               "entity": "binary_sensor.zendure_solarflow_3000_mix_ac_error",
               "icon": "mdi:alert-circle-outline"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.zendure_solarflow_3000_mix_ac_controller_status",
+              "name": "Integration",
+              "icon": "mdi:tag-outline",
+              "state_content": "integration_version"
             }
           ]
         },
@@ -90,7 +97,7 @@
             },
             {
               "type": "markdown",
-              "content": "{% set s = states('sensor.zendure_solarflow_3000_mix_ac_controller_status') %}\n{% set a = state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'reason') %}\n\n**Status** {{ s }} - {{ a }}\n\n**Direction** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'direction') }} | **Target** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'target_power') }} W\n\n**Grid** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_power') }} W | **Battery** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'battery_power') }} W\n\n**Meter** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_active') }} | **Foreign writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'foreign_writes') }} | **Trim writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'trim_writes') }}\n",
+              "content": "{% set c = 'sensor.zendure_solarflow_3000_mix_ac_controller_status' %}\n**Status** {{ states(c) }} - {{ state_attr(c, 'reason') }}\n\n**Direction** {{ state_attr(c, 'direction') }} | **Target** {{ state_attr(c, 'target_power') }} W\n\n**Grid** {{ state_attr(c, 'meter_power') }} W | **Battery** {{ state_attr(c, 'battery_power') }} W\n\n**Meter** {{ state_attr(c, 'meter_active') }} | **Foreign writes** {{ state_attr(c, 'foreign_writes') }} | **Trim writes** {{ state_attr(c, 'trim_writes') }}\n",
               "grid_options": {
                 "rows": "auto",
                 "columns": "full"

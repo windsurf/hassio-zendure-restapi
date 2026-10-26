@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.8
+# ZENDURE RESTAPI DASHBOARD - v1.6.9
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -160,6 +160,11 @@ views:
       name:
         type: entity
       icon: mdi:alert-circle-outline
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_controller_status
+      name: Integration
+      icon: mdi:tag-outline
+      state_content: integration_version
   - type: grid
     column_span: 2
     cards:
@@ -176,16 +181,14 @@ views:
         entity: binary_sensor.zendure_solarflow_3000_mix_ac_second_controller
     - type: markdown
       content: |
-        {% set s = states('sensor.zendure_solarflow_3000_mix_ac_controller_status') %}
-        {% set a = state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'reason') %}
+        {% set c = 'sensor.zendure_solarflow_3000_mix_ac_controller_status' %}
+        **Status** {{ states(c) }} - {{ state_attr(c, 'reason') }}
 
-        **Status** {{ s }} - {{ a }}
+        **Direction** {{ state_attr(c, 'direction') }} | **Target** {{ state_attr(c, 'target_power') }} W
 
-        **Direction** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'direction') }} | **Target** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'target_power') }} W
+        **Grid** {{ state_attr(c, 'meter_power') }} W | **Battery** {{ state_attr(c, 'battery_power') }} W
 
-        **Grid** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_power') }} W | **Battery** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'battery_power') }} W
-
-        **Meter** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'meter_active') }} | **Foreign writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'foreign_writes') }} | **Trim writes** {{ state_attr('sensor.zendure_solarflow_3000_mix_ac_controller_status', 'trim_writes') }}
+        **Meter** {{ state_attr(c, 'meter_active') }} | **Foreign writes** {{ state_attr(c, 'foreign_writes') }} | **Trim writes** {{ state_attr(c, 'trim_writes') }}
       grid_options:
         rows: auto
         columns: full

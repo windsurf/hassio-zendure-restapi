@@ -32,7 +32,11 @@ default: an automation or planner that already steers the Operation mode
 stays the only one that does.
 
 Without a usable price, or a day plan without a price list or battery data,
-the target is the in-between mode. A
+the target is the in-between mode. A price list once read is held when the
+sensor drops out or shrinks (v1.6.9): the plan and the current price carry on
+from it until its last period has passed. The status keeps showing the band;
+the attributes prices_held and prices_held_until say that it runs on the held
+list. Nothing is stored: after a restart there is nothing to hold. A
 cheap price at or above the expensive one is treated the same way: the two
 limits contradict each other, so neither applies.
 """
@@ -94,6 +98,7 @@ from .dayplan import (
     ACTION_CHARGE,
     ACTION_DISCHARGE,
     Battery,
+    Period,
     Plan,
     Tariff,
     ahead,
@@ -211,6 +216,11 @@ class PriceControl:
         # and tomorrow (v1.6.6): [(start, import, export)].
         self.price_curve: list[tuple[Any, float, float]] = []
         self.plan: Plan | None = None
+        # The last usable price list and its format (v1.6.9): held while the
+        # sensor gives none, or a shorter one, until it has run out.
+        self._held: list[Period] = []
+        self._held_format: str | None = None
+        self.prices_held = False
         self._generation = 0
         # Decision and Net metering as last seen; None until the first update,
         # so a restart never overwrites the modes.
@@ -273,6 +283,9 @@ class PriceControl:
                 self._unsub_price()
                 self._unsub_price = None
             self._entity = entity
+            # Another sensor: what was held belonged to the old one.
+            self._held = []
+            self._held_format = None
             if entity:
                 self._unsub_price = async_track_state_change_event(
                     self.hass, [entity], self._on_price
@@ -384,9 +397,31 @@ class PriceControl:
 
     # ── Decision ─────────────────────────────────────────────────────────
 
-    def _plan_inputs(self, tariff: Tariff, attributes: dict[str, Any]) -> tuple | str:
+    def _price_list(self, attributes: dict[str, Any], now: Any) -> list[Period]:
+        """The price list to work with: the sensor's, or the one held (v1.6.9).
+
+        A fresh list replaces the held one when it reaches at least as far
+        ahead, so a corrected list or the new day at midnight is taken over,
+        and a source that drops tomorrow again is not. An empty or shorter
+        list leaves the held one in use while it still has periods ahead.
+        """
+        fresh = read_prices(attributes)
+        if fresh and (not self._held or fresh[-1].end >= self._held[-1].end):
+            self._held = fresh
+            self._held_format = price_format(attributes)
+            self.prices_held = False
+            return fresh
+        if not ahead(self._held, now):
+            self._held = []
+            self._held_format = None
+            self.prices_held = False
+            return fresh
+        self.prices_held = True
+        return self._held
+
+    def _plan_inputs(self, tariff: Tariff, periods: list[Period]) -> tuple | str:
         """What the day plan needs, or the status when it cannot plan."""
-        periods = ahead(read_prices(attributes), dt_util.now())
+        periods = ahead(periods, dt_util.now())
         if not periods:
             return PRICE_STATUS_NO_PRICE
         battery = self._battery_input()
@@ -407,11 +442,18 @@ class PriceControl:
         The day plan is worked out in the executor: two days of quarters take
         tens of milliseconds, too long for the event loop on a small machine.
         """
+        now = dt_util.now()
         self.price, attributes = self._read_price()
-        self.price_format = price_format(attributes)
+        periods = self._price_list(attributes, now)
+        self.price_format = self._held_format if self.prices_held else price_format(attributes)
         if self.price is not None:
             # Per kWh in the currency's main unit, whatever the sensor's scale.
             self.price = round(self.price * price_scale(attributes), 6)
+        elif self.prices_held:
+            # The sensor gives no price: the held period of this moment.
+            current = next((p for p in self._held if p.start <= now < p.end), None)
+            if current is not None:
+                self.price = round(current.value, 6)
         tariff = self.tariff()
         if self.price is None:
             self.import_price = self.export_value = None
@@ -425,7 +467,7 @@ class PriceControl:
                 round(tariff.import_price(tariff.spot(period.value)), 5),
                 round(tariff.export_value(tariff.spot(period.value)), 5),
             )
-            for period in read_prices(attributes)
+            for period in periods
         ]
 
         self._generation += 1
@@ -439,7 +481,7 @@ class PriceControl:
                 )
             )
             return
-        inputs = self._plan_inputs(tariff, attributes)
+        inputs = self._plan_inputs(tariff, periods)
         if isinstance(inputs, str):
             self.plan = None
             self._apply(inputs)
@@ -505,6 +547,10 @@ class PriceControl:
             "expensive_price": self._settings.get_float(OPT_PRICE_EXPENSIVE),
             "import_price": self.import_price,
             "export_value": self.export_value,
+            "prices_held": self.prices_held,
+            "prices_held_until": (
+                self._held[-1].end.isoformat() if self.prices_held and self._held else None
+            ),
         }
 
     def _price_name(self) -> str | None:

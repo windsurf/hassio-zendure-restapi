@@ -316,7 +316,12 @@
           "protecting": "Beschermen",
           "error": "Fout"
         },
-        "name": "Regelaarstatus"
+        "name": "Regelaarstatus",
+        "state_attributes": {
+          "integration_version": {
+            "name": "Integratieversie"
+          }
+        }
       },
       "external_status": {
         "state": {
@@ -352,6 +357,12 @@
               "energi_data_service": "Energi Data Service",
               "other": "andere prijslijst"
             }
+          },
+          "prices_held": {
+            "name": "Prijzen vastgehouden"
+          },
+          "prices_held_until": {
+            "name": "Prijzen vastgehouden tot"
           }
         }
       },

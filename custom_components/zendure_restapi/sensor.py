@@ -35,6 +35,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    INTEGRATION_VERSION,
     CONF_MODEL,
     DEVICE_TYPE_METER,
     DOMAIN,
@@ -589,8 +590,12 @@ class ZendureControllerSensor(ZendureSensor):
     """What the controller last decided, with the reasoning as attributes.
 
     This is the entity to look at when the battery does something unexpected:
-    the state says what happened, the attributes say why.
+    the state says what happened, the attributes say why. It also carries the
+    version of the integration that runs (v1.6.9): HACS shows the version it
+    last downloaded, which differs after a manual install.
     """
+
+    _unrecorded_attributes = frozenset({"integration_version"})
 
     def __init__(
         self,
@@ -613,7 +618,7 @@ class ZendureControllerSensor(ZendureSensor):
 
     @property
     def extra_state_attributes(self):
-        return self._controller.state.attributes
+        return {**self._controller.state.attributes, "integration_version": INTEGRATION_VERSION}
 
 
 # ── Derived power ────────────────────────────────────────────────────────
