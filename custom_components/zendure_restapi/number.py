@@ -33,10 +33,17 @@ It is stored as whole percent so it travels the same integer path as every
 other setting.
 
 **Ceilings are read from the device, not hard-coded.** ``chargeMaxLimit`` bounds
-the charge side and ``inverseMaxPower`` the discharge side. Both are writable,
-so the app is not needed to change them. Their values differ per device and per
-configuration — on one installation they were observed at 800 W and later at
-3000 and 2400 W — which is exactly why a fixed figure would be wrong.
+the charge side and ``inverseMaxPower`` the discharge side. Their values differ
+per device and per configuration — on one installation they were observed at
+800 W and later at 3000 and 2400 W — which is exactly why a fixed figure would
+be wrong.
+
+**The Inverter power limit is not raised from here (v1.6.10).**
+``inverseMaxPower`` is the battery's ceiling for feeding into the grid. It
+follows the grid code and what is registered with the grid operator, and it
+holds when Home Assistant is not running. It can be lowered from Home Assistant;
+raising it goes through the Zendure app (Safe power setting). Without a reported
+value nothing is written, since a raise could not be ruled out.
 """
 
 from __future__ import annotations
@@ -53,6 +60,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
@@ -214,6 +222,10 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
+# The battery's ceiling for feeding into the grid: lowered here, never raised.
+INVERTER_LIMIT_KEY = "inverseMaxPower"
+
+
 class ZendureNumber(ZendureEntity, NumberEntity):
     """Writable numeric property."""
 
@@ -222,6 +234,11 @@ class ZendureNumber(ZendureEntity, NumberEntity):
     @property
     def native_max_value(self) -> float:
         """Ceiling published by the device, falling back to the static value."""
+        if self.entity_description.key == INVERTER_LIMIT_KEY:
+            # The Inverter power limit is its own ceiling: never raised from here.
+            current = self.native_value
+            if current is not None and current > 0:
+                return current
         max_key = self.entity_description.max_key
         if max_key:
             reported = (self.coordinator.data or {}).get(max_key)
@@ -245,6 +262,19 @@ class ZendureNumber(ZendureEntity, NumberEntity):
         return round(scaled, 1)
 
     async def async_set_native_value(self, value: float) -> None:
+        key = self.entity_description.key
+        if key == INVERTER_LIMIT_KEY:
+            before = self.native_value
+            # Without a reported value it cannot be told whether this raises
+            # it: nothing is written then. Same text as v1.7.3.
+            if before is None or value > before:
+                raise HomeAssistantError(
+                    "The Inverter power limit is the battery's ceiling for feeding into the grid, set by the "
+                    "grid code and your registration with the grid operator. "
+                    + ("The battery has not reported it yet, so a change cannot be checked; try again once it has. "
+                       if before is None else f"It can be lowered here, not raised above {before:g} W: ")
+                    + "Raise it in the Zendure app (Safe power setting)."
+                )
         raw = int(round(value / self.entity_description.scale))
         try:
             await self.coordinator.async_write(self.entity_description.key, raw)

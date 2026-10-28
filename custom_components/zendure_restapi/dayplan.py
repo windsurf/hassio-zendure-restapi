@@ -39,7 +39,7 @@ fixed prices earned EUR 0.21. Under the 2027 rules it earned EUR 0.83 a day.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Iterable
 
@@ -166,14 +166,24 @@ class Plan:
 
 
 def _as_datetime(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value
+    """A start or end as a moment with a fixed UTC offset (v1.6.10).
+
+    Nord Pool gives datetimes in Home Assistant's own time zone. Python compares
+    and subtracts two of those by wall clock and ignores `fold`, so on the night
+    the clocks go back 02:00 summer time and 02:00 winter time read as the same
+    moment (an hour of prices lost), and on the night they go forward 01:45 to
+    03:00 reads as 75 minutes. With a fixed offset (+02:00, +01:00) every
+    comparison and duration is exact, as it already was for prices given as text.
+    """
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value)
+            value = datetime.fromisoformat(value)
         except ValueError:
             return None
-    return None
+    if not isinstance(value, datetime):
+        return None
+    offset = value.utcoffset()
+    return value if offset is None else value.astimezone(timezone(offset))
 
 
 def price_scale(attributes: dict[str, Any]) -> float:

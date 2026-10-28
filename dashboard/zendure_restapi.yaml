@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.9
+# ZENDURE RESTAPI DASHBOARD - v1.6.10
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -20,6 +20,12 @@
 #                     last 30 minutes live, 4 hours, 24
 #                     hours, 30 days of daily totals; then the
 #                     measured diagnostics (v1.6.3)
+#
+# INVERTER POWER LIMIT (v1.6.10):
+#   The slider reaches as far as the value the battery reports.
+#   It can be lowered here; raising the limit goes through the
+#   Zendure app (Safe power setting). The limit follows the grid
+#   code and the registration with the grid operator.
 #
 # INSTALL:
 #   Automatic: tick "Create the Zendure RestAPI dashboard" when

@@ -79,6 +79,8 @@ Forget it, and the integration notices: the binary sensor *Second controller* tu
 
 **The Safe power setting is the ceiling.** On the HEMS main page, the hexagon icon at the top right → *Home settings* → *Safe power setting* holds the maximum discharge and charge power, set for regulations and breaker capacity. The battery reports them as `inverseMaxPower` and `chargeMaxLimit`, shown in Home Assistant as *Inverter power limit* and *Charge power limit*, and *Max discharge power* and *Max charge power* of the controller cannot go above them.
 
+**The Inverter power limit is not raised from Home Assistant** (since v1.6.10). `inverseMaxPower` is the battery's ceiling for feeding into the grid: it follows the grid code and what is registered with your grid operator, and it holds when Home Assistant is not running. In Home Assistant its slider reaches as far as the value the battery reports. You can lower it there; a higher value, by hand or from an automation, is refused with a message and nothing is written. Home Assistant itself refuses a value above the slider's maximum, with its own message about the valid range, before the integration is asked. While the battery reports no value the entity is unavailable and a call to it does nothing. After lowering it, raise it again in the Zendure app (*Safe power setting*). The integration itself never writes it; the controller only reads it as its ceiling.
+
 **800 W is the default on purpose.** *Max discharge power* and *Max charge power* start at 800 W: in most countries, for safety reasons, that is what you may feed back through an ordinary wall socket. Above that the battery needs its own circuit: a fixed connection or a dedicated cable with its own fuse. Raise them only when your installation allows it, up to *Inverter power limit* and *Charge power limit*; for more than that, raise the Safe power setting in the app first.
 
 <img src="images/app_hems_settings_icon.png" width="400" alt="HEMS main page, settings icon"> <img src="images/app_safe_power_setting.png" width="400" alt="Safe power setting">
@@ -681,6 +683,10 @@ That is also what keeps the `writer` column in the trace meaningful: outside tha
 
 **Choosing standby again sends the command again** (v1.6.8). It skips what the battery already holds, so it writes nothing when nothing is wrong.
 
+**A limit this integration wrote is stopped even if the report does not show it yet** (v1.6.10). The report can lag behind a write. If you switch to standby right after the integration wrote a limit, the last report may still read 0; skipping the command as a no-op would leave the battery running at that limit while the status reads *passive*. When this integration wrote a limit, the command is therefore sent in full (both limits and `smartMode`), whatever the last report shows. A battery this integration wrote nothing to is still left alone when it already rests.
+
+**Not at startup** (v1.6.10). When standby is already the chosen mode as Home Assistant starts or the entry reloads, nothing is written: a battery that is only watched, or whose limits were set by hand, keeps them. The command goes out when you switch into standby from another mode, or choose standby again (also from an automation, for instance one that sets standby when Home Assistant starts). One exception: if this integration wrote a limit earlier in the same Home Assistant session and has not stopped it yet (a reload right after a smart mode ran), the command is still sent once, so the battery is not left charging or discharging at a limit nothing controls anymore.
+
 ### The smart control loop
 
 ```
@@ -1150,13 +1156,16 @@ At one sample a second a day of recording is roughly 86,000 rows and some 15 MB.
 
 ## Tests
 
-Since v1.6.8 the repository has a `tests/` folder. The tests pin six things:
+Since v1.6.8 the repository has a `tests/` folder. The tests pin nine things:
 
-- **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again. The order decides what the battery keeps in flash.
+- **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again; standby that is already chosen at startup writes nothing, and a stop after a limit it wrote is not skipped when the report still reads 0 (v1.6.10). The order decides what the battery keeps in flash.
 - **A device restart**: recognised from `messageId` or `smartMode`, recorded, shown as a repair in standby, and never answered with a write; a report that is only late is not a restart, and neither is `messageId` turning from 255 to 0.
 - **Prices held through an outage** (v1.6.9): a price list once read carries the day plan when the sensor drops out or gives a shorter list, until it runs out; a list that reaches as far replaces it.
 - **The dashboard template** (v1.6.9): the version tile next to *Error*, and the status card naming the controller entity once.
 - **A meter recognised by its report** (v1.6.7, issue #7): the Smart Meter 3CT without `meterType` is a meter, the P1 meter is unchanged, and a battery stays a battery, also without `product`.
+- **The change of clocks** (v1.6.10): the night with 25 hours and the night with 23 give every quarter once and a quarter of an hour long, with Nord Pool and with prices as text.
+- **The Inverter power limit** (v1.6.10): its slider reaches the reported value, a higher value is refused and not written, lowering is written, without a reported value nothing is written, and *Charge power limit* keeps its range.
+- **A former battery entry** (v1.6.10): a Smart Meter 3CT that was added as a battery loses the battery entities it no longer has; the meter's own entities, also the disabled ones, stay; the generic meter name has no brand in it.
 - **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
 
 Run them from the root of the repository:
@@ -1229,6 +1238,8 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 ---
 
+**Time axis on the day the clocks change.** On the two days a year when the clocks change (a day of 25 or of 23 hours), the time labels under a chart that starts at midnight, such as the day plan chart on *Price Control*, can be one hour off after the change. ApexCharts Card counts the labels from the start of the range in days of a fixed length. Only the labels are affected: the data, the *now* line and the tooltip, which is worked out per point, show the real time. The labels correct themselves as soon as the range no longer holds the change, for a chart of 48 hours from midnight at 00:00 the next day. At the change to summer time the labels are one hour early instead of late. Nothing in the integration is changed for this.
+
 ## Coming in 1.7: clusters
 
 Several Zendure batteries behind one grid connection work as one cluster: one controller regulates the net on the measured properties of each battery, with no fixed master/slave relation. Roles (primary, secondary) follow from the regulation at each moment. A single battery behaves as in 1.6.x; existing entities and automations keep working.
@@ -1240,6 +1251,19 @@ Status: tested on a simulator, not yet with real batteries. Testers with two or 
 ## Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.6.10 — The Inverter power limit is not raised from Home Assistant; standby leaves the battery alone at startup
+
+After updating, restart Home Assistant.
+
+- **Standby writes nothing at startup.** In standby, the integration used to stop the battery after every start of Home Assistant and every reload of the entry (both limits to 0, `smartMode` 0), because standby is the default mode. Now, when standby is already the chosen mode at startup, nothing is written: a battery that is only watched, or whose limits were set by hand, keeps them. Switching into standby from another mode, or choosing it again, stops the battery as before. If this integration wrote a limit earlier in the same Home Assistant session and has not stopped it yet, the stop is still sent once. See [Standby stops the battery, once](#standby-stops-the-battery-once). Thanks to the Home Assistant review.
+- **The stop is not skipped when the report lags.** When you switch to standby right after the integration wrote a limit, the last report can still read 0, and the stop was skipped as a no-op: the battery kept running at the limit while the status read *passive*. Now, when this integration wrote a limit, the stop is always sent in full. At startup nothing is owned yet, so standby that is already chosen still writes nothing.
+
+- **The Inverter power limit is lowered here, never raised.** `inverseMaxPower` is the battery's ceiling for feeding into the grid, set by the grid code and the registration with your grid operator. Its slider used to reach 5000 W, and any value was written. Now the slider reaches as far as the value the battery reports; a higher value, by hand or from an automation, is refused with a message and nothing is written. Without a reported value nothing is written either. Raise it in the Zendure app (*Safe power setting*). An automation that raises it gets an error from now on. See [The Safe power setting is the ceiling](#before-you-start).
+- **The day plan across the change of clocks.** With Nord Pool as the price sensor, the night the clocks go back lost an hour of prices (02:00 summer time and 02:00 winter time read as the same quarter), and the night they go forward made one quarter 75 minutes long. Every price time is now read as a moment with its own UTC offset, so both nights give each quarter once, a quarter of an hour long. Prices given as text with an offset (EPEX Spot, Zonneplan and others) were already right. The control loop was not affected.
+- **Docs: the time axis on the day the clocks change** is added to [Known limitations](#known-limitations): the labels of a chart that starts at midnight can be one hour off after the change; the data and the *now* line are right.
+- **A Smart Meter 3CT that was added as a battery.** Before v1.6.7 the 3CT was added as a battery. Since v1.6.7 its entry turns into a meter entry by itself, but the battery entities it had (controller status, operation mode, the power and buffer settings) stayed behind as *unavailable*. They are now removed when the entry loads. The meter's own entities stay, and so do the ones that are disabled by default. A meter you add now is called *Zendure Meter*; it was *Zendure Zendure Meter*. Entries made earlier keep their names and entity ids.
+- **Tests.** `tests/test_dst.py`: both nights, with Nord Pool and with prices as text. `tests/test_inverter_limit.py`: the slider, a raise refused, a lower value written, no reported value (with the message that says the battery has not reported it yet), and *Charge power limit* unchanged. `tests/test_leftovers.py`: the battery part of a former battery entry is removed, the meter stays. `tests/test_meter_probe.py`: the generic meter name has no brand in it. `tests/test_write_contract.py`: standby at startup writes nothing, a reload after an own limit stops it once, switching to standby still stops, a limit written moments ago is stopped even if the report reads 0, and a battery that rests is still left alone.
 
 ### v1.6.9 — Price Control holds the last prices
 

@@ -43,6 +43,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
@@ -188,6 +189,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Before the platforms: the pack entities come up under their new ids.
     migrate_pack_entity_ids(hass, entry.entry_id)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if coordinator.device_type == DEVICE_TYPE_METER:
+        _remove_battery_leftovers(hass, entry)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     # The dashboard needs the entities registered and the frontend up, hence
@@ -352,6 +355,39 @@ def _as_int(value, default: int) -> int:
 
 
 @callback
+def battery_leftovers(entries: list[Any], live: set[str]) -> list[str]:
+    """The entity ids a meter entry still holds from when it was set up as a battery.
+
+    A Smart Meter 3CT added before v1.6.7 became a battery entry, with a
+    controller, an operation mode and the settings of one. Once the entry is a
+    meter those entities are gone for good and read "unavailable". They are
+    recognised by the operation mode select, which only a battery has. An
+    entity that is live, or disabled on purpose (the meter's own timestamp and
+    message id), stays.
+    """
+    if not any((entity.unique_id or "").endswith("_operation_mode") for entity in entries):
+        return []
+    return [
+        entity.entity_id
+        for entity in entries
+        if entity.entity_id not in live and entity.disabled_by is None
+    ]
+
+
+def _remove_battery_leftovers(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove what a battery entry left behind once it is a meter (v1.6.10)."""
+    registry = er.async_get(hass)
+    live = {
+        entity_id
+        for platform in entity_platform.async_get_platforms(hass, DOMAIN)
+        if platform.config_entry is entry
+        for entity_id in platform.entities
+    }
+    for entity_id in battery_leftovers(er.async_entries_for_config_entry(registry, entry.entry_id), live):
+        registry.async_remove(entity_id)
+        _LOGGER.info("Removed %s: %s is a meter, not a battery", entity_id, entry.title)
+
+
 def _migrate_external_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Move an external meter from the battery's options into its own entry.
 

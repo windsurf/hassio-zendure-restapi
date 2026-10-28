@@ -112,6 +112,13 @@ from .trace import ZendureTrace
 
 _LOGGER = logging.getLogger(__name__)
 
+# Batteries on which this integration wrote a limit above 0 in this Home
+# Assistant session that standby has not stopped yet, by entry. Kept at module
+# level so it outlives a reload of the entry, not a restart of Home Assistant
+# (v1.6.10): standby that is already chosen at startup writes nothing, unless a
+# limit this integration wrote is still running.
+_OPEN_LIMITS: set[str] = set()
+
 
 @dataclass
 class ControllerState:
@@ -206,8 +213,9 @@ class ZendureController:
         self._last_direction = "none"
         self._idle_since: Any = None
         # Whether the one-time standby command has been sent for this stay in
-        # standby. Cleared on the way out, so re-entering sends it again.
-        self._standby_sent = False
+        # standby. Cleared on the way out, so re-entering sends it again. None
+        # until the first standby cycle after setup decides it (v1.6.10).
+        self._standby_sent: bool | None = None
 
         # ── Trim loop ────────────────────────────────────────────────
         # The single contract point between the two loops. The mode loop sets
@@ -862,8 +870,23 @@ class ZendureController:
         # a second later, and the two produce a square wave in grid power at
         # the polling period. After this command the controller is passive
         # again and whatever the manager does next is its own business.
+        if self._standby_sent is None:
+            # First standby cycle since setup: standby was already chosen, so
+            # the battery is left as it is (v1.6.10), unless a limit this
+            # integration wrote earlier in this session is still running.
+            self._standby_sent = self._stop_key() not in _OPEN_LIMITS
+            if self._standby_sent:
+                _LOGGER.debug("standby at startup: writing nothing, the battery keeps its limits")
         if not self._standby_sent:
-            await self._write_many([("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)], data)
+            # When this controller set a limit, the stop is sent even if the
+            # last poll already reads 0: a limit written moments ago may not
+            # be reported yet, and skipping the stop as a no-op leaves it
+            # running (v1.6.10, as v1.7.3). At startup nothing is owned yet,
+            # so standby that is already chosen still writes nothing.
+            await self._write_many(
+                [("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)], data, force=self._owns_limits
+            )
+            _OPEN_LIMITS.discard(self._stop_key())
             self._standby_sent = True
             self._owns_limits = False
             self._last_direction = "none"
@@ -2011,9 +2034,9 @@ class ZendureController:
         except (TypeError, ValueError):
             return False
 
-    async def _write(self, key: str, value: Any, data: dict[str, Any]) -> None:
-        """Write one property, skipping no-ops."""
-        if self._holds(data, key, value):
+    async def _write(self, key: str, value: Any, data: dict[str, Any], force: bool = False) -> None:
+        """Write one property, skipping no-ops unless forced."""
+        if not force and self._holds(data, key, value):
             _LOGGER.debug("skip %s=%s, device already holds it", key, value)
             return
         _LOGGER.debug("write %s: %s -> %s", key, data.get(key), value)
@@ -2021,19 +2044,21 @@ class ZendureController:
         self.measure.on_command(dt_util.utcnow(), key, _as_int(value))
         self._written(key, value, data)
 
-    async def _write_many(self, items: list[tuple[str, Any]], data: dict[str, Any]) -> None:
+    async def _write_many(
+        self, items: list[tuple[str, Any]], data: dict[str, Any], force: bool = False
+    ) -> None:
         """Write properties that belong together in one request, skipping no-ops.
 
         One left over goes the single way. Should the device refuse a request
         with several properties, they go one at a time from then on, as they
         did until v1.6.3.
         """
-        changes = {key: value for key, value in items if not self._holds(data, key, value)}
+        changes = {key: value for key, value in items if force or not self._holds(data, key, value)}
         if not changes:
             return
         if len(changes) == 1 or not self._multi_write:
             for key, value in changes.items():
-                await self._write(key, value, data)
+                await self._write(key, value, data, force=force)
             return
         _LOGGER.debug("write %s", changes)
         try:
@@ -2047,7 +2072,7 @@ class ZendureController:
             )
             self._multi_write = False
             for key, value in changes.items():
-                await self._write(key, value, data)
+                await self._write(key, value, data, force=force)
             return
         self.measure.on_request(dt_util.utcnow(), {k: _as_int(v) for k, v in changes.items()})
         for key, value in changes.items():
@@ -2069,6 +2094,17 @@ class ZendureController:
                 self.measure.on_write(
                     dt_util.utcnow(), key, written, self._meter_reading()[0]
                 )
+                if written > 0:
+                    _OPEN_LIMITS.add(self._stop_key())
+
+    def _stop_key(self) -> str:
+        """The battery in `_OPEN_LIMITS`: its entry, else its device."""
+        coordinator = self.coordinator
+        return str(
+            getattr(coordinator, "entry_id", None)
+            or getattr(coordinator, "device_id", None)
+            or id(coordinator)
+        )
 
     # ── State ────────────────────────────────────────────────────────────
 

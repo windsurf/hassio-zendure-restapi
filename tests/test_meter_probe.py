@@ -56,3 +56,10 @@ def test_a_battery_without_product_is_still_a_battery():
     report["properties"] = {**BATTERY["properties"], "total_power": 0}
     assert not is_meter_report(report)
     assert ProbeResult(report).device_type == DEVICE_TYPE_BATTERY
+
+
+def test_the_generic_meter_name_has_no_brand_in_it():
+    """The title and the device name put "Zendure" in front: not "Zendure Zendure Meter" (v1.6.10)."""
+    assert UNKNOWN_METER == "Meter"
+    assert f"Zendure {ProbeResult(METER_3CT).model}" == "Zendure Meter"
+    assert f"Zendure {ProbeResult(METER_P1).model}" == "Zendure P1 Meter (3-phase)"

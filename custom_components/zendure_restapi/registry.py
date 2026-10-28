@@ -18,7 +18,10 @@ from __future__ import annotations
 import re
 
 UNKNOWN_MODEL = "SolarFlow (generic)"
-UNKNOWN_METER = "Zendure Meter"
+# Without the brand: the entry title and the device name put "Zendure" in front
+# (v1.6.10; "Zendure Zendure Meter" before). Entries made earlier keep the model
+# they stored, so their names and entity ids stay as they were.
+UNKNOWN_METER = "Meter"
 
 # Normalised token -> display name.
 MODEL_NAMES: dict[str, str] = {
