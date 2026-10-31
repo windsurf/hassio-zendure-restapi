@@ -8,7 +8,8 @@
           "zendure": "Baterie Zendure — začněte zde (také elektroměr P1 Zendure)",
           "external_meter": "Externí elektroměr přes IP — nejrychlejší (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externí elektroměr z Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Řízení podle ceny (dynamické tarify)"
+          "price_control": "Řízení podle ceny — nabíjet, když je elektřina levná, vybíjet, když je drahá (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Bateriový cluster — až tři baterie, jedna na fázi, jako jeden systém"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "Elektroměr ukazuje dodávku kladně (obrátit znaménko)"
         }
+      },
+      "battery_cluster": {
+        "title": "Bateriový cluster",
+        "description": "U každé zapojené baterie zadejte fázi, ke které je připojena: jedna baterie na fázi. Zvolte *neúčastní se*, chcete-li baterii vynechat. Buffery, prahy spuštění a měřič se převezmou z první baterie; skupina začíná v pohotovosti. Baterie lze později pod clusterem přidávat, měnit nebo odebírat."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "Elektroměr neodpovídá. Zapněte místní API v aplikaci HomeWizard Energy a zkuste to znovu.",
       "not_a_power_sensor": "Tento senzor teď nemá hodnotu výkonu (jednotka W nebo kW, číselný stav).",
       "same_entity": "Senzor dodávky musí být jiný než senzor výkonu.",
-      "no_power_total": "Žádný senzor výkonu tohoto zařízení nedává součet sítě. Zvolte pak senzory ručně."
+      "no_power_total": "Žádný senzor výkonu tohoto zařízení nedává součet sítě. Zvolte pak senzory ručně.",
+      "no_member": "Zvolte fázi alespoň pro jednu baterii.",
+      "phase_taken": "Dvě baterie na jedné fázi: tato verze bere jednu baterii na fázi."
     },
     "abort": {
       "already_configured": "Toto zařízení je již nastaveno.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — čistý výkon sítě, odběr kladně:\n\n{sensors}\n\nNyní: **{reading}**. Se sluncem na panelech a malou spotřebou v domě by to měla být dodávka do sítě. Jsou-li odběr a dodávka obráceně, zaškrtněte políčko.",
         "data": {
           "export_positive": "Elektroměr ukazuje dodávku kladně (obrátit znaménko)"
+        }
+      },
+      "cluster": {
+        "title": "Bateriový cluster",
+        "description": "Provozní režim, buffery, prahy a zdroj měřiče jsou entity clusteru. Baterie jsou jeho podpoložky.",
+        "data": {
+          "external_meter": "Externí měřič"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Uvolněno",
           "blocked": "Blokováno",
           "protecting": "Ochrana",
-          "error": "Chyba"
+          "error": "Chyba",
+          "secondary": "Secondary"
         },
         "name": "Stav regulátoru",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Žádný plán",
           "cheap": "Levné",
           "between": "Mezi",
-          "expensive": "Drahé"
+          "expensive": "Drahé",
+          "paused": "Pozastaveno (koordinováno)"
         },
         "name": "Stav",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Ztracené zápisy"
+      },
+      "group_power": {
+        "name": "Výkon skupiny"
+      },
+      "group_state_of_charge": {
+        "name": "Stav nabití skupiny"
+      },
+      "members": {
+        "name": "Zapojené baterie"
+      },
+      "cluster_status": {
+        "name": "Stav",
+        "state": {
+          "standby": "Pohotovost",
+          "idle": "Nečinný",
+          "regulating": "Reguluje",
+          "concentrated": "Jedna baterie",
+          "reversing": "Změna směru",
+          "quick": "Plný výkon",
+          "meter_stale": "Žádný údaj měřiče"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Náklady na opotřebení"
+      },
+      "concentrate_below": {
+        "name": "Soustředit pod"
+      },
+      "redistribute_every": {
+        "name": "Přerozdělit každých"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Záznam trasování"
+      },
+      "take_part": {
+        "name": "Účastnit se"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Spotová cena s DPH",
         "spot": "Spotová cena bez DPH",
         "import_price": "Nákupní cena (celý tarif)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Neúčastní se",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} hlásí nové vlastnosti",
       "description": "{device} hlásí {keys}, které dříve nehlásil. Obvykle to následuje po aktualizaci firmwaru. Tato verze pro ně zatím nemá entitu. Stáhněte diagnostiku (stránka zařízení → Stáhnout diagnostiku) a nahlaste je v issue, aby mohly být přidány. Ignorujte tuto zprávu, chcete-li ji zavřít."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Baterie",
+      "initiate_flow": {
+        "user": "Přidat baterii"
+      },
+      "step": {
+        "user": {
+          "title": "Přidat baterii",
+          "description": "Baterie této integrace, která ještě nepatří ke clusteru, na fázi, která je ještě volná.",
+          "data": {
+            "battery_entry": "Baterie",
+            "phase": "Fáze",
+            "priority": "Priorita",
+            "max_share": "Maximální podíl"
+          },
+          "data_description": {
+            "priority": "1 až 9. Nejvyšší je primary; při shodě nejrychlejší naměřená baterie.",
+            "max_share": "Nejvyšší výkon ve wattech, který tato baterie ve skupině převezme, v obou směrech. 0 = její vlastní maximum."
+          }
+        },
+        "reconfigure": {
+          "title": "Baterie pod clusterem",
+          "description": "Fáze, priorita a nejvíce, co tato baterie smí ve skupině dodat nebo odebrat.",
+          "data": {
+            "phase": "Fáze",
+            "priority": "Priorita",
+            "max_share": "Maximální podíl"
+          },
+          "data_description": {
+            "priority": "1 až 9. Nejvyšší je primary; při shodě nejrychlejší naměřená baterie.",
+            "max_share": "Nejvyšší výkon ve wattech, který tato baterie ve skupině převezme, v obou směrech. 0 = její vlastní maximum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Všechny baterie už patří ke clusteru.",
+        "no_free_phase": "Každá fáze už má baterii.",
+        "reconfigure_successful": "Uloženo."
+      }
     }
   }
 }

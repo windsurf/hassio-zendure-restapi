@@ -29,6 +29,10 @@ first start.
 Since v1.5.3 there may be several external meters — a YouLess, a HomeWizard
 and a Home Assistant sensor side by side on one splitter, say — and each
 battery's `External meter` select says which of them it uses.
+
+Since v1.7.0 a battery cluster lets up to three batteries, one per phase,
+hold the grid at zero together: an entry of its own with a subentry per
+battery. The logic lives in cluster/ and member.py; here it is only wired up.
 """
 
 from __future__ import annotations
@@ -95,6 +99,18 @@ from .const import (
     CONF_METER_PLAN,
     CONF_SOURCE_DEVICE,
     SLOW_METER_SECONDS,
+    DEVICE_TYPE_CLUSTER,
+    MODE_STANDBY,
+    OPT_CHARGE_BUFFER,
+    OPT_CONCENTRATE_BELOW,
+    OPT_DISCHARGE_BUFFER,
+    OPT_OPERATION_MODE,
+    OPT_REDISTRIBUTE,
+    OPT_START_CHARGE_AT,
+    OPT_START_DISCHARGE_AT,
+    SIGNAL_CLUSTER,
+    SUBENTRY_BATTERY,
+    CLUSTER_KEY,
 )
 from .controller import ZendureController
 from .dashboard import EXISTS, async_create_dashboard, notify
@@ -103,7 +119,10 @@ from .coordinator import ZendureCoordinator
 from .entity import migrate_pack_entity_ids
 from .hadevice import MeterPlan
 from .p1meter import ADAPTERS, ExternalMeter
-from .settings import ZendureSettings
+from .cluster.contract import GroupSettings
+from .cluster.runtime import ClusterCoordinator
+from .member import ZendureMember
+from .settings import SettingsView, ZendureSettings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,6 +137,7 @@ PLATFORMS: list[Platform] = [
 # An external meter entry has no switches, selects or numbers of its own.
 EXTERNAL_PLATFORMS: list[Platform] = [Platform.SENSOR]
 PRICE_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT]
+CLUSTER_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT]
 
 RUNTIME_SUFFIX = "_runtime"
 
@@ -130,6 +150,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return await _async_setup_external(hass, entry)
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
         return await _async_setup_price(hass, entry)
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
+        return await _async_setup_cluster(hass, entry)
 
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
@@ -165,10 +187,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if coordinator.device_type != DEVICE_TYPE_METER:
         _migrate_external_options(hass, entry)
         settings = ZendureSettings(hass, entry)
-        controller = ZendureController(coordinator, settings)
+        # The controller reads through a view: its own settings, or the
+        # cluster's while the battery takes part (v1.7.0).
+        view = SettingsView(settings)
+        controller = ZendureController(coordinator, view)
         store[f"{entry.entry_id}{RUNTIME_SUFFIX}"] = {
             "settings": settings,
+            "view": view,
             "controller": controller,
+            # Whether its Take part switch is made: it belongs to the cluster.
+            "take_part": is_member(hass, entry.entry_id),
         }
 
         await controller.async_load_measure()
@@ -184,6 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         entry.async_on_unload(coordinator.async_add_listener(_on_update))
 
+    _link_cluster(hass)
     _link_meters(hass)
 
     # Before the platforms: the pack entities come up under their new ids.
@@ -235,6 +264,141 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(async_at_started(hass, _start))
     entry.async_on_unload(price.async_stop)
     return True
+
+
+# ── Battery cluster (v1.7.0) ─────────────────────────────────────────
+
+
+def _member_ids(entry: ConfigEntry) -> list[str]:
+    """The battery entries under a cluster entry, in subentry order."""
+    return [
+        str(sub.data.get(CONF_BATTERY_ENTRY))
+        for sub in entry.subentries.values()
+        if sub.subentry_type == SUBENTRY_BATTERY and sub.data.get(CONF_BATTERY_ENTRY)
+    ]
+
+
+def cluster_entry(hass: HomeAssistant) -> ConfigEntry | None:
+    """The cluster entry, loaded or not."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
+            return entry
+    return None
+
+
+def is_member(hass: HomeAssistant, battery_id: str) -> bool:
+    """Whether a battery entry belongs to the cluster, set up or not."""
+    entry = cluster_entry(hass)
+    return entry is not None and battery_id in _member_ids(entry)
+
+
+async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """The battery cluster: its own device, steering its batteries."""
+    store = hass.data.setdefault(DOMAIN, {})
+    settings = ZendureSettings(hass, entry)
+
+    def group_settings() -> GroupSettings:
+        return GroupSettings(
+            mode=str(settings.get(OPT_OPERATION_MODE)),
+            charge_buffer=settings.get_int(OPT_CHARGE_BUFFER),
+            discharge_buffer=settings.get_int(OPT_DISCHARGE_BUFFER),
+            start_charge_at=settings.get_int(OPT_START_CHARGE_AT),
+            start_discharge_at=settings.get_int(OPT_START_DISCHARGE_AT),
+            concentrate_below=settings.get_int(OPT_CONCENTRATE_BELOW),
+            redistribute_s=settings.get_int(OPT_REDISTRIBUTE),
+        )
+
+    signal = f"{SIGNAL_CLUSTER}_{entry.entry_id}"
+    cluster = ClusterCoordinator(hass, group_settings, lambda: async_dispatcher_send(hass, signal))
+    cluster.entry = entry
+    cluster.settings = settings
+    cluster.signal = signal
+    store[entry.entry_id] = cluster
+    store[CLUSTER_KEY] = entry.entry_id
+    known = {sid: dict(sub.data) for sid, sub in entry.subentries.items()}
+
+    # A battery parks in standby when it joins: should the cluster go,
+    # it stands still until its owner chooses again.
+    for battery_id in _member_ids(entry):
+        battery = hass.config_entries.async_get_entry(battery_id)
+        if battery is not None and battery.options.get(OPT_OPERATION_MODE, MODE_STANDBY) != MODE_STANDBY:
+            hass.config_entries.async_update_entry(
+                battery, options={**battery.options, OPT_OPERATION_MODE: MODE_STANDBY}
+            )
+
+    # A battery set up without its Take part switch, or with one it no longer
+    # needs, is reloaded so the switch comes or goes. At a start of Home
+    # Assistant they already match, because the switch follows the entries.
+    _reload_mismatched(hass, set(_member_ids(entry)))
+
+    _link_cluster(hass)
+    _link_meters(hass)
+    await hass.config_entries.async_forward_entry_setups(entry, CLUSTER_PLATFORMS)
+
+    async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        # A battery added, changed or removed: set up again. A setting: decide now.
+        now = {sid: dict(sub.data) for sid, sub in entry.subentries.items()}
+        if now != known:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+            return
+        _link_meters(hass)
+        await cluster.async_evaluate()
+
+    entry.async_on_unload(entry.add_update_listener(_changed))
+    cluster.start()
+    entry.async_on_unload(cluster.stop)
+    return True
+
+
+@callback
+def _link_cluster(hass: HomeAssistant) -> None:
+    """Give every battery under the cluster its member, take it from the others.
+
+    Runs on every setup and unload of a battery or the cluster, like
+    _link_meters: whichever comes up last completes the pairing.
+    """
+    store = hass.data.get(DOMAIN, {})
+    cluster = store.get(store.get(CLUSTER_KEY) or "")
+    wanted: dict[str, Any] = {}
+    if isinstance(cluster, ClusterCoordinator):
+        for sid, sub in cluster.entry.subentries.items():
+            if sub.subentry_type == SUBENTRY_BATTERY and sub.data.get(CONF_BATTERY_ENTRY):
+                wanted[str(sub.data[CONF_BATTERY_ENTRY])] = (sid, sub)
+
+    members: list[ZendureMember] = []
+    for key, runtime in list(store.items()):
+        if not key.endswith(RUNTIME_SUFFIX) or not isinstance(runtime, dict):
+            continue
+        battery_id = key[: -len(RUNTIME_SUFFIX)]
+        current: ZendureMember | None = runtime.get("member")
+        if battery_id not in wanted:
+            if current is not None:
+                current.leave()
+                runtime["member"] = None
+            continue
+        sid, sub = wanted[battery_id]
+        if current is None or current.key != sid or current.data != dict(sub.data):
+            if current is not None:
+                current.leave()
+            battery = hass.config_entries.async_get_entry(battery_id)
+            # Title plus serial tail: two of the same model share a title.
+            sn = str(battery.data.get(CONF_SN) or "") if battery is not None else ""
+            name = sub.title.rsplit(" · ", 1)[0]
+            if battery is not None:
+                name = f"{battery.title} (…{sn[-4:]})" if sn else battery.title
+            current = ZendureMember(
+                sid,
+                name,
+                dict(sub.data),
+                runtime["controller"],
+                runtime["view"],
+                runtime["settings"],
+            )
+            current.join(cluster.settings, cluster.entry.title, cluster.secondaries_against)
+            runtime["member"] = current
+        members.append(current)
+    if isinstance(cluster, ClusterCoordinator):
+        cluster.set_members(members)
 
 
 def _remove_retired(
@@ -475,7 +639,8 @@ def _link_meters(hass: HomeAssistant) -> None:
     for key, runtime in store.items():
         if not key.endswith(RUNTIME_SUFFIX):
             continue
-        choice = str(runtime["settings"].get(OPT_EXTERNAL_METER) or "")
+        # Through the view: a battery under the cluster uses its meter.
+        choice = str(runtime.get("view", runtime["settings"]).get(OPT_EXTERNAL_METER) or "")
         external = chosen_external(externals, choice)
         if external is None and len(externals) > 1 and choice != EXTERNAL_NONE:
             _LOGGER.warning(
@@ -510,9 +675,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     platforms = (
         EXTERNAL_PLATFORMS if kind == DEVICE_TYPE_EXTERNAL
         else PRICE_PLATFORMS if kind == DEVICE_TYPE_PRICE
+        else CLUSTER_PLATFORMS if kind == DEVICE_TYPE_CLUSTER
         else PLATFORMS
     )
     unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
+    if unloaded and kind == DEVICE_TYPE_CLUSTER:
+        store = hass.data.get(DOMAIN, {})
+        cluster = store.pop(entry.entry_id, None)
+        if cluster is not None:
+            cluster.stop()
+        if store.get(CLUSTER_KEY) == entry.entry_id:
+            store.pop(CLUSTER_KEY, None)
+        # The batteries return to their own settings, in standby.
+        _link_cluster(hass)
+        _link_meters(hass)
+        return unloaded
     if unloaded:
         store = hass.data.get(DOMAIN, {})
         store.pop(entry.entry_id, None)
@@ -525,8 +702,28 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             runtime["controller"].detach_meter()
             # Written before a reload sets the entry up again and reads it.
             await runtime["controller"].async_save_measure()
+        _link_cluster(hass)
         _link_meters(hass)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """A removed coordinator: reload its batteries, so their Take part switch goes."""
+    if entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_CLUSTER:
+        return
+    _reload_mismatched(hass, set())
+
+
+@callback
+def _reload_mismatched(hass: HomeAssistant, members: set[str]) -> None:
+    """Reload the batteries whose Take part switch does not match their membership."""
+    store = hass.data.get(DOMAIN, {})
+    for key, runtime in list(store.items()):
+        if not key.endswith(RUNTIME_SUFFIX) or not isinstance(runtime, dict):
+            continue
+        battery_id = key[: -len(RUNTIME_SUFFIX)]
+        if bool(runtime.get("take_part")) != (battery_id in members):
+            hass.config_entries.async_schedule_reload(battery_id)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────

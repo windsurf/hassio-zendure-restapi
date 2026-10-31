@@ -64,6 +64,7 @@ from homeassistant.util import dt as dt_util
 from .api import ZendureApiError
 from .const import (
     DOMAIN,
+    CLUSTER_KEY,
     PACK_PREFIX,
     PACK_STATE_CHARGING,
     AC_MODE_CHARGE,
@@ -78,6 +79,7 @@ from .const import (
     METER_SANE_LIMIT,
     METER_SOURCE_EXTERNAL,
     METER_SOURCE_ZENDURE,
+    MODE_FOLLOW,
     MODE_MANUAL,
     MODE_QUICK_CHARGE,
     MODE_QUICK_DISCHARGE,
@@ -107,17 +109,10 @@ from .coordinator import RESTART_KEYS, ZendureCoordinator
 from .measure import BatteryMeasure, Sample
 from .p1meter import ExternalMeter
 from .registry import pack_model
-from .settings import ZendureSettings
+from .settings import SettingsView, ZendureSettings
 from .trace import ZendureTrace
 
 _LOGGER = logging.getLogger(__name__)
-
-# Batteries on which this integration wrote a limit above 0 in this Home
-# Assistant session that standby has not stopped yet, by entry. Kept at module
-# level so it outlives a reload of the entry, not a restart of Home Assistant
-# (v1.6.10): standby that is already chosen at startup writes nothing, unless a
-# limit this integration wrote is still running.
-_OPEN_LIMITS: set[str] = set()
 
 
 @dataclass
@@ -161,6 +156,19 @@ WRITE_HISTORY = 6
 # not the trace of a restart (v1.6.8).
 SMART_RESET_GRACE_S = 60
 
+# Batteries on which a controller of this run of Home Assistant wrote a limit
+# above zero that its standby stop has not cleared yet, by entry (v1.6.10).
+# Standby that is already the stored mode at startup writes nothing: a user who
+# only watches the battery, or set its limits by hand in standby, keeps them
+# across a restart or a reload (review of the integration). The one
+# exception is a reload right after this integration wrote a limit itself — a
+# battery leaving a cluster returns to its own standby while the cluster's
+# limit still runs — and that is what this set remembers. It lives as long as
+# the module: across a reload of the entry, not across a restart of Home
+# Assistant, after which nothing of ours can still be running in RAM that the
+# device did not report as a restart.
+_OPEN_LIMITS: set[str] = set()
+
 # A second controller: something else moving the limits while this one steers
 # (v1.6.2). The on-device energy manager, left on in the Zendure app, moved
 # outputLimit about every 20 s — some 45 times a quarter of an hour; with the
@@ -183,6 +191,8 @@ MEASURE_SAVE_EVERY = timedelta(minutes=5)
 # Where the controller currently steering on the grid is registered, in
 # hass.data[DOMAIN]. See ZendureController._claim_grid.
 GRID_OWNER_KEY = "_grid_owner"
+# What _claim_grid answers a battery outside the cluster (v1.7.0).
+CLUSTER_OWNER = "battery cluster"
 
 
 class ZendureController:
@@ -191,7 +201,7 @@ class ZendureController:
     def __init__(
         self,
         coordinator: ZendureCoordinator,
-        settings: ZendureSettings,
+        settings: ZendureSettings | SettingsView,
     ) -> None:
         self.coordinator = coordinator
         self.settings = settings
@@ -214,7 +224,9 @@ class ZendureController:
         self._idle_since: Any = None
         # Whether the one-time standby command has been sent for this stay in
         # standby. Cleared on the way out, so re-entering sends it again. None
-        # until the first standby cycle after setup decides it (v1.6.10).
+        # until the first standby cycle decides it (v1.6.10): standby that is
+        # already the stored mode at startup sends nothing, unless this
+        # integration left a limit of its own running (_OPEN_LIMITS).
         self._standby_sent: bool | None = None
 
         # ── Trim loop ────────────────────────────────────────────────
@@ -250,6 +262,17 @@ class ZendureController:
         # Set once the entry unloads, so a claim it still holds lapses.
         self._unloaded = False
         self._aside_logged = False
+
+        # ── Battery cluster (v1.7.0) ─────────────────────────────
+        # As a secondary the battery holds the limit the cluster gives it
+        # (`follow` mode). As the primary it runs the loop below unchanged; the
+        # one thing it asks first is whether secondaries still run the other
+        # way, through `start_check`, and it says so in `waiting_for` until
+        # they have stopped.
+        self.follow_direction = "none"
+        self.follow_limit = 0
+        self.waiting_for = "none"
+        self.start_check: Any = None
 
         # ── Rest state ───────────────────────────────────────────────
         # When this controller has both of its own limits at zero across two
@@ -566,6 +589,8 @@ class ZendureController:
             self._set_state("waiting", "no device data")
             return
 
+        # Set again below on every cycle in which the primary still waits.
+        self.waiting_for = "none"
         mode = self.settings.get(OPT_OPERATION_MODE)
         if mode not in SMART_MODES:
             self._release_grid()
@@ -603,6 +628,8 @@ class ZendureController:
             await self._apply_quick(data, charging=False)
         elif mode in SMART_MODES:
             await self._apply_smart(data, mode)
+        elif mode == MODE_FOLLOW:
+            await self._apply_follow(data)
         else:
             self._set_state("idle", f"unknown mode {mode}")
 
@@ -669,7 +696,7 @@ class ZendureController:
             return
 
         charging = direction == "charge"
-        full, empty = _soc_bounds(data)
+        full, empty = self._bounds(data)
         if (charging and full) or (not charging and empty):
             # The device has closed this direction. Adjusting a limit it
             # ignores is the write traffic the bound check exists to stop;
@@ -794,6 +821,12 @@ class ZendureController:
         """Charge back to the lower SOC bound. Returns True when it acted."""
         if not self.settings.get_bool(OPT_SOC_PROTECTION):
             return False
+        if getattr(self.settings, "coordinated", False):
+            # In a battery cluster the group decides (v1.7.0): a battery
+            # under its floor stops discharging there (see _bounds) instead of
+            # charging from the grid on its own while the others discharge —
+            # measured as 2400 W from one battery into the other for 55 s.
+            return False
         if mode in (MODE_QUICK_DISCHARGE, MODE_MANUAL):
             # Explicit user intent; protection would fight the operator.
             return False
@@ -825,6 +858,18 @@ class ZendureController:
             direction="charge",
         )
         return True
+
+    def _bounds(self, data: dict[str, Any]) -> tuple[bool, bool]:
+        """(full, empty) as this battery must respect them.
+
+        On its own: the device's socLimit, as before. In a battery cluster a
+        battery under its SOC floor counts as empty as well: its own SOC
+        protection stands down there, so the floor is held by not discharging.
+        """
+        full, empty = _soc_bounds(data)
+        if getattr(self.settings, "coordinated", False) and _below_floor(data):
+            empty = True
+        return full, empty
 
     # ── Modes ────────────────────────────────────────────────────────────
 
@@ -871,23 +916,22 @@ class ZendureController:
         # the polling period. After this command the controller is passive
         # again and whatever the manager does next is its own business.
         if self._standby_sent is None:
-            # First standby cycle since setup: standby was already chosen, so
-            # the battery is left as it is (v1.6.10), unless a limit this
-            # integration wrote earlier in this session is still running.
+            # The first standby cycle since setup (v1.6.10): standby was already
+            # chosen, so leave the battery as it is — unless a limit this
+            # integration wrote before a reload is still open.
             self._standby_sent = self._stop_key() not in _OPEN_LIMITS
             if self._standby_sent:
                 _LOGGER.debug("standby at startup: writing nothing, the battery keeps its limits")
         if not self._standby_sent:
             # When this controller set a limit, the stop is sent even if the
-            # last poll already reads 0: a limit written moments ago may not
-            # be reported yet, and skipping the stop as a no-op leaves it
-            # running (v1.6.10, as v1.7.3). At startup nothing is owned yet,
-            # so standby that is already chosen still writes nothing.
+            # last poll already reads 0: a limit written moments ago may not be
+            # reported yet, and skipping the stop as a no-op leaves it running
+            # (a primary leaving the group right after it started, v1.7.0).
             await self._write_many(
                 [("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)], data, force=self._owns_limits
             )
-            _OPEN_LIMITS.discard(self._stop_key())
             self._standby_sent = True
+            _OPEN_LIMITS.discard(self._stop_key())
             self._owns_limits = False
             self._last_direction = "none"
             self._set_state("standby", "stopped and released, now passive")
@@ -940,6 +984,42 @@ class ZendureController:
             direction="charge" if charging else "discharge",
         )
 
+    async def _apply_follow(self, data: dict[str, Any]) -> None:
+        """Hold the limit the battery cluster gives this battery (v1.7.0).
+
+        A secondary writes nothing of its own: no meter, no trim, no threshold.
+        The primary's loop sees each step it makes as a step in the house load.
+        The direction change delay still applies, and the device's own SOC
+        bounds are respected the way the smart modes respect them.
+        """
+        group = getattr(self.settings, "group_name", None) or "the cluster"
+        direction, limit = self.follow_direction, int(self.follow_limit)
+        charging = direction == "charge"
+        full, empty = self._bounds(data)
+        closed = (charging and full) or (direction == "discharge" and empty)
+        if direction not in ("charge", "discharge") or limit <= 0 or closed:
+            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
+            self._owns_limits = False
+            self._last_direction = "none"
+            reason = f"held at 0 W by {group}"
+            if closed:
+                reason = f"{SOC_BLOCKED[direction]}, held at 0 W"
+            self._set_state("secondary", reason)
+            return
+        if await self._reverse_guard(data, direction):
+            return
+        target = int(_clamp(limit, 0, self._cap(data, charging)))
+        await self._write_direction(
+            data, AC_MODE_CHARGE if charging else AC_MODE_DISCHARGE, target
+        )
+        self._last_direction = direction
+        self._set_state(
+            "secondary",
+            f"{direction} at {target} W as given by {group}",
+            target=target,
+            direction=direction,
+        )
+
     async def _apply_smart(self, data: dict[str, Any], mode: str) -> None:
         """Track the grid meter towards zero exchange."""
         other = self._claim_grid()
@@ -989,7 +1069,7 @@ class ZendureController:
         # loop kept ordering into a battery that accepted nothing — 59 trim
         # writes in a quarter of an hour at 100 %, a discharge limit averaging
         # 1353 W at 5 % while nothing flowed — and reported "within 10 W".
-        full, empty = _soc_bounds(data)
+        full, empty = self._bounds(data)
         mode_charge = mode in (MODE_SMART_MATCHING, MODE_SMART_CHARGE)
         mode_discharge = mode in (MODE_SMART_MATCHING, MODE_SMART_DISCHARGE)
         allow_charge = mode_charge and not full
@@ -1148,6 +1228,17 @@ class ZendureController:
         installation with two devices has been measured.
         """
         store = self.coordinator.hass.data.setdefault(DOMAIN, {})
+        # With a battery cluster set up, its primary holds the grid and a
+        # battery outside it stands aside, whoever came first (v1.7.0).
+        # Only while the group steers: with no battery taking part, or the
+        # group in standby or a quick mode, a battery outside it steers on its
+        # own as before.
+        if getattr(self.settings, "coordinated", False):
+            store[GRID_OWNER_KEY] = self
+            return None
+        cluster = store.get(store.get(CLUSTER_KEY) or "")
+        if cluster is not None and getattr(cluster, "steers", False):
+            return CLUSTER_OWNER
         owner = store.get(GRID_OWNER_KEY)
         if owner is not None and owner is not self and owner._holds_grid():
             return owner
@@ -1166,18 +1257,24 @@ class ZendureController:
         if store.get(GRID_OWNER_KEY) is self:
             store.pop(GRID_OWNER_KEY, None)
 
-    async def _stand_aside(self, data: dict[str, Any], other: "ZendureController") -> None:
+    async def _stand_aside(self, data: dict[str, Any], other: "ZendureController | str") -> None:
         """Stop this battery while another one steers on the grid."""
         await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
         self._owns_limits = False
         self._last_direction = "none"
         self._pending = 0.0
         self._prev_grid = None
-        name = other.coordinator.device_id or "another battery"
-        reason = (
-            f"{name} already steers on the grid; smart modes run on one battery "
-            "at a time"
-        )
+        if isinstance(other, str):
+            reason = (
+                "the battery cluster steers on the grid; add this battery to it "
+                "or choose a mode that is not smart"
+            )
+        else:
+            name = other.coordinator.device_id or "another battery"
+            reason = (
+                f"{name} already steers on the grid; smart modes run on one battery "
+                "at a time — a battery cluster lets up to three steer together"
+            )
         if not self._aside_logged:
             _LOGGER.warning("Smart mode refused: %s", reason)
             self._aside_logged = True
@@ -1345,6 +1442,13 @@ class ZendureController:
         # Whether this is a genuine direction change is a property of the
         # device, not of what this controller remembers doing.
         starting = self._device_direction(data) != direction
+
+        # Primary of a battery cluster: secondaries that still run the other
+        # way stop first, or the primary would start against them (v1.7.0).
+        if starting and self.start_check is not None and self.start_check(direction):
+            self.waiting_for = direction
+            self._set_state("waiting", f"secondaries still run, waiting before {direction}")
+            return
 
         if starting and not idle:
             # A direction change while the battery is still moving power would
@@ -1955,6 +2059,11 @@ class ZendureController:
         else:
             ir.async_delete_issue(hass, DOMAIN, issue_id)
 
+    def _stop_key(self) -> str:
+        """Which battery `_OPEN_LIMITS` means: its entry, else its device."""
+        coordinator = self.coordinator
+        return str(getattr(coordinator, "entry_id", None) or getattr(coordinator, "device_id", None) or id(coordinator))
+
     def reapply_mode(self) -> None:
         """Choosing the current mode again: send its command again (v1.6.8).
 
@@ -2094,17 +2203,13 @@ class ZendureController:
                 self.measure.on_write(
                     dt_util.utcnow(), key, written, self._meter_reading()[0]
                 )
+                # A limit above zero arms the standby stop again. The mode loop
+                # does that too, but the trim loop can write between two polls:
+                # a primary that starts on a meter sample and leaves the group
+                # before the next poll would otherwise keep its limit (v1.7.0).
                 if written > 0:
+                    self._standby_sent = False
                     _OPEN_LIMITS.add(self._stop_key())
-
-    def _stop_key(self) -> str:
-        """The battery in `_OPEN_LIMITS`: its entry, else its device."""
-        coordinator = self.coordinator
-        return str(
-            getattr(coordinator, "entry_id", None)
-            or getattr(coordinator, "device_id", None)
-            or id(coordinator)
-        )
 
     # ── State ────────────────────────────────────────────────────────────
 
@@ -2146,6 +2251,13 @@ class ZendureController:
             "meter_active": self._source_used,
             "trace_file": self.trace.path,
         }
+        # Battery cluster (v1.7.0): only while the battery takes part.
+        role = getattr(self.settings, "role", None)
+        if role is not None and getattr(self.settings, "group", None) is not None:
+            self.state.attributes["coordinated_by"] = self.settings.group_name
+            self.state.attributes["role"] = role
+            if role == "secondary":
+                self.state.attributes["follow_limit"] = self.follow_limit
 
         # One line per decision. The status sensor shows the outcome; this shows
         # the reasoning that led there, which is what you need when a mode does
@@ -2182,6 +2294,14 @@ def _soc_bounds(data: dict[str, Any]) -> tuple[bool, bool]:
     except (TypeError, ValueError):
         return False, False
     return flag == SOC_LIMIT_UPPER, flag == SOC_LIMIT_LOWER
+
+
+def _below_floor(data: dict[str, Any]) -> bool:
+    """Whether the state of charge is under the battery's lower SOC limit (minSoc, tenths)."""
+    try:
+        return float(data.get("electricLevel")) < float(data.get("minSoc")) / 10.0
+    except (TypeError, ValueError):
+        return False
 
 
 def _refused(data: dict[str, Any], charging: bool) -> str:

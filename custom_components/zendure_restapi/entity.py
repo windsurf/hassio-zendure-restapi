@@ -133,6 +133,7 @@ ALIGN_KEYS = (
     "measured_charge_efficiency", "measured_discharge_efficiency",
     "round_trip_ac", "round_trip_dc", "usable_capacity", "full_cycles",
     "standby_draw", "response_time", "grid_tracking_error", "lost_writes",
+    "take_part",
 )
 
 

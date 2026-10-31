@@ -8,7 +8,8 @@
           "zendure": "Zendure-Batterie — hier beginnen (auch ein Zendure-P1-Zähler)",
           "external_meter": "Externer Netzzähler über IP — am schnellsten (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externer Netzzähler aus Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Preissteuerung (dynamische Tarife)"
+          "price_control": "Preissteuerung — laden, wenn Strom günstig ist, entladen, wenn er teuer ist (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Akku-Cluster — bis zu drei Akkus, einer pro Phase, als ein System"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
         }
+      },
+      "battery_cluster": {
+        "title": "Akku-Cluster",
+        "description": "Gib jedem Akku, der mitmacht, die Phase, an der er angeschlossen ist: ein Akku pro Phase. Wähle *macht nicht mit*, um einen Akku draußen zu lassen. Puffer, Startschwellen und Zähler werden vom ersten Akku übernommen; die Gruppe startet im Standby. Akkus lassen sich später unter dem Cluster hinzufügen, ändern oder entfernen."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "Der Zähler antwortet nicht. Aktiviere Lokale API in der HomeWizard-Energy-App und versuche es erneut.",
       "not_a_power_sensor": "Dieser Sensor hat gerade keinen Leistungswert (Einheit W oder kW, numerischer Zustand).",
       "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden.",
-      "no_power_total": "Kein Leistungssensor dieses Geräts ergibt eine Netzsumme. Wähle die Sensoren dann selbst."
+      "no_power_total": "Kein Leistungssensor dieses Geräts ergibt eine Netzsumme. Wähle die Sensoren dann selbst.",
+      "no_member": "Wähle für mindestens einen Akku eine Phase.",
+      "phase_taken": "Zwei Akkus an einer Phase: diese Version nimmt einen Akku pro Phase."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — Netto-Netzleistung, Bezug positiv:\n\n{sensors}\n\nJetzt: **{reading}**. Mit Sonne auf den Modulen und wenig Verbrauch im Haus sollte das Einspeisung sein. Sind Bezug und Einspeisung vertauscht, das Kästchen ankreuzen.",
         "data": {
           "export_positive": "Der Zähler zeigt Einspeisung positiv (Vorzeichen umkehren)"
+        }
+      },
+      "cluster": {
+        "title": "Akku-Cluster",
+        "description": "Betriebsmodus, Puffer, Schwellen und die Zählerquelle sind Entitäten des Clusters. Die Akkus sind seine Untereinträge.",
+        "data": {
+          "external_meter": "Externer Zähler"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Freigegeben",
           "blocked": "Blockiert",
           "protecting": "Schützt",
-          "error": "Fehler"
+          "error": "Fehler",
+          "secondary": "Secondary"
         },
         "name": "Reglerstatus",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Kein Plan",
           "cheap": "Günstig",
           "between": "Dazwischen",
-          "expensive": "Teuer"
+          "expensive": "Teuer",
+          "paused": "Pausiert (koordiniert)"
         },
         "name": "Status",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Verlorene Schreibbefehle"
+      },
+      "group_power": {
+        "name": "Leistung Gruppe"
+      },
+      "group_state_of_charge": {
+        "name": "Ladezustand Gruppe"
+      },
+      "members": {
+        "name": "Akkus, die mitmachen"
+      },
+      "cluster_status": {
+        "name": "Status",
+        "state": {
+          "standby": "Standby",
+          "idle": "Untätig",
+          "regulating": "Regelt",
+          "concentrated": "Ein Akku",
+          "reversing": "Richtungswechsel",
+          "quick": "Volle Leistung",
+          "meter_stale": "Kein Zählerwert"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Verschleißkosten"
+      },
+      "concentrate_below": {
+        "name": "Konzentrieren unter"
+      },
+      "redistribute_every": {
+        "name": "Neu verteilen alle"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Trace-Aufzeichnung"
+      },
+      "take_part": {
+        "name": "Mitmachen"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Spotpreis inkl. MwSt.",
         "spot": "Spotpreis ohne MwSt.",
         "import_price": "Bezugspreis (ganzer Tarif)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Macht nicht mit",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} meldet neue Eigenschaften",
       "description": "{device} meldet {keys}, die es vorher nicht meldete. Meist folgt das auf ein Firmware-Update. Diese Version hat dafür noch keine Entität. Lade die Diagnose herunter (Geräteseite → Diagnose herunterladen) und melde sie in einem Issue, damit sie ergänzt werden können. Ignoriere diese Meldung, um sie zu schließen."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Akku",
+      "initiate_flow": {
+        "user": "Akku hinzufügen"
+      },
+      "step": {
+        "user": {
+          "title": "Akku hinzufügen",
+          "description": "Ein Akku dieser Integration, der noch nicht zum Cluster gehört, an einer Phase, die noch frei ist.",
+          "data": {
+            "battery_entry": "Akku",
+            "phase": "Phase",
+            "priority": "Priorität",
+            "max_share": "Maximaler Anteil"
+          },
+          "data_description": {
+            "priority": "1 bis 9. Der höchste ist Primary; bei Gleichstand der am schnellsten gemessene Akku.",
+            "max_share": "Höchste Leistung in Watt, die dieser Akku in der Gruppe übernimmt, in beide Richtungen. 0 = sein eigenes Maximum."
+          }
+        },
+        "reconfigure": {
+          "title": "Akku unter dem Cluster",
+          "description": "Phase, Priorität und das Meiste, was dieser Akku in der Gruppe liefern oder aufnehmen darf.",
+          "data": {
+            "phase": "Phase",
+            "priority": "Priorität",
+            "max_share": "Maximaler Anteil"
+          },
+          "data_description": {
+            "priority": "1 bis 9. Der höchste ist Primary; bei Gleichstand der am schnellsten gemessene Akku.",
+            "max_share": "Höchste Leistung in Watt, die dieser Akku in der Gruppe übernimmt, in beide Richtungen. 0 = sein eigenes Maximum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Jeder Akku gehört schon zum Cluster.",
+        "no_free_phase": "Jede Phase hat schon einen Akku.",
+        "reconfigure_successful": "Gespeichert."
+      }
     }
   }
 }

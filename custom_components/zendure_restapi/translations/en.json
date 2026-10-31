@@ -8,7 +8,8 @@
           "zendure": "Zendure battery — start here (also a Zendure P1 meter)",
           "external_meter": "External grid meter over IP — fastest (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "External grid meter from Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Price control (dynamic tariffs)"
+          "price_control": "Price control — charge when power is cheap, discharge when it is expensive (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Battery cluster — up to three batteries, one per phase, as one system"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "The meter reads export as positive (invert the sign)"
         }
+      },
+      "battery_cluster": {
+        "title": "Battery cluster",
+        "description": "Give each battery that takes part the phase it is connected to: one battery per phase. Choose *not taking part* to leave a battery out. Buffers, start thresholds and the meter are taken from the first battery; the group starts in standby. Batteries can be added, changed or removed later under the cluster."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "The meter does not answer. Switch on Local API in the HomeWizard Energy app and try again.",
       "not_a_power_sensor": "This sensor has no power reading right now (unit W or kW, numeric state).",
       "same_entity": "The export sensor must differ from the power sensor.",
-      "no_power_total": "No power sensor on this device makes a grid total. Choose the sensors by hand instead."
+      "no_power_total": "No power sensor on this device makes a grid total. Choose the sensors by hand instead.",
+      "no_member": "Choose a phase for at least one battery.",
+      "phase_taken": "Two batteries on one phase: this version takes one battery per phase."
     },
     "abort": {
       "already_configured": "This device is already configured.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — net grid power, import positive:\n\n{sensors}\n\nNow: **{reading}**. With sun on the panels and little use in the house this should read export. If import and export are the wrong way round, tick the box.",
         "data": {
           "export_positive": "The meter reads export as positive (invert the sign)"
+        }
+      },
+      "cluster": {
+        "title": "Battery cluster",
+        "description": "Operation mode, buffers, thresholds and the meter source are entities of the cluster. The batteries are its sub-entries.",
+        "data": {
+          "external_meter": "External meter"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Released",
           "blocked": "Blocked",
           "protecting": "Protecting",
-          "error": "Error"
+          "error": "Error",
+          "secondary": "Secondary"
         },
         "name": "Controller status",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "No plan",
           "cheap": "Cheap",
           "between": "In between",
-          "expensive": "Expensive"
+          "expensive": "Expensive",
+          "paused": "Paused (coordinated)"
         },
         "name": "Status",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Lost writes"
+      },
+      "group_power": {
+        "name": "Group power"
+      },
+      "group_state_of_charge": {
+        "name": "Group state of charge"
+      },
+      "members": {
+        "name": "Batteries taking part"
+      },
+      "cluster_status": {
+        "name": "Status",
+        "state": {
+          "standby": "Standby",
+          "idle": "Idle",
+          "regulating": "Regulating",
+          "concentrated": "One battery",
+          "reversing": "Reversing",
+          "quick": "Full power",
+          "meter_stale": "No meter reading"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Wear cost"
+      },
+      "concentrate_below": {
+        "name": "Concentrate below"
+      },
+      "redistribute_every": {
+        "name": "Redistribute every"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Trace recording"
+      },
+      "take_part": {
+        "name": "Take part"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Spot price incl. VAT",
         "spot": "Spot price excl. VAT",
         "import_price": "Import price (whole tariff)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Not taking part",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} reports new properties",
       "description": "{device} reports {keys}, which it did not report before. This usually follows a firmware upgrade. This version has no entity for them yet. Download the diagnostics (device page → Download diagnostics) and report them in an issue, so they can be added. Ignore this message to dismiss it."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Battery",
+      "initiate_flow": {
+        "user": "Add battery"
+      },
+      "step": {
+        "user": {
+          "title": "Add a battery",
+          "description": "A battery of this integration that does not belong to the cluster yet, on a phase that is still free.",
+          "data": {
+            "battery_entry": "Battery",
+            "phase": "Phase",
+            "priority": "Priority",
+            "max_share": "Max share"
+          },
+          "data_description": {
+            "priority": "1 to 9. The highest is primary; among equals the fastest measured battery.",
+            "max_share": "Highest power in watts this battery takes on in the group, in both directions. 0 = its own maximum."
+          }
+        },
+        "reconfigure": {
+          "title": "Battery under the cluster",
+          "description": "Phase, priority and the most this battery may give or take in the group.",
+          "data": {
+            "phase": "Phase",
+            "priority": "Priority",
+            "max_share": "Max share"
+          },
+          "data_description": {
+            "priority": "1 to 9. The highest is primary; among equals the fastest measured battery.",
+            "max_share": "Highest power in watts this battery takes on in the group, in both directions. 0 = its own maximum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Every battery already belongs to the cluster.",
+        "no_free_phase": "Every phase already has a battery.",
+        "reconfigure_successful": "Saved."
+      }
     }
   }
 }

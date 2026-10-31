@@ -7,6 +7,7 @@ They are removed; the meter's own entities, live or disabled on purpose, stay.
 
 from types import SimpleNamespace
 
+import custom_components.zendure_restapi as Z
 from custom_components.zendure_restapi import battery_leftovers
 
 
@@ -51,3 +52,23 @@ def test_a_disabled_entity_of_the_battery_part_stays_too():
     off = entity("number.zendure_meter_trim_strength", "trim_factor", "user")
     gone = battery_leftovers(METER_LIVE + BATTERY_ONLY + [off], LIVE)
     assert off.entity_id not in gone
+
+
+def test_only_the_meter_entry_is_looked_at(monkeypatch):
+    """A battery cluster and a Virtual cluster have an operation mode of their own
+    under their own entry: the clean-up only gets the entities of the meter entry
+    it runs for, so theirs are never touched (v1.7.x)."""
+    meter_entry = SimpleNamespace(entry_id="meter", title="Zendure Meter")
+    by_entry = {
+        "meter": METER_LIVE + METER_OFF + BATTERY_ONLY,
+        "cluster": [entity("select.battery_cluster_operation_mode", "operation_mode")],
+        "virtual": [entity("select.virtual_cluster_operation_mode", "operation_mode")],
+    }
+    removed: list[str] = []
+    registry = SimpleNamespace(async_remove=removed.append)
+    monkeypatch.setattr(Z.er, "async_get", lambda hass: registry)
+    monkeypatch.setattr(Z.er, "async_entries_for_config_entry", lambda reg, entry_id: by_entry[entry_id])
+    platform = SimpleNamespace(config_entry=meter_entry, entities={e.entity_id: None for e in METER_LIVE})
+    monkeypatch.setattr(Z.entity_platform, "async_get_platforms", lambda hass, domain: [platform])
+    Z._remove_battery_leftovers(None, meter_entry)
+    assert sorted(removed) == sorted(e.entity_id for e in BATTERY_ONLY)

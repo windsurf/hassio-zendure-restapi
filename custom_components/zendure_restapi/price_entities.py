@@ -136,7 +136,7 @@ PRICE_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
     ), OPT_IMPORT_FACTOR),
     (NumberEntityDescription(
         key="import_surcharge", name="Import surcharge", native_min_value=-1, native_max_value=1,
-        native_step=0.00001, mode=NumberMode.BOX, icon="mdi:cash-plus",
+        native_step=0.0000001, mode=NumberMode.BOX, icon="mdi:cash-plus",
     ), OPT_IMPORT_SURCHARGE),
     (NumberEntityDescription(
         key="export_factor", name="Export factor", native_min_value=0, native_max_value=3,
@@ -144,7 +144,7 @@ PRICE_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
     ), OPT_EXPORT_FACTOR),
     (NumberEntityDescription(
         key="export_surcharge", name="Export surcharge", native_min_value=-1, native_max_value=1,
-        native_step=0.00001, mode=NumberMode.BOX, icon="mdi:cash-minus",
+        native_step=0.0000001, mode=NumberMode.BOX, icon="mdi:cash-minus",
     ), OPT_EXPORT_SURCHARGE),
     (NumberEntityDescription(
         key="wear_cost", name="Wear cost", native_min_value=0, native_max_value=0.2,
@@ -296,7 +296,7 @@ class PriceNumber(_Setting, NumberEntity):
         return self._settings.get_float(self._key)
 
     async def async_set_native_value(self, value: float) -> None:
-        self._settings.set(self._key, round(float(value), 5))
+        self._settings.set(self._key, round(float(value), 7))
         self.async_write_ha_state()
 
 

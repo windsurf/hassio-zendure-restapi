@@ -92,6 +92,7 @@ from .const import (
     PRICE_STATUS_NO_PLAN,
     PRICE_STATUS_NO_PRICE,
     PRICE_STATUS_OFF,
+    PRICE_STATUS_PAUSED,
     SIGNAL_PRICE_CHANGED,
 )
 from .dayplan import (
@@ -517,6 +518,11 @@ class PriceControl:
         if not self._enabled:
             self.status = PRICE_STATUS_OFF
             self._last_target = None
+        elif self._coordinated():
+            # The battery cluster sets this battery's mode (v1.7.0); two
+            # writers on one mode is what it exists to prevent.
+            self.status = PRICE_STATUS_PAUSED
+            self._last_target = None
         else:
             self.status = band
             if self.target != self._last_target and self._battery_present():
@@ -528,6 +534,12 @@ class PriceControl:
                     )
                     self._battery.set(OPT_OPERATION_MODE, self.target)
         async_dispatcher_send(self.hass, self._signal)
+
+    def _coordinated(self) -> bool:
+        """Whether the battery takes part in the battery cluster."""
+        runtime = self.hass.data.get(DOMAIN, {}).get(f"{self._battery_entry_id}_runtime")
+        view = runtime.get("view") if isinstance(runtime, dict) else None
+        return view is not None and view.coordinated
 
     def _battery_present(self) -> bool:
         # The battery entry may have been removed while this one stays.

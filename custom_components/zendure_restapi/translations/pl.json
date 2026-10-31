@@ -8,7 +8,8 @@
           "zendure": "Bateria Zendure — zacznij tutaj (także licznik P1 Zendure)",
           "external_meter": "Zewnętrzny licznik sieci przez IP — najszybszy (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Zewnętrzny licznik sieci z Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Sterowanie cenowe (taryfy dynamiczne)"
+          "price_control": "Sterowanie cenowe — ładowanie, gdy prąd jest tani, rozładowanie, gdy jest drogi (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Klaster akumulatorów — do trzech akumulatorów, po jednym na fazę, jako jeden system"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
         }
+      },
+      "battery_cluster": {
+        "title": "Klaster akumulatorów",
+        "description": "Podaj dla każdego uczestniczącego akumulatora fazę, do której jest podłączony: jeden akumulator na fazę. Wybierz *nie uczestniczy*, aby pominąć akumulator. Bufory, progi startu i licznik są przejmowane z pierwszego akumulatora; grupa startuje w trybie czuwania. Akumulatory można później dodawać, zmieniać lub usuwać pod klastrem."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "Licznik nie odpowiada. Włącz lokalne API w aplikacji HomeWizard Energy i spróbuj ponownie.",
       "not_a_power_sensor": "Ten czujnik nie ma teraz wartości mocy (jednostka W lub kW, stan liczbowy).",
       "same_entity": "Czujnik oddawania musi być inny niż czujnik mocy.",
-      "no_power_total": "Żaden czujnik mocy tego urządzenia nie daje sumy sieci. Wybierz wtedy czujniki ręcznie."
+      "no_power_total": "Żaden czujnik mocy tego urządzenia nie daje sumy sieci. Wybierz wtedy czujniki ręcznie.",
+      "no_member": "Wybierz fazę dla co najmniej jednego akumulatora.",
+      "phase_taken": "Dwa akumulatory na jednej fazie: ta wersja przyjmuje jeden akumulator na fazę."
     },
     "abort": {
       "already_configured": "To urządzenie jest już skonfigurowane.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — moc sieci netto, pobór dodatni:\n\n{sensors}\n\nTeraz: **{reading}**. Przy słońcu na panelach i małym zużyciu w domu powinien to być oddawanie do sieci. Jeśli pobór i oddawanie są zamienione, zaznacz pole.",
         "data": {
           "export_positive": "Licznik pokazuje oddawanie jako dodatnie (odwróć znak)"
+        }
+      },
+      "cluster": {
+        "title": "Klaster akumulatorów",
+        "description": "Tryb pracy, bufory, progi i źródło licznika są encjami klastra. Akumulatory są jego podwpisami.",
+        "data": {
+          "external_meter": "Licznik zewnętrzny"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Zwolniony",
           "blocked": "Zablokowany",
           "protecting": "Ochrona",
-          "error": "Błąd"
+          "error": "Błąd",
+          "secondary": "Secondary"
         },
         "name": "Stan regulatora",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Brak planu",
           "cheap": "Tanio",
           "between": "Pomiędzy",
-          "expensive": "Drogo"
+          "expensive": "Drogo",
+          "paused": "Wstrzymane (koordynowane)"
         },
         "name": "Stan",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Utracone zapisy"
+      },
+      "group_power": {
+        "name": "Moc grupy"
+      },
+      "group_state_of_charge": {
+        "name": "Stan naładowania grupy"
+      },
+      "members": {
+        "name": "Uczestniczące akumulatory"
+      },
+      "cluster_status": {
+        "name": "Status",
+        "state": {
+          "standby": "Czuwanie",
+          "idle": "Bezczynny",
+          "regulating": "Reguluje",
+          "concentrated": "Jeden akumulator",
+          "reversing": "Zmiana kierunku",
+          "quick": "Pełna moc",
+          "meter_stale": "Brak odczytu licznika"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Koszt zużycia"
+      },
+      "concentrate_below": {
+        "name": "Koncentruj poniżej"
+      },
+      "redistribute_every": {
+        "name": "Rozdzielaj co"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Zapis śladu"
+      },
+      "take_part": {
+        "name": "Uczestniczy"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Cena spot z VAT",
         "spot": "Cena spot bez VAT",
         "import_price": "Cena zakupu (cała taryfa)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Nie uczestniczy",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} zgłasza nowe właściwości",
       "description": "{device} zgłasza {keys}, których wcześniej nie zgłaszał. Zwykle dzieje się tak po aktualizacji firmware. Ta wersja nie ma jeszcze dla nich encji. Pobierz diagnostykę (strona urządzenia → Pobierz diagnostykę) i zgłoś je w issue, aby można je było dodać. Zignoruj ten komunikat, aby go zamknąć."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Akumulator",
+      "initiate_flow": {
+        "user": "Dodaj akumulator"
+      },
+      "step": {
+        "user": {
+          "title": "Dodaj akumulator",
+          "description": "Akumulator tej integracji, który nie należy jeszcze do klastra, na fazie, która jest jeszcze wolna.",
+          "data": {
+            "battery_entry": "Akumulator",
+            "phase": "Faza",
+            "priority": "Priorytet",
+            "max_share": "Maksymalny udział"
+          },
+          "data_description": {
+            "priority": "Od 1 do 9. Najwyższy jest primary; przy równości najszybszy zmierzony akumulator.",
+            "max_share": "Najwyższa moc w watach, jaką ten akumulator przejmuje w grupie, w obu kierunkach. 0 = jego własne maksimum."
+          }
+        },
+        "reconfigure": {
+          "title": "Akumulator pod klastrem",
+          "description": "Faza, priorytet i maksimum, które ten akumulator może oddać lub przyjąć w grupie.",
+          "data": {
+            "phase": "Faza",
+            "priority": "Priorytet",
+            "max_share": "Maksymalny udział"
+          },
+          "data_description": {
+            "priority": "Od 1 do 9. Najwyższy jest primary; przy równości najszybszy zmierzony akumulator.",
+            "max_share": "Najwyższa moc w watach, jaką ten akumulator przejmuje w grupie, w obu kierunkach. 0 = jego własne maksimum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Każdy akumulator należy już do klastra.",
+        "no_free_phase": "Każda faza ma już akumulator.",
+        "reconfigure_successful": "Zapisano."
+      }
     }
   }
 }

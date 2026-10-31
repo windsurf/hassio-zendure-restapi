@@ -8,7 +8,8 @@
           "zendure": "Batería Zendure — empiece aquí (también un contador P1 Zendure)",
           "external_meter": "Contador de red externo por IP — el más rápido (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Contador de red externo desde Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Control por precio (tarifas dinámicas)"
+          "price_control": "Control por precio — cargar cuando la electricidad es barata, descargar cuando es cara (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Clúster de baterías — hasta tres baterías, una por fase, como un solo sistema"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
         }
+      },
+      "battery_cluster": {
+        "title": "Clúster de baterías",
+        "description": "Indica para cada batería que participa la fase a la que está conectada: una batería por fase. Elige *no participa* para dejar una batería fuera. Los búferes, los umbrales de arranque y el medidor se toman de la primera batería; el grupo arranca en espera. Las baterías se pueden añadir, cambiar o quitar más tarde bajo el clúster."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "El contador no responde. Activa la API local en la app HomeWizard Energy y vuelve a intentarlo.",
       "not_a_power_sensor": "Este sensor no tiene ahora un valor de potencia (unidad W o kW, estado numérico).",
       "same_entity": "El sensor de vertido debe ser distinto del sensor de potencia.",
-      "no_power_total": "Ningún sensor de potencia de este dispositivo da un total de red. Elige entonces los sensores a mano."
+      "no_power_total": "Ningún sensor de potencia de este dispositivo da un total de red. Elige entonces los sensores a mano.",
+      "no_member": "Elige una fase para al menos una batería.",
+      "phase_taken": "Dos baterías en una fase: esta versión admite una batería por fase."
     },
     "abort": {
       "already_configured": "Este dispositivo ya está configurado.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — potencia neta de red, consumo positivo:\n\n{sensors}\n\nAhora: **{reading}**. Con sol en los paneles y poco consumo en casa debería indicar exportación. Si consumo y exportación están invertidos, marca la casilla.",
         "data": {
           "export_positive": "El contador indica la exportación como positiva (invertir el signo)"
+        }
+      },
+      "cluster": {
+        "title": "Clúster de baterías",
+        "description": "El modo de funcionamiento, los búferes, los umbrales y la fuente del medidor son entidades del clúster. Las baterías son sus subentradas.",
+        "data": {
+          "external_meter": "Medidor externo"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Liberado",
           "blocked": "Bloqueado",
           "protecting": "Protegiendo",
-          "error": "Error"
+          "error": "Error",
+          "secondary": "Secondary"
         },
         "name": "Estado del controlador",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Sin plan",
           "cheap": "Barato",
           "between": "Intermedio",
-          "expensive": "Caro"
+          "expensive": "Caro",
+          "paused": "En pausa (coordinado)"
         },
         "name": "Estado",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Escrituras perdidas"
+      },
+      "group_power": {
+        "name": "Potencia del grupo"
+      },
+      "group_state_of_charge": {
+        "name": "Estado de carga del grupo"
+      },
+      "members": {
+        "name": "Baterías que participan"
+      },
+      "cluster_status": {
+        "name": "Estado",
+        "state": {
+          "standby": "En espera",
+          "idle": "Inactivo",
+          "regulating": "Regulando",
+          "concentrated": "Una batería",
+          "reversing": "Invirtiendo",
+          "quick": "Potencia máxima",
+          "meter_stale": "Sin lectura del medidor"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Coste de desgaste"
+      },
+      "concentrate_below": {
+        "name": "Concentrar por debajo de"
+      },
+      "redistribute_every": {
+        "name": "Redistribuir cada"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Grabación de traza"
+      },
+      "take_part": {
+        "name": "Participar"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Precio spot con IVA",
         "spot": "Precio spot sin IVA",
         "import_price": "Precio de compra (tarifa completa)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "No participa",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} informa de propiedades nuevas",
       "description": "{device} informa de {keys}, que antes no enviaba. Suele ocurrir tras una actualización de firmware. Esta versión aún no tiene entidad para ellas. Descarga los diagnósticos (página del dispositivo → Descargar diagnósticos) e infórmalas en un issue para que puedan añadirse. Ignora este mensaje para cerrarlo."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Batería",
+      "initiate_flow": {
+        "user": "Añadir batería"
+      },
+      "step": {
+        "user": {
+          "title": "Añadir una batería",
+          "description": "Una batería de esta integración que aún no pertenece al clúster, en una fase que sigue libre.",
+          "data": {
+            "battery_entry": "Batería",
+            "phase": "Fase",
+            "priority": "Prioridad",
+            "max_share": "Parte máxima"
+          },
+          "data_description": {
+            "priority": "1 a 9. La más alta es primary; entre iguales, la batería medida más rápida.",
+            "max_share": "Potencia máxima en vatios que esta batería asume en el grupo, en ambos sentidos. 0 = su propio máximo."
+          }
+        },
+        "reconfigure": {
+          "title": "Batería bajo el clúster",
+          "description": "Fase, prioridad y lo máximo que esta batería puede dar o tomar en el grupo.",
+          "data": {
+            "phase": "Fase",
+            "priority": "Prioridad",
+            "max_share": "Parte máxima"
+          },
+          "data_description": {
+            "priority": "1 a 9. La más alta es primary; entre iguales, la batería medida más rápida.",
+            "max_share": "Potencia máxima en vatios que esta batería asume en el grupo, en ambos sentidos. 0 = su propio máximo."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Todas las baterías ya pertenecen al clúster.",
+        "no_free_phase": "Cada fase ya tiene una batería.",
+        "reconfigure_successful": "Guardado."
+      }
     }
   }
 }

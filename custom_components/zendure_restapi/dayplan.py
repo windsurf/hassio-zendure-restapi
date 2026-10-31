@@ -59,8 +59,8 @@ class Tariff:
     """Import price and export value as linear functions of the spot price."""
 
     import_factor: float = 1.21
-    import_surcharge: float = 0.13505
-    export_factor: float = 1.10
+    import_surcharge: float = 0.1308481
+    export_factor: float = 1.00
     export_surcharge: float = 0.02
     net_metering: bool = False
     contains: str = CONTAINS_SPOT_VAT

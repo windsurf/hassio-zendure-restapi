@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
@@ -66,6 +67,24 @@ from .const import (
     PRICE_CONTAINS_OPTIONS,
     PRICE_DEVICE_NAME,
     ZEROCONF_HOMEWIZARD,
+    CONF_MAX_SHARE,
+    CONF_PHASE,
+    CONF_PRIORITY,
+    CLUSTER_DEVICE_NAME,
+    CLUSTER_UNIQUE_ID,
+    DEFAULT_PRIORITY,
+    DEVICE_TYPE_CLUSTER,
+    EXTERNAL_NONE,
+    MODE_STANDBY,
+    OPT_CHARGE_BUFFER,
+    OPT_DISCHARGE_BUFFER,
+    OPT_EXTERNAL_METER,
+    OPT_METER_SOURCE,
+    OPT_OPERATION_MODE,
+    OPT_START_CHARGE_AT,
+    OPT_START_DISCHARGE_AT,
+    PHASES,
+    SUBENTRY_BATTERY,
 )
 from .hadevice import Candidate, MeterPlan, fast_route, plan as device_plan, summary
 from .p1meter import ADAPTERS, HaSensorMeter, state_power
@@ -93,6 +112,119 @@ def _contains_selector() -> selector.SelectSelector:
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )
+
+def _phase_selector(with_none: bool = False, phases: tuple[str, ...] = PHASES) -> selector.SelectSelector:
+    """L1, L2, L3 — and `none` where a battery may stay out."""
+    options = (["none"] if with_none else []) + list(phases)
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=options,
+            translation_key="phase",
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def battery_label(entry: config_entries.ConfigEntry) -> str:
+    """A battery entry by title and the last four of its serial number: two of
+    the same model have the same title."""
+    sn = str(entry.data.get(CONF_SN) or "")
+    return f"{entry.title} (…{sn[-4:]})" if sn else entry.title
+
+
+def member_subentry(
+    battery: config_entries.ConfigEntry, phase: str, priority: int, max_share: int
+) -> config_entries.ConfigSubentryData:
+    """The subentry of one battery under the cluster."""
+    return config_entries.ConfigSubentryData(
+        data={
+            CONF_BATTERY_ENTRY: battery.entry_id,
+            CONF_PHASE: phase,
+            CONF_PRIORITY: int(priority),
+            CONF_MAX_SHARE: int(max_share),
+        },
+        subentry_type=SUBENTRY_BATTERY,
+        title=f"{battery_label(battery)} · {phase.upper()}",
+        unique_id=battery.entry_id,
+    )
+
+
+class BatterySubentryFlow(config_entries.ConfigSubentryFlow):
+    """Add a battery to the cluster, or change its phase, priority and Max share."""
+
+    def _taken(self, skip: str | None = None) -> tuple[set[str], set[str]]:
+        """Batteries and phases already under the cluster."""
+        entry = self._get_entry()
+        batteries, phases = set(), set()
+        for sid, sub in entry.subentries.items():
+            if sub.subentry_type != SUBENTRY_BATTERY or sid == skip:
+                continue
+            batteries.add(str(sub.data.get(CONF_BATTERY_ENTRY)))
+            phases.add(str(sub.data.get(CONF_PHASE)))
+        return batteries, phases
+
+    @staticmethod
+    def _fields(phases: tuple[str, ...], data: dict[str, Any]) -> dict[Any, Any]:
+        return {
+            vol.Required(CONF_PHASE, default=data.get(CONF_PHASE, phases[0])): _phase_selector(phases=phases),
+            vol.Required(CONF_PRIORITY, default=int(data.get(CONF_PRIORITY, DEFAULT_PRIORITY))): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=1, max=9, step=1, mode=selector.NumberSelectorMode.BOX)
+            ),
+            vol.Required(CONF_MAX_SHARE, default=int(data.get(CONF_MAX_SHARE, 0))): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=5000, step=50, unit_of_measurement="W", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+        }
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.SubentryFlowResult:
+        taken, phases_taken = self._taken()
+        free = [
+            e for e in self.hass.config_entries.async_entries(DOMAIN)
+            if e.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_BATTERY) == DEVICE_TYPE_BATTERY
+            and e.entry_id not in taken
+        ]
+        phases = tuple(p for p in PHASES if p not in phases_taken)
+        if not free:
+            return self.async_abort(reason="no_free_battery")
+        if not phases:
+            return self.async_abort(reason="no_free_phase")
+        if user_input is not None:
+            battery = next(e for e in free if e.entry_id == user_input[CONF_BATTERY_ENTRY])
+            sub = member_subentry(
+                battery, user_input[CONF_PHASE], int(user_input[CONF_PRIORITY]), int(user_input[CONF_MAX_SHARE])
+            )
+            return self.async_create_entry(
+                title=sub["title"], data=sub["data"], unique_id=sub["unique_id"]
+            )
+        schema = {
+            vol.Required(CONF_BATTERY_ENTRY, default=free[0].entry_id): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[selector.SelectOptionDict(value=e.entry_id, label=battery_label(e)) for e in free],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            **self._fields(phases, {}),
+        }
+        return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> config_entries.SubentryFlowResult:
+        subentry = self._get_reconfigure_subentry()
+        _, phases_taken = self._taken(skip=subentry.subentry_id)
+        phases = tuple(p for p in PHASES if p not in phases_taken)
+        if user_input is not None:
+            battery = self.hass.config_entries.async_get_entry(subentry.data.get(CONF_BATTERY_ENTRY))
+            data = {**subentry.data, **{
+                CONF_PHASE: user_input[CONF_PHASE],
+                CONF_PRIORITY: int(user_input[CONF_PRIORITY]),
+                CONF_MAX_SHARE: int(user_input[CONF_MAX_SHARE]),
+            }}
+            title = f"{battery_label(battery)} · {str(data[CONF_PHASE]).upper()}" if battery is not None else subentry.title
+            return self.async_update_and_abort(self._get_entry(), subentry, data=data, title=title)
+        return self.async_show_form(
+            step_id="reconfigure", data_schema=vol.Schema(self._fields(phases, dict(subentry.data)))
+        )
+
 
 class ProbeResult:
     """What a single report fetch tells us about a device."""
@@ -175,10 +307,85 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Choose what to add: a Zendure device, an external meter or price control."""
-        return self.async_show_menu(
-            step_id="user",
-            menu_options=["zendure", "external_meter", "ha_meter", "price_control"],
+        """Choose what to add: a Zendure device, an external meter, price control
+        or, once there is no cluster yet, the battery cluster."""
+        options = ["zendure", "external_meter", "ha_meter", "price_control"]
+        if not any(
+            e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER
+            for e in self._async_current_entries(include_ignore=False)
+        ):
+            options.append("battery_cluster")
+        return self.async_show_menu(step_id="user", menu_options=options)
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: config_entries.ConfigEntry
+    ) -> dict[str, type[config_entries.ConfigSubentryFlow]]:
+        """Batteries are subentries of the cluster (v1.7.0); nothing else has any."""
+        if config_entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
+            return {SUBENTRY_BATTERY: BatterySubentryFlow}
+        return {}
+
+    # ── Battery cluster (v1.7.0) ─────────────────────────────────────
+
+    async def async_step_battery_cluster(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Up to three batteries, one per phase, as one system.
+
+        One field per battery, named after it, with its phase or `none`. The
+        settings that steer are taken from the first battery chosen, so an
+        installation that was tuned keeps its buffers and thresholds; the
+        group starts in standby.
+        """
+        await self.async_set_unique_id(CLUSTER_UNIQUE_ID)
+        self._abort_if_unique_id_configured()
+        batteries = self._batteries()
+        if not batteries:
+            return self.async_abort(reason="no_battery")
+        labels = {battery_label(e): e for e in batteries}
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chosen = [
+                (labels[label], phase) for label, phase in user_input.items()
+                if label in labels and phase in PHASES
+            ]
+            phases = [phase for _, phase in chosen]
+            if not chosen:
+                errors["base"] = "no_member"
+            elif len(set(phases)) != len(phases):
+                errors["base"] = "phase_taken"
+            else:
+                first = chosen[0][0]
+                copied = {
+                    key: first.options[key]
+                    for key in (
+                        OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER, OPT_START_CHARGE_AT,
+                        OPT_START_DISCHARGE_AT, OPT_METER_SOURCE, OPT_EXTERNAL_METER,
+                    )
+                    if key in first.options
+                }
+                return self.async_create_entry(
+                    title=CLUSTER_DEVICE_NAME,
+                    data={
+                        CONF_DEVICE_TYPE: DEVICE_TYPE_CLUSTER,
+                        CONF_DEVICE_NAME: CLUSTER_DEVICE_NAME,
+                    },
+                    options={**copied, OPT_OPERATION_MODE: MODE_STANDBY},
+                    subentries=[
+                        member_subentry(battery, phase, DEFAULT_PRIORITY, 0)
+                        for battery, phase in chosen
+                    ],
+                )
+        fields: dict[Any, Any] = {}
+        for index, label in enumerate(labels):
+            default = PHASES[index] if index < len(PHASES) else "none"
+            fields[vol.Required(label, default=default)] = _phase_selector(with_none=True)
+        return self.async_show_form(
+            step_id="battery_cluster",
+            data_schema=vol.Schema(fields),
+            errors=errors,
         )
 
     async def async_step_ha_meter(
@@ -647,6 +854,8 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         entry = self.config_entry
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
             return await self.async_step_price(user_input)
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
+            return await self.async_step_cluster(user_input)
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
             if entry.data.get(CONF_METER_PLAN):
                 return await self.async_step_device(user_input)
@@ -687,6 +896,39 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Optional(OPT_CREATE_DASHBOARD, default=False)] = bool
             fields[vol.Optional(OPT_REBUILD_DASHBOARD, default=False)] = bool
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
+
+    async def async_step_cluster(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Battery cluster: which external meter the group steers on.
+
+        Everything else is an entity on the cluster; the batteries are its
+        subentries (Add battery, Reconfigure, Delete).
+        """
+        entry = self.config_entry
+        externals = [
+            e for e in self.hass.config_entries.async_entries(DOMAIN)
+            if e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
+        ]
+        if user_input is not None:
+            return self.async_create_entry(title="", data={**entry.options, **user_input})
+        current = entry.options.get(OPT_EXTERNAL_METER) or (
+            externals[0].entry_id if len(externals) == 1 else EXTERNAL_NONE
+        )
+        if current != EXTERNAL_NONE and current not in {e.entry_id for e in externals}:
+            current = EXTERNAL_NONE
+        schema = vol.Schema(
+            {
+                vol.Required(OPT_EXTERNAL_METER, default=current): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[selector.SelectOptionDict(value=e.entry_id, label=e.title) for e in externals]
+                        + [selector.SelectOptionDict(value=EXTERNAL_NONE, label="none")],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="cluster", data_schema=schema)
 
     async def async_step_price(
         self, user_input: dict[str, Any] | None = None

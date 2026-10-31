@@ -8,10 +8,11 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
-from .const import CONF_MODEL, DOMAIN, OPT_SOC_PROTECTION
+from .const import CONF_MODEL, DOMAIN, OPT_SOC_PROTECTION, OPT_TAKE_PART
 from .controller import ZendureController
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
@@ -70,6 +71,19 @@ async def async_setup_entry(
         entities.append(
             ZendureTraceSwitch(coordinator, TRACE_SWITCH, device_id, model, runtime["controller"])
         )
+        # Only on a battery under the battery cluster (v1.7.0); the entry
+        # is reloaded when it joins or leaves, so the switch comes and goes.
+        from . import is_member  # the package imports this module
+        if runtime.get("take_part", is_member(hass, entry.entry_id)):
+            entities.append(
+                ZendureSettingSwitch(coordinator, TAKE_PART_SWITCH, device_id, model, runtime["settings"], OPT_TAKE_PART)
+            )
+        else:
+            # Left the cluster: the switch goes from the registry too.
+            registry = er.async_get(hass)
+            stale = registry.async_get_entity_id("switch", DOMAIN, f"{device_id}_{TAKE_PART_SWITCH.key}")
+            if stale is not None:
+                registry.async_remove(stale)
 
     async_add_entities(entities)
 
@@ -114,6 +128,15 @@ SETTING_SWITCHES: tuple[tuple[SwitchEntityDescription, str], ...] = (
         icon="mdi:shield-battery-outline",
         entity_category=EntityCategory.CONFIG,
     ), OPT_SOC_PROTECTION),
+)
+
+
+# Off takes the battery out of the battery cluster's group for a while,
+# in standby, without deleting its subentry (v1.7.0).
+TAKE_PART_SWITCH = SwitchEntityDescription(
+    key="take_part",
+    name="Take part",
+    icon="mdi:battery-sync",
 )
 
 

@@ -8,7 +8,8 @@
           "zendure": "Zendure-accu — begin hier (ook een Zendure P1-meter)",
           "external_meter": "Externe netmeter via IP — het snelst (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externe netmeter uit Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Prijssturing (dynamische tarieven)"
+          "price_control": "Prijssturing — laden als stroom goedkoop is, ontladen als hij duur is (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Accucluster — tot drie accu's, één per fase, als één systeem"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
         }
+      },
+      "battery_cluster": {
+        "title": "Accucluster",
+        "description": "Geef elke accu die meedoet de fase waarop hij is aangesloten: één accu per fase. Kies *doet niet mee* om een accu buiten de groep te laten. Buffers, startdrempels en de meter worden overgenomen van de eerste accu; de groep start in standby. Accu's toevoegen, wijzigen of verwijderen kan later onder het cluster."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "De meter antwoordt niet. Zet Lokale API aan in de HomeWizard Energy-app en probeer opnieuw.",
       "not_a_power_sensor": "Deze sensor heeft nu geen vermogenswaarde (eenheid W of kW, numerieke waarde).",
       "same_entity": "De terugleversensor moet een andere zijn dan de vermogenssensor.",
-      "no_power_total": "Geen vermogenssensor van dit apparaat geeft een nettotaal. Kies de sensoren dan zelf."
+      "no_power_total": "Geen vermogenssensor van dit apparaat geeft een nettotaal. Kies de sensoren dan zelf.",
+      "no_member": "Kies voor ten minste één accu een fase.",
+      "phase_taken": "Twee accu's op één fase: deze versie neemt één accu per fase."
     },
     "abort": {
       "already_configured": "Dit apparaat is al geconfigureerd.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — netto netvermogen, afname positief:\n\n{sensors}\n\nNu: **{reading}**. Met zon op de panelen en weinig verbruik in huis hoort dit teruglevering te zijn. Staan afname en teruglevering omgekeerd, vink dan het vakje aan.",
         "data": {
           "export_positive": "De meter geeft teruglevering positief (teken omdraaien)"
+        }
+      },
+      "cluster": {
+        "title": "Accucluster",
+        "description": "Bedrijfsmodus, buffers, drempels en de meterbron zijn entiteiten van het cluster. De accu's zijn zijn subitems.",
+        "data": {
+          "external_meter": "Externe meter"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Vrijgegeven",
           "blocked": "Geblokkeerd",
           "protecting": "Beschermen",
-          "error": "Fout"
+          "error": "Fout",
+          "secondary": "Secondary"
         },
         "name": "Regelaarstatus",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Geen plan",
           "cheap": "Goedkoop",
           "between": "Daartussen",
-          "expensive": "Duur"
+          "expensive": "Duur",
+          "paused": "Gepauzeerd (gecoördineerd)"
         },
         "name": "Status",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Verloren schrijfacties"
+      },
+      "group_power": {
+        "name": "Vermogen groep"
+      },
+      "group_state_of_charge": {
+        "name": "Laadtoestand groep"
+      },
+      "members": {
+        "name": "Accu's die meedoen"
+      },
+      "cluster_status": {
+        "name": "Status",
+        "state": {
+          "standby": "Stand-by",
+          "idle": "Inactief",
+          "regulating": "Regelt",
+          "concentrated": "Eén accu",
+          "reversing": "Omkeren",
+          "quick": "Vol vermogen",
+          "meter_stale": "Geen meterwaarde"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Slijtagekosten"
+      },
+      "concentrate_below": {
+        "name": "Concentreren onder"
+      },
+      "redistribute_every": {
+        "name": "Herverdelen elke"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Trace opnemen"
+      },
+      "take_part": {
+        "name": "Meedoen"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Spotprijs incl. btw",
         "spot": "Spotprijs excl. btw",
         "import_price": "Importprijs (heel tarief)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Doet niet mee",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} meldt nieuwe eigenschappen",
       "description": "{device} meldt {keys}, die hij eerder niet meldde. Meestal komt dat na een firmware-upgrade. Deze versie heeft er nog geen entiteit voor. Download de diagnostiek (apparaatpagina → Diagnostiek downloaden) en meld ze in een issue, zodat ze kunnen worden toegevoegd. Negeer deze melding om haar weg te halen."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Accu",
+      "initiate_flow": {
+        "user": "Accu toevoegen"
+      },
+      "step": {
+        "user": {
+          "title": "Accu toevoegen",
+          "description": "Een accu van deze integratie die nog niet bij het cluster hoort, op een fase die nog vrij is.",
+          "data": {
+            "battery_entry": "Accu",
+            "phase": "Fase",
+            "priority": "Prioriteit",
+            "max_share": "Maximaal aandeel"
+          },
+          "data_description": {
+            "priority": "1 tot 9. De hoogste is primary; bij gelijke stand de snelst gemeten accu.",
+            "max_share": "Hoogste vermogen in watt dat deze accu in de groep op zich neemt, in beide richtingen. 0 = zijn eigen maximum."
+          }
+        },
+        "reconfigure": {
+          "title": "Accu onder het cluster",
+          "description": "Fase, prioriteit en het meeste dat deze accu in de groep mag leveren of opnemen.",
+          "data": {
+            "phase": "Fase",
+            "priority": "Prioriteit",
+            "max_share": "Maximaal aandeel"
+          },
+          "data_description": {
+            "priority": "1 tot 9. De hoogste is primary; bij gelijke stand de snelst gemeten accu.",
+            "max_share": "Hoogste vermogen in watt dat deze accu in de groep op zich neemt, in beide richtingen. 0 = zijn eigen maximum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Elke accu hoort al bij het cluster.",
+        "no_free_phase": "Elke fase heeft al een accu.",
+        "reconfigure_successful": "Opgeslagen."
+      }
     }
   }
 }

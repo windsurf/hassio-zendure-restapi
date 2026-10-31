@@ -59,61 +59,44 @@ def test_choosing_standby_again_resends_the_standby_command():
     assert sent(c) == [[("inputLimit", 0)]]
 
 
-# ── Standby at startup (v1.6.10) ──────────────────────────────────────────
+# ── Standby at startup (v1.6.10, review) ─────────────────────────────────
 
-
-def started(mode: str, entry_id: str):
-    """A controller as set up: the standby decision not taken yet."""
+def fresh(mode=C.MODE_STANDBY):
     c = make_controller(mode)
-    c.coordinator.entry_id = entry_id
-    c._standby_sent = None
+    c._standby_sent = None  # as after setup
+    c.coordinator.entry_id = f"entry-{id(c)}"
     return c
 
 
-def test_standby_at_startup_writes_nothing_and_keeps_a_limit_set_by_hand():
-    C._OPEN_LIMITS.discard("startup")
-    c = started(C.MODE_STANDBY, "startup")
-    run(c._apply_standby({"smartMode": 1, "inputLimit": 0, "outputLimit": 600, "acMode": C.AC_MODE_DISCHARGE}))
+def test_standby_at_startup_writes_nothing_and_keeps_hand_set_limits():
+    c = fresh()
+    run(c._apply_standby({"smartMode": 0, "inputLimit": 0, "outputLimit": 800, "acMode": C.AC_MODE_DISCHARGE}))
     assert sent(c) == []
+    c._set_state.assert_called_with("standby", "passive, writing nothing")
 
 
-def test_a_reload_after_an_own_limit_stops_it_once():
-    C._OPEN_LIMITS.discard("reload")
-    before = started(C.MODE_QUICK_CHARGE, "reload")
-    data = {"smartMode": 0, "inputLimit": 0, "outputLimit": 0, "acMode": C.AC_MODE_DISCHARGE}
-    run(before._write_direction(data, C.AC_MODE_CHARGE, 3000))
-    after = started(C.MODE_STANDBY, "reload")       # reloaded, standby chosen
-    run(after._apply_standby(data))
-    assert sent(after) == [[("inputLimit", 0), ("smartMode", 0)]]
-    again = started(C.MODE_STANDBY, "reload")       # a second reload
-    run(again._apply_standby(data))
+def test_after_a_reload_an_own_limit_still_gets_the_stop():
+    before = make_controller(C.MODE_QUICK_DISCHARGE)
+    before.coordinator.entry_id = "entry-reload"
+    run(before._write_direction({"smartMode": 0, "inputLimit": 0, "outputLimit": 0, "acMode": 1},
+                                C.AC_MODE_DISCHARGE, 1500))
+    # The entry is reloaded (a battery leaving a cluster): a new controller in standby.
+    after = make_controller(C.MODE_STANDBY, before.coordinator)
+    after._standby_sent = None
+    after.coordinator.api.async_write_properties.reset_mock()
+    run(after._apply_standby({"smartMode": 1, "inputLimit": 0, "outputLimit": 1500, "acMode": C.AC_MODE_DISCHARGE}))
+    assert sent(after) == [[("outputLimit", 0), ("smartMode", 0)]]
+    # Stopped: a second reload leaves it alone.
+    again = make_controller(C.MODE_STANDBY, before.coordinator)
+    again._standby_sent = None
+    again.coordinator.api.async_write_properties.reset_mock()
+    run(again._apply_standby({"smartMode": 0, "inputLimit": 0, "outputLimit": 900, "acMode": C.AC_MODE_DISCHARGE}))
     assert sent(again) == []
 
 
-def test_switching_to_standby_still_stops_the_battery():
-    C._OPEN_LIMITS.discard("switch")
-    c = started(C.MODE_STANDBY, "switch")
-    c._standby_sent = False                         # the way out of another mode
+def test_switching_into_standby_still_stops():
+    c = fresh()
+    run(c._apply_standby({"smartMode": 0, "inputLimit": 0, "outputLimit": 0, "acMode": 1}))
+    c._standby_sent = False  # what a cycle in another mode does
     run(c._apply_standby({"smartMode": 1, "inputLimit": 0, "outputLimit": 600, "acMode": C.AC_MODE_DISCHARGE}))
     assert sent(c) == [[("outputLimit", 0), ("smartMode", 0)]]
-
-
-def test_a_limit_written_moments_ago_is_stopped_even_if_the_report_reads_zero():
-    """Write, then standby before the report shows the limit: the stop is not a no-op (v1.6.10)."""
-    C._OPEN_LIMITS.discard("moments")
-    c = started(C.MODE_QUICK_CHARGE, "moments")
-    fresh = {"smartMode": 0, "inputLimit": 0, "outputLimit": 0, "acMode": C.AC_MODE_DISCHARGE}
-    run(c._write_direction(dict(fresh), C.AC_MODE_CHARGE, 500))
-    assert c._owns_limits
-    c._standby_sent = False                         # standby chosen right after
-    before = len(sent(c))
-    run(c._apply_standby(dict(fresh)))              # the report still reads 0
-    assert sent(c)[before:] == [[("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)]]
-
-
-def test_a_stop_without_an_own_limit_is_still_skipped_when_the_device_rests():
-    C._OPEN_LIMITS.discard("rest")
-    c = started(C.MODE_STANDBY, "rest")
-    c._standby_sent = False                         # switching, but nothing of its own was written
-    run(c._apply_standby({"smartMode": 0, "inputLimit": 0, "outputLimit": 0, "acMode": 1}))
-    assert sent(c) == []

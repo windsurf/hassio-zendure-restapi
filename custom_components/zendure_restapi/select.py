@@ -23,7 +23,9 @@ from .const import (
     OPERATION_MODES,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
+    MODE_COORDINATED,
 )
+from homeassistant.exceptions import HomeAssistantError
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
 from .settings import ZendureSettings
@@ -38,7 +40,8 @@ from .properties import (
 )
 
 from homeassistant.const import Platform
-from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_PRICE
+from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_PRICE
+from .cluster_entities import cluster_entities
 from .price_entities import price_entities
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +111,9 @@ async def async_setup_entry(
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PRICE:
         async_add_entities(price_entities(Platform.SELECT, hass, entry))
         return
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
+        async_add_entities(cluster_entities(Platform.SELECT, hass, entry))
+        return
     coordinator: ZendureCoordinator = hass.data[DOMAIN][entry.entry_id]
     device_id = coordinator.device_id or entry.unique_id or entry.entry_id
     model = entry.data.get(CONF_MODEL) or "SolarFlow"
@@ -124,12 +130,12 @@ async def async_setup_entry(
     # The strategy layer only exists on a battery, never on a meter.
     runtime = hass.data[DOMAIN].get(f"{entry.entry_id}_runtime")
     if runtime is not None:
-        entities.append(
-            ZendureOperationMode(
-                coordinator, OPERATION_MODE_DESCRIPTION, device_id, model,
-                runtime["settings"],
-            )
+        operation_mode = ZendureOperationMode(
+            coordinator, OPERATION_MODE_DESCRIPTION, device_id, model,
+            runtime["settings"],
         )
+        operation_mode.view = runtime.get("view")
+        entities.append(operation_mode)
         entities.append(
             ZendureMeterSource(
                 coordinator, METER_SOURCE_DESCRIPTION, device_id, model,
@@ -186,6 +192,8 @@ class ZendureOperationMode(ZendureEntity, SelectEntity):
     """
 
     entity_description: SelectEntityDescription
+    # The battery's settings view (v1.7.0): set on the Operation mode only.
+    view = None
 
     def __init__(
         self,
@@ -198,16 +206,32 @@ class ZendureOperationMode(ZendureEntity, SelectEntity):
         super().__init__(coordinator, description, device_id, model)
         self._settings = settings
 
+    def _coordinated(self) -> bool:
+        return self.view is not None and self.view.coordinated
+
     @property
     def available(self) -> bool:
         # Not backed by a coordinator key, so the base check does not apply.
         return self.coordinator.last_update_success
 
     @property
+    def options(self) -> list[str]:
+        # Under the battery cluster the mode is set there (v1.7.0).
+        if self._coordinated():
+            return [MODE_COORDINATED]
+        return list(self.entity_description.options or ())
+
+    @property
     def current_option(self) -> str | None:
+        if self._coordinated():
+            return MODE_COORDINATED
         return self._settings.get(OPT_OPERATION_MODE)
 
     async def async_select_option(self, option: str) -> None:
+        if self._coordinated():
+            raise HomeAssistantError(
+                f"{self.view.group_name} steers this battery; set the Operation mode there"
+            )
         if option not in OPERATION_MODES:
             _LOGGER.error("Unknown operation mode %s", option)
             return

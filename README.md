@@ -1,16 +1,20 @@
 # Zendure RestAPI – Home Assistant Integration
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![100% local](https://img.shields.io/badge/100%25-local-brightgreen.svg)](#why-this-integration) [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-supported-meters) [![Dynamic tariffs](https://img.shields.io/badge/dynamic-tariffs-f5a623.svg)](#-price-control)
+[![Zero export](https://img.shields.io/badge/zero-export-2ea44f.svg)](#why-this-integration) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![100% local](https://img.shields.io/badge/100%25-local-brightgreen.svg)](#why-this-integration) [![Works with HomeWizard](https://img.shields.io/badge/works%20with-HomeWizard%20P1-1e90ff.svg)](#-supported-meters) [![Dynamic tariffs](https://img.shields.io/badge/dynamic-tariffs-f5a623.svg)](#-price-control)
 
 🇳🇱 [Nederlandse versie](README.nl.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
 **Your Zendure SolarFlow battery in Home Assistant, 100% local, in three steps.** No cloud account, no MQTT broker, no YAML packages to copy. Install it from HACS, add your battery, pick a mode — the battery holds your grid at zero, once a second.
 
+**⚖️ Zero export, once a second.** The battery holds your grid connection at zero (Dutch: *nul op de meter*, NOM). A fast loop reads your meter every second and corrects evenly on both sides of zero: what your solar panels would send to the grid goes into the battery, and what the house would take from the grid comes out of it, without swinging from one to the other. Why it pays: a kWh you export earns less than a kWh you import costs — and once net metering ends, exporting can even cost you. Every kWh kept at home is worth the full import price.
+
+**☀️ Fixed-price contract with solar panels? Supported.** No price sensor, no Price Control: `smart_matching` soaks up your solar surplus and gives it back to the house in the evening. When net metering ends (the Netherlands, 2027) and your supplier charges feed-in costs, every kWh you store instead of export is worth almost the full import price. [More](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract)
+
+**💶 Dynamic tariff? Built in.** Zonneplan, Tibber, Frank Energie, Vattenfall, Essent or any other supplier: Price Control plans charging and discharging per quarter of an hour over today's and tomorrow's prices, with losses and wear in the sum. Net metering included while it lasts. Switch it on — no automation to write.
+
 **🔌 Works with HomeWizard.** Already have a HomeWizard P1 meter? That is all you need — no Zendure meter required. YouLess, EcoTracker, Shelly Pro 3EM and the Zendure meters work too.
 
-**💶 Dynamic tariffs, built in.** On a dynamic contract? Price Control plans charging and discharging per quarter of an hour over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan) — import and export prices, conversion losses and wear included. Net metering (Dutch *salderen*) included: one switch while it lasts. No automation to write: switch it on.
-
-![Zendure dashboard](images/dashboard.png)
+![\<image of the dashboard\>](images/dashboard.png)
 
 *`smart_matching` puts the solar surplus into the battery: it charges at 902 W and the controller keeps the grid within 10 W of zero, steering on the external meter. The integration creates this dashboard for you, with two more views: Price Control and History.*
 
@@ -55,13 +59,16 @@ Set it up in one go: **Add integration → Zendure RestAPI → External grid met
 
 ---
 
-## Why this integration
+<a id="why-this-integration"></a>
+
+## 💡 Why this integration
 
 - **100% local.** Talks straight to the battery's own HTTP server on your network. Keeps working when the internet or the Zendure cloud does not.
 - **Zero-export control, once a second.** A fast loop follows your meter every second; a slower one handles direction and safety. Built and tuned on measurements, not guesses.
 - **Seven operation modes** — from hands-off `standby` to `smart_matching`, charge-only, discharge-only, quick charge/discharge and manual. Drive them by hand, from Price Control or from your own automation.
 - **Dynamic tariffs, built in.** Price Control steers the battery on two fixed prices or on a day plan over the prices of today and tomorrow — see [Price control](#-price-control).
-- **Keeps working when the web doesn't.** Control runs locally on your network, without a cloud. Prices can come from Nord Pool or EPEX Spot, which kept working while web services were offline for the PHP2Shell emergency patches, and Price Control holds the last prices it read through an outage (v1.6.9).
+- **Fixed-price contracts too.** With solar panels and a fixed price, `smart_matching` alone stores the surplus for the evening; no prices needed.
+- **Keeps working when the web doesn't.** Control runs locally on your network, without a cloud. Prices can come from EPEX Spot or Nord Pool, which kept working while web services were offline for the PHP2Shell emergency patches, and Price Control holds the last prices it read through an outage (v1.6.9).
 - **Settings are entities.** Every setting survives a restart and can be changed live from the dashboard or an automation. Updates through HACS leave your own configuration alone.
 - **Your own meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM or Zendure — found on your network or added by IP, read directly once a second, not through a slower Home Assistant sensor. Or any power sensor Home Assistant already has.
 - **Safe by design.** No valid meter reading, no movement: the battery stops. Two batteries never fight over the same meter; each has its own controller, meter choice and price control.
@@ -92,11 +99,15 @@ Or: HACS → three-dot menu → Custom repositories → `https://github.com/wind
 
 **3. Add your devices** Home Assistant usually finds the battery and the P1 meter by itself under **Settings → Devices & Services**. Otherwise add **Zendure RestAPI**, choose **Zendure battery** (the first option) and enter the IP address. The dashboard **Zendure RestAPI** appears in your sidebar by itself; an existing one is left alone. Set **Operation mode** to `smart_matching` and watch the grid go to zero.
 
+**One controller only.** Switch off whatever else steers the battery: Zendure's own control in the app (ZENKI — *Add to HEMS* off, or *Custom Mode* without rules), another integration, or a Home Assistant automation that sets the battery's mode or limits. Two controllers on one battery undo each other; the integration warns you with the *Second controller* sensor. See [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
+
 **Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: **External grid meter from Home Assistant**. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
-## Operation modes
+<a id="operation-modes"></a>
+
+## 🎛️ Operation modes
 
 The mode names stay the same in every language, so automations and documentation can refer to them.
 
@@ -109,29 +120,31 @@ The mode names stay the same in every language, so automations and documentation
 | `quick_charge` / `quick_discharge` | Full power, ignoring the meter |
 | `manual` | Follows a fixed setpoint |
 
+**Fixed-price contract with solar panels:** choose `smart_matching` and leave Price Control off. When storing pays: [On a fixed-price contract](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract).
+
 ---
 
 ## 💶 Price control
 
-![Price Control view of the dashboard](images/dashboard_price.png)
+![\<image of the Price Control tab\>](images/dashboard_price.png)
 
 *The Price Control view: the day plan for today and tomorrow, measured up to now and planned after it, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Two ways to steer the battery on a dynamic tariff, in a device of its own:
 
 - **Fixed prices** — at or below a **cheap price** the battery charges (from the grid, or from solar only), at or above an **expensive price** it discharges, in between it holds the grid at zero (the modes per band are yours to change). Any price sensor will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie or your own.
-- **Day plan** (new in v1.6.0) — over the prices of today and tomorrow from [Nord Pool](https://github.com/custom-components/nordpool), EPEX Spot or Zonneplan it works out per quarter of an hour whether to charge, discharge or neither, with separate import and export prices, conversion losses, wear and a minimum margin per kWh. By default it trades: charging and discharging at the battery's full power; the modes per band can make it cover the house only or charge from solar only. Ready for the end of Dutch net metering in 2027: switch *Net metering* off and the export price follows its own formula.
+- **Day plan** (new in v1.6.0) — over the prices of today and tomorrow from [EPEX Spot](https://github.com/mampfes/ha_epex_spot), Nord Pool or your supplier's own integration it works out per quarter of an hour whether to charge, discharge or neither, with separate import and export prices, conversion losses, wear and a minimum margin per kWh. By default it trades: charging and discharging at the battery's full power; the modes per band can make it cover the house only or charge from solar only. Ready for the end of Dutch net metering in 2027: switch *Net metering* off and the export price follows its own formula.
 
 Replayed on 30 days of a real installation, the day plan earned **€ 1.58 a day** — as much as a full home-energy planner on the same days; the fixed prices earned € 0.21.
 
-**Day plan — what you need:** a price sensor with the prices of today and tomorrow, and **ApexCharts Card** from HACS for the chart. **Nord Pool** is the quickest route and is used below; **EPEX Spot** and **Zonneplan** work as well. Without ApexCharts Card the day plan runs as usual; the dashboard shows a note instead of the chart.
+**Day plan — what you need:** a price sensor with the prices of today and tomorrow, and **ApexCharts Card** from HACS for the chart. The day-ahead price is one price per country, so every dynamic contract works: **EPEX Spot** is the recommended source and is used below, **Nord Pool** works as well, and your supplier's surcharge, the energy tax and VAT are set in Price Control. That links any supplier with a dynamic contract — in the Netherlands Zonneplan, Tibber, Frank Energie, Vattenfall, Eneco, Essent, Budget Energie, NextEnergy, Coolblue Energie, Vandebron, ANWB Energie, EnergyZero and more; in Germany Tibber, Ostrom, E.ON. Zonneplan and Frank Energie customers can also use their supplier's own integration. Without ApexCharts Card the day plan runs as usual; the dashboard shows a note instead of the chart.
 
-1. Install **Nord Pool** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration)) and **ApexCharts Card** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)); restart Home Assistant and refresh the browser.
-2. **Add integration → Nord Pool**: *Region* your price area (`NL` for the Netherlands), *Currency* `EUR`, *Include VAT* on, *Price in cents* off, *Energy scale* `kWh`, *Template for additional costs* left as it is.
-3. Add Price Control (below) with that sensor, `sensor.nordpool_kwh_…`, and *The price sensor holds* on **Spot price incl. VAT**.
-4. Set **Decision** to **Day plan**; in the Netherlands, switch **Net metering** on until 1 January 2027. Compare **Import price** with your supplier's price for this quarter; adjust *Import surcharge* if they differ.
+1. Install **EPEX Spot** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)) and **ApexCharts Card** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)); restart Home Assistant and refresh the browser.
+2. **Add integration → EPEX Spot** with your market area (`NL` for the Netherlands).
+3. Add Price Control (below) with the sensor *Market price*, `sensor.epex_spot_data_market_price`, and *The price sensor holds* on **Spot price excl. VAT**.
+4. Set **Decision** to **Day plan**. In the Netherlands in 2026: *Import factor* 1.21, *Import surcharge* 0.1108481 (energy tax incl. VAT) + your supplier's purchase cost per kWh ([table](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#import-surcharge-per-supplier-netherlands)), and **Net metering** on until 1 January 2027. Compare **Import price** with your supplier's price for this quarter.
 
-**Using EPEX Spot or Zonneplan instead of Nord Pool?** In step 1 install only ApexCharts Card, and skip step 2. In step 3 choose the price sensor of EPEX Spot or Zonneplan, with *The price sensor holds* set as listed for that integration in [Other price sources](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more).
+**Nord Pool instead?** Set it up bare: *Include VAT* off, precision 7, low price percentage 0 (`sensor.nordpool_kwh_nl_eur_7_00_0`), and choose **Spot price excl. VAT**. **Your supplier's own integration** (Zonneplan, Frank Energie): choose **Import price (whole tariff)**. See [Other price sources](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more).
 
 Full walk-through, tariff settings for other contracts and countries: [Setting up spot prices](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-spot-prices-for-the-day-plan).
 
@@ -167,13 +180,14 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) and [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug logging and the sample trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — what Zendure's SDK lists, and what this integration adds and corrects
+- [Battery cluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — up to three batteries, one per phase, as one system
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.6.10:** standby that is already chosen leaves the battery alone when Home Assistant starts; the day plan is right across the change of clocks with Nord Pool; the Inverter power limit is lowered from Home Assistant, never raised: raise it in the Zendure app (Safe power setting); a Smart Meter 3CT that was added as a battery before v1.6.7 loses the battery entities it no longer has, and a new meter is called *Zendure Meter* instead of *Zendure Zendure Meter*. **v1.6.9:** Price Control holds the last prices: when the price sensor drops out, the day plan carries on with the prices it already had until they run out; the dashboard shows the version that runs. **v1.6.8:** what happens with a Zendure firmware upgrade: the integration recognises a restart of the battery, shows it in the diagnostics and with a repair when standby comes back with a limit, and writes nothing by itself; new keys in the report raise a repair; it loads on a clean Home Assistant again. **v1.6.7:** a smaller database: energy counters are written per 0.01 kWh or once a minute, *Telegram age* is no longer a sensor, and the README explains how to keep the database small; the chart axes follow the data and no longer cut a line off. **v1.6.6:** a **History** view with four charts — 30 minutes live, 4 hours, the last 24 hours, 30 days of daily totals; solar from a **micro inverter or second inverter** can be shown in the charts; the dashboard can be **replaced** from the options. **v1.6.5:** the dashboard shows the grid reading that actually steers, **Grid power (in control)**, whichever meter that is; the day plan also reads **EPEX Spot** and **Zonneplan** prices; any meter already in Home Assistant can be chosen as a whole device. **v1.6.4:** a **direction change in one write** instead of up to four, and a new measured diagnostic, **Lost writes**, that checks every limit write against the device's next report; how fast the device follows a write is documented; the setup menu now starts with the battery. **v1.6.3:** **measured diagnostics** — what the battery actually does, next to what its settings assume: charge and discharge efficiency per block, round trip efficiency per cycle, usable capacity, full cycles, standby draw, response time and grid tracking error, and the **realized margin** per day next to the expected one; a warning when the battery draws too much at rest. **v1.6.2:** a warning when something else also steers the battery (the Zendure app not on Custom Mode, or an automation of your own); price control keeps writing after a reload or a slow restart.
+**Latest release – v1.7.0:** a **battery cluster**: up to three batteries, one per phase, hold the grid at zero together — one is primary, the others secondary; a single battery works as before.
 
-**Coming in 1.7:** several batteries behind one connection as one cluster — testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
+<a id="more"></a>
 
-## More
+## 🔗 More
 
 - 🐞 [Issues](https://github.com/windsurf/hassio-zendure-restapi/issues) — bugs, questions and [model reports](https://github.com/windsurf/hassio-zendure-restapi/issues/new?template=new_model.yml).
 - 💬 [Forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) — questions, setups and experiences.
@@ -183,4 +197,4 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 
 > **Disclaimer:** Not affiliated with or endorsed by Zendure. Provided as-is, without warranty. Use at your own risk.
 
-Licence: MIT — see [LICENSE](LICENSE).
+Licence: Apache 2.0 since v1.7.0; v1.6.x and earlier under MIT — see [LICENSE](LICENSE) and [NOTICE](NOTICE).

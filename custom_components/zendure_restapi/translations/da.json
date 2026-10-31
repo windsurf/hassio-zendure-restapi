@@ -8,7 +8,8 @@
           "zendure": "Zendure-batteri — start her (også en Zendure P1-måler)",
           "external_meter": "Ekstern netmåler via IP — hurtigst (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Ekstern netmåler fra Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Prisstyring (dynamiske tariffer)"
+          "price_control": "Prisstyring — oplad, når strøm er billig, aflad, når den er dyr (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "battery_cluster": "Batteriklynge — op til tre batterier, ét pr. fase, som ét system"
         }
       },
       "zendure": {
@@ -91,6 +92,10 @@
         "data": {
           "export_positive": "Måleren viser salg som positivt (vend fortegnet)"
         }
+      },
+      "battery_cluster": {
+        "title": "Batteriklynge",
+        "description": "Angiv for hvert batteri, der deltager, den fase det er tilsluttet: ét batteri pr. fase. Vælg *deltager ikke* for at lade et batteri være udenfor. Buffere, starttærskler og måler overtages fra det første batteri; gruppen starter i standby. Batterier kan senere tilføjes, ændres eller fjernes under klyngen."
       }
     },
     "error": {
@@ -100,7 +105,9 @@
       "homewizard_api_off": "Måleren svarer ikke. Slå Lokal API til i HomeWizard Energy-appen, og prøv igen.",
       "not_a_power_sensor": "Denne sensor har lige nu ingen effektværdi (enhed W eller kW, numerisk tilstand).",
       "same_entity": "Eksportsensoren skal være en anden end effektsensoren.",
-      "no_power_total": "Ingen effektsensor på denne enhed giver en nettotal. Vælg så sensorerne manuelt."
+      "no_power_total": "Ingen effektsensor på denne enhed giver en nettotal. Vælg så sensorerne manuelt.",
+      "no_member": "Vælg en fase for mindst ét batteri.",
+      "phase_taken": "To batterier på én fase: denne version tager ét batteri pr. fase."
     },
     "abort": {
       "already_configured": "Denne enhed er allerede konfigureret.",
@@ -158,6 +165,13 @@
         "description": "**{device}** — nettoeffekt fra nettet, køb positivt:\n\n{sensors}\n\nNu: **{reading}**. Med sol på panelerne og lidt forbrug i huset bør det være salg til nettet. Er køb og salg byttet om, så sæt kryds i feltet.",
         "data": {
           "export_positive": "Måleren viser salg som positivt (vend fortegnet)"
+        }
+      },
+      "cluster": {
+        "title": "Batteriklynge",
+        "description": "Driftstilstand, buffere, tærskler og målerkilde er entiteter på klyngen. Batterierne er dens underposter.",
+        "data": {
+          "external_meter": "Ekstern måler"
         }
       }
     },
@@ -314,7 +328,8 @@
           "released": "Frigivet",
           "blocked": "Blokeret",
           "protecting": "Beskytter",
-          "error": "Fejl"
+          "error": "Fejl",
+          "secondary": "Secondary"
         },
         "name": "Regulatorstatus",
         "state_attributes": {
@@ -338,7 +353,8 @@
           "no_plan": "Ingen plan",
           "cheap": "Billigt",
           "between": "Imellem",
-          "expensive": "Dyrt"
+          "expensive": "Dyrt",
+          "paused": "Sat på pause (koordineret)"
         },
         "name": "Status",
         "state_attributes": {
@@ -628,6 +644,27 @@
       },
       "lost_writes": {
         "name": "Tabte skrivninger"
+      },
+      "group_power": {
+        "name": "Gruppens effekt"
+      },
+      "group_state_of_charge": {
+        "name": "Gruppens ladetilstand"
+      },
+      "members": {
+        "name": "Deltagende batterier"
+      },
+      "cluster_status": {
+        "name": "Status",
+        "state": {
+          "standby": "Standby",
+          "idle": "Inaktiv",
+          "regulating": "Regulerer",
+          "concentrated": "Ét batteri",
+          "reversing": "Skifter retning",
+          "quick": "Fuld effekt",
+          "meter_stale": "Ingen målerværdi"
+        }
       }
     },
     "binary_sensor": {
@@ -767,6 +804,12 @@
       },
       "wear_cost": {
         "name": "Slidomkostning"
+      },
+      "concentrate_below": {
+        "name": "Koncentrér under"
+      },
+      "redistribute_every": {
+        "name": "Omfordel hver"
       }
     },
     "switch": {
@@ -784,6 +827,9 @@
       },
       "trace_recording": {
         "name": "Sporoptagelse"
+      },
+      "take_part": {
+        "name": "Deltag"
       }
     }
   },
@@ -793,6 +839,14 @@
         "spot_vat": "Spotpris inkl. moms",
         "spot": "Spotpris ekskl. moms",
         "import_price": "Købspris (hele tariffen)"
+      }
+    },
+    "phase": {
+      "options": {
+        "none": "Deltager ikke",
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3"
       }
     }
   },
@@ -816,6 +870,48 @@
     "new_property": {
       "title": "{device} rapporterer nye egenskaber",
       "description": "{device} rapporterer {keys}, som den ikke rapporterede før. Det følger som regel efter en firmwareopdatering. Denne version har endnu ingen entitet for dem. Download diagnostikken (enhedssiden → Download diagnostik) og rapportér dem i et issue, så de kan tilføjes. Ignorér meddelelsen for at lukke den."
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Batteri",
+      "initiate_flow": {
+        "user": "Tilføj batteri"
+      },
+      "step": {
+        "user": {
+          "title": "Tilføj et batteri",
+          "description": "Et batteri fra denne integration, som endnu ikke hører til klyngen, på en fase der stadig er fri.",
+          "data": {
+            "battery_entry": "Batteri",
+            "phase": "Fase",
+            "priority": "Prioritet",
+            "max_share": "Maksimal andel"
+          },
+          "data_description": {
+            "priority": "1 til 9. Den højeste er primary; ved lighed det hurtigst målte batteri.",
+            "max_share": "Højeste effekt i watt, som dette batteri påtager sig i gruppen, i begge retninger. 0 = dets eget maksimum."
+          }
+        },
+        "reconfigure": {
+          "title": "Batteri under klyngen",
+          "description": "Fase, prioritet og det meste dette batteri må levere eller optage i gruppen.",
+          "data": {
+            "phase": "Fase",
+            "priority": "Prioritet",
+            "max_share": "Maksimal andel"
+          },
+          "data_description": {
+            "priority": "1 til 9. Den højeste er primary; ved lighed det hurtigst målte batteri.",
+            "max_share": "Højeste effekt i watt, som dette batteri påtager sig i gruppen, i begge retninger. 0 = dets eget maksimum."
+          }
+        }
+      },
+      "abort": {
+        "no_free_battery": "Alle batterier hører allerede til klyngen.",
+        "no_free_phase": "Hver fase har allerede et batteri.",
+        "reconfigure_successful": "Gemt."
+      }
     }
   }
 }

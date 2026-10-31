@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.6.10
+# ZENDURE RESTAPI DASHBOARD - v1.7.0
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -21,12 +21,6 @@
 #                     hours, 30 days of daily totals; then the
 #                     measured diagnostics (v1.6.3)
 #
-# INVERTER POWER LIMIT (v1.6.10):
-#   The slider reaches as far as the value the battery reports.
-#   It can be lowered here; raising the limit goes through the
-#   Zendure app (Safe power setting). The limit follows the grid
-#   code and the registration with the grid operator.
-#
 # INSTALL:
 #   Automatic: tick "Create the Zendure RestAPI dashboard" when
 #   adding the battery, or later in its options (Configure).
@@ -37,6 +31,13 @@
 #   By hand: create a new dashboard, open Edit dashboard ->
 #   three-dot menu -> Raw configuration editor, and replace its
 #   content with everything below this comment block.
+#
+# INVERTER POWER LIMIT (v1.6.10):
+#   The battery's ceiling for feeding into the grid. Its slider
+#   under Configuration goes up to the value the battery
+#   reports: Home Assistant can lower it, raising it is done in
+#   the Zendure app (Safe power setting). The limit follows the
+#   grid code and the registration with the grid operator.
 #
 # ENTITY IDS:
 #   Battery  - sensor./number./select./switch./binary_sensor.

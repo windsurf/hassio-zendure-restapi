@@ -12,20 +12,22 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 > **Actively tested with:** Zendure SolarFlow 3000 Mix AC+ (`solarFlow3000MixAC+`) and the Zendure P1 meter (three-phase, meterType 3)
 
-![Zendure dashboard](images/dashboard.png)
+![\<image of the dashboard\>](images/dashboard.png)
 
 *The example dashboard: `smart_matching` puts the solar surplus into the battery, charging at 902 W while the controller keeps the grid within 10 W of zero on the external meter. Three views are included — the battery, Price Control and History — see [Dashboard](#dashboard).*
 
 ---
 
-## Contents
+<a id="contents"></a>
+
+## 📑 Contents
 
 - **Install:** [Supported products](#-supported-products) · [Before you start](#before-you-start) · [Installation via HACS](#installation-via-hacs) · [Manual Installation](#manual-installation) · [Setup](#setup)
-- **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter) · [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade)
+- **Use:** [Dashboard](#dashboard) · [Price control](#price-control) · [An external P1 meter](#an-external-p1-meter) · [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade) · [Several batteries](#several-batteries)
 - **How it works:** [How the controller works](#how-the-controller-works) · [What the P1 meter does and does not give you](#what-the-p1-meter-does-and-does-not-give-you) · [zenSDK and this integration](#zensdk-and-this-integration) · [Notes on correctness](#notes-on-correctness)
 - **Energy and measurements:** [The Energy dashboard](#the-energy-dashboard) · [Measured diagnostics](#measured-diagnostics)
 - **Reference:** [Supported Entities](#supported-entities) · [The database](#the-database) · [Debug logging](#debug-logging) · [Tests](#tests) · [Reporting an unsupported property](#reporting-an-unsupported-property) · [Brand images](#brand-images) · [Known limitations](#known-limitations)
-- **History:** [Coming in 1.7](#coming-in-17-clusters) · [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
+- **History:** [Changelog](#changelog) · [Inspiration & Acknowledgements](#inspiration--acknowledgements) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
 ---
 
@@ -64,28 +66,11 @@ Running it on another setup? Add yours in the [forum topic](https://community.ho
 
 ---
 
-## Before you start
+<a id="before-you-start"></a>
 
-Under EN 18031 the local HTTP API is **disabled by default**. In the Zendure app, add **HEMS** and exit the app: that switches the API on. Check it from a terminal, see the end of this section.
+## ✅ Before you start
 
-**Then keep Zendure's own control out**, or two controllers steer one battery. Two ways, both keep the API on:
-
-1. **Add to HEMS off.** On the device page, switch **Add to HEMS** off: the device is then "no longer automatically controlled by the system". The simplest way; tested on a 3000 Mix AC+ and a 2400 AC.
-2. **Custom Mode.** Leave the device in HEMS, choose **Energy plan → Custom Mode** and **delete its default rule**. Handy if you hand control back to Zendure now and then: going back to ZENKI is one tap.
-
-<img src="images/app_add_to_hems.png" width="400" alt="Add to HEMS switch on the device page"> <img src="images/app_add_to_hems_info.png" width="400" alt="Add to HEMS explained in the app">
-
-Forget it, and the integration notices: the binary sensor *Second controller* turns on and a repair appears under *Settings → Repairs* once something else has moved the limits five times in a quarter of an hour while the integration steers. Both clear by themselves after an hour without such writes.
-
-**The Safe power setting is the ceiling.** On the HEMS main page, the hexagon icon at the top right → *Home settings* → *Safe power setting* holds the maximum discharge and charge power, set for regulations and breaker capacity. The battery reports them as `inverseMaxPower` and `chargeMaxLimit`, shown in Home Assistant as *Inverter power limit* and *Charge power limit*, and *Max discharge power* and *Max charge power* of the controller cannot go above them.
-
-**The Inverter power limit is not raised from Home Assistant** (since v1.6.10). `inverseMaxPower` is the battery's ceiling for feeding into the grid: it follows the grid code and what is registered with your grid operator, and it holds when Home Assistant is not running. In Home Assistant its slider reaches as far as the value the battery reports. You can lower it there; a higher value, by hand or from an automation, is refused with a message and nothing is written. Home Assistant itself refuses a value above the slider's maximum, with its own message about the valid range, before the integration is asked. While the battery reports no value the entity is unavailable and a call to it does nothing. After lowering it, raise it again in the Zendure app (*Safe power setting*). The integration itself never writes it; the controller only reads it as its ceiling.
-
-**800 W is the default on purpose.** *Max discharge power* and *Max charge power* start at 800 W: in most countries, for safety reasons, that is what you may feed back through an ordinary wall socket. Above that the battery needs its own circuit: a fixed connection or a dedicated cable with its own fuse. Raise them only when your installation allows it, up to *Inverter power limit* and *Charge power limit*; for more than that, raise the Safe power setting in the app first.
-
-<img src="images/app_hems_settings_icon.png" width="400" alt="HEMS main page, settings icon"> <img src="images/app_safe_power_setting.png" width="400" alt="Safe power setting">
-
-**Verify** from a terminal before configuring anything.
+Under EN 18031 the local HTTP API is **disabled by default**. In the Zendure app, add **HEMS** and exit the app: that switches the API on. Check it from a terminal:
 
 ```bash
 curl "http://<device-ip>/properties/report"
@@ -97,9 +82,29 @@ Invoke-RestMethod "http://<device-ip>/properties/report" | ConvertTo-Json
 
 If that returns JSON, the integration will work. If it times out or returns nothing, the local API is still off and no amount of configuration will help.
 
+**Then keep Zendure's own control out**, or two controllers steer one battery. Two ways, both keep the API on:
+
+1. **Add to HEMS off.** On the device page, switch **Add to HEMS** off: the device is then "no longer automatically controlled by the system". The simplest way; tested on a 3000 Mix AC+ and a 2400 AC.
+2. **Custom Mode.** Leave the device in HEMS, choose **Energy plan → Custom Mode** and **delete its default rule**. Handy if you hand control back to Zendure now and then: going back to ZENKI is one tap.
+
+<img src="images/app_add_to_hems.png" width="400" alt="&lt;image of the Add to HEMS switch&gt;"> <img src="images/app_add_to_hems_info.png" width="400" alt="&lt;image of the Add to HEMS explanation&gt;">
+
+Forget it, and the integration notices: the binary sensor *Second controller* turns on and a repair appears under *Settings → Repairs* once something else has moved the limits five times in a quarter of an hour while the integration steers. Both clear by themselves after an hour without such writes.
+
+**The Safe power setting is the ceiling.** On the HEMS main page, the hexagon icon at the top right → *Home settings* → *Safe power setting* holds the maximum discharge and charge power, set for regulations and breaker capacity. The battery reports them as `inverseMaxPower` and `chargeMaxLimit`, shown in Home Assistant as *Inverter power limit* and *Charge power limit*, and *Max discharge power* and *Max charge power* of the controller cannot go above them.
+
+**The Inverter power limit is not raised from Home Assistant** (since v1.6.10). `inverseMaxPower` is the battery's ceiling for feeding into the grid: it follows the grid code and what is registered with your grid operator, and it holds when Home Assistant is not running. In Home Assistant its slider reaches as far as the value the battery reports. You can lower it there; a higher value, by hand or from an automation, is refused with a message and nothing is written. Home Assistant itself refuses a value above the slider's maximum, with its own message about the valid range, before the integration is asked. While the battery reports no value the entity is unavailable and a call to it does nothing. After lowering it, raise it again in the Zendure app (*Safe power setting*). The integration itself never writes it; the controller only reads it as its ceiling.
+
+**800 W is the default on purpose.** *Max discharge power* and *Max charge power* start at 800 W: in most countries, for safety reasons, that is what you may feed back through an ordinary wall socket. Above that the battery needs its own circuit: a fixed connection or a dedicated cable with its own fuse. Raise them only when your installation allows it, up to *Inverter power limit* and *Charge power limit*; for more than that, raise the Safe power setting in the app first.
+
+<img src="images/app_hems_settings_icon.png" width="400" alt="&lt;image of the HEMS settings icon&gt;"> <img src="images/app_safe_power_setting.png" width="400" alt="&lt;image of the Safe power setting&gt;">
+
+
 ---
 
-## Installation via HACS
+<a id="installation-via-hacs"></a>
+
+## 📦 Installation via HACS
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=windsurf&repository=hassio-zendure-restapi&category=integration)
 
@@ -111,13 +116,17 @@ HACS shows the version it last downloaded. After a manual install, or a copy of 
 
 ---
 
-## Manual Installation
+<a id="manual-installation"></a>
+
+## 🛠️ Manual Installation
 
 Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custom_components/` directory and restart. A full restart is required — a reload leaves stale bytecode in `__pycache__`.
 
 ---
 
-## Setup
+<a id="setup"></a>
+
+## ⚙️ Setup
 
 Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
@@ -141,7 +150,7 @@ The confidence per model is listed under [Supported products](#-supported-produc
 
 **Why PV on the device is experimental.** The loop reads the battery's contribution as `outputHomePower − gridInputPower`. On an AC-coupled device that is the battery and nothing else. With panels on the device's own inputs it includes their output, so what the loop treats as battery power is battery plus PV. That may well be the right quantity for holding the grid at zero, but it has not been tested, and a trace from such a device is what would settle it.
 
-**One battery steers at a time.** Two batteries in a smart mode would each see the whole grid deviation and correct it twice between them, so the second battery to enter a smart mode is stopped with status `blocked` and a reason naming the first. Manual, quick and standby are unaffected. One Home Assistant instance is assumed to be one grid connection. Sharing a deviation between batteries is a planned extension and needs measurements from a two-device installation first.
+**One battery steers at a time, unless a battery cluster steers them.** Two batteries in a smart mode would each see the whole grid deviation and correct it twice between them, so the second battery to enter a smart mode is stopped with status `blocked` and a reason naming the first. Manual, quick and standby are unaffected. One Home Assistant instance is assumed to be one grid connection. Since v1.7.0 up to three batteries, one per phase, can steer together under a **battery cluster** — see [Several batteries](#several-batteries).
 
 **The device tapers the last percent when charging, not when discharging.** Charging at 3 kW, the 3000 Mix AC+ holds full power to about 98–99 %, then steps down by itself — roughly 2.8, 1.8 and 1.2 kW, each held for about a minute — and stops at 100 %, the charge limit still at 3000 W. Seen three times in the same pattern. Discharging runs at full power down to the lower limit and stops there; no taper. The last percent of a charge therefore takes three to four minutes instead of under two; nothing in the integration causes or needs to correct it.
 
@@ -155,7 +164,9 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 
 ---
 
-## Dashboard
+<a id="dashboard"></a>
+
+## 📊 Dashboard
 
 `dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the switch, its status and decision, the day plan with its charge and discharge periods and the expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the fixed prices and the three modes per band (used by both the fixed prices and the day plan), the tariff, losses and margin — every setting a tile with a slider, a select or a toggle (see [Price control](#price-control)) — and the battery and grid now. The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed) and, under them, the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, control and the realized margin. The view **Zendure RestAPI** has thirteen sections:
 
@@ -172,7 +183,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 
 **The History view.** Four charts, each in the same colours: grid, discharging, charging, PV and state of charge.
 
-![History view of the dashboard](images/dashboard_history.png)
+![\<image of the History tab\>](images/dashboard_history.png)
 
 *The History view: charging at 3 kW in the cheap hours around noon, with solar from a second inverter, then following the solar surplus; the last 24 hours with several cycles, and 30 days of daily totals.*
 
@@ -199,16 +210,18 @@ Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000
 
 ---
 
-## Price control
+<a id="price-control"></a>
 
-![Price Control view of the dashboard](images/dashboard_price.png)
+## 💶 Price control
+
+![\<image of the Price Control tab\>](images/dashboard_price.png)
 
 *The Price Control view: the day plan for today and tomorrow, measured up to now and planned after it, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
 Steering on dynamic tariffs, built in, in two ways:
 
 - **Fixed prices.** At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, and in between it follows the meter or rests. Any sensor that gives the current price per kWh will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie, or a template of your own.
-- **Day plan.** Over the prices of today and tomorrow from a price sensor with a price list — **Nord Pool** or **EPEX Spot** from HACS, the **Zonneplan** integration and [others](#other-price-sources-epex-spot-zonneplan-and-more) — it works out for every quarter of an hour whether to charge, discharge or neither — with an import price and an export price each from a formula of their own, the conversion losses on both sides, wear, and a minimum margin per kWh that every cycle has to clear.
+- **Day plan.** Over the prices of today and tomorrow from a price sensor with a price list — **EPEX Spot** or **Nord Pool** from HACS, the **Zonneplan** integration and [others](#other-price-sources-epex-spot-zonneplan-and-more) — it works out for every quarter of an hour whether to charge, discharge or neither — with an import price and an export price each from a formula of their own, the conversion losses on both sides, wear, and a minimum margin per kWh that every cycle has to clear.
 
 ### Modes per band
 
@@ -238,7 +251,7 @@ Why these. Fixed prices know only the price now, so they cover the house rather 
 
 #### Why not fill the battery with free solar in between?
 
-Because under net metering solar is not free: a kWh sent to the grid is credited at the export price, which under net metering is the import price of that quarter ([more](#net-metering-and-the-export-price)). Store it instead and you give that up, and get back about 0.91 kWh later (95 % charging × 96 % discharging), minus the wear cost. Storing pays only when the later price is some 10 % higher plus two cents.
+Because under net metering solar is not free: a kWh sent to the grid is credited at the export price, which under net metering is the import price of that quarter ([more](#net-metering-and-the-export-price)). Store it instead and you give that up, and get back about 0.90 kWh later (95 % charging × 95 % discharging), minus the wear cost. Storing pays only when the later price is some 10 % higher plus two cents.
 
 The day plan already does that, and more cheaply: with `quick_charge` as cheap price mode (the preset) it charges from the grid at full power in the cheapest quarters, which on a sunny day are the sunny hours. The battery is only so large, so solar caught in the morning takes the place of grid energy the plan would have bought a few hours later at the same or a lower price. Nothing is won; the conversion loss remains. Replayed (the modes replay of [Replays](#replays)), with in between only catching solar (`smart_charge_only`, not offered as an in-between mode):
 
@@ -248,7 +261,7 @@ The day plan already does that, and more cheaply: with `quick_charge` as cheap p
 | catch solar only | 1.71 | 0.79 |
 | `smart_matching` (catch solar and cover the house) | 1.67 | **1.02** |
 
-With net metering, catching solar earns nothing, and covering the house in between costs more: it spends at night and in the morning what the plan set aside for the evening peak. Without net metering it turns round. Solar sent to the grid then fetches, with the default export formula, spot × 1.10 + € 0.02, far less than a kWh saves in the evening, and holding the grid at zero in between earns the most. The difference under net metering is small, about € 20 a year; choose `smart_matching` anyway if you prefer the battery to follow the sun.
+With net metering, catching solar earns nothing, and covering the house in between costs more: it spends at night and in the morning what the plan set aside for the evening peak. Without net metering it turns round. Solar sent to the grid then fetches, with the default export formula, spot + € 0.02, far less than a kWh saves in the evening, and holding the grid at zero in between earns the most. The difference under net metering is small, about € 20 a year; choose `smart_matching` anyway if you prefer the battery to follow the sun.
 
 ### Setting it up
 
@@ -264,19 +277,19 @@ Price control is a device of its own, linked to one battery — this integration
 | Expensive price mode | both: `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | preset |
 | In-between mode | both: `smart_matching` (grid at zero) or `standby`; also without a usable price | preset |
 | Net metering (export = import price) | day plan: how exports are valued, see [Net metering](#net-metering-and-the-export-price); both: switching it fills in the presets | off |
-| Import factor, Import surcharge | day plan: import price = spot × factor + surcharge | 1.21, 0.13505 |
-| Export factor, Export surcharge | day plan: export price = spot × factor + surcharge, when net metering is off | 1.10, 0.02 |
+| Import factor, Import surcharge | day plan: import price = spot × factor + surcharge | 1.21, 0.1308481 |
+| Export factor, Export surcharge | day plan: export price = spot × factor + surcharge, when net metering is off | 1.00, 0.02 |
 | Wear cost | day plan: per kWh through the battery | 0.02 |
 | Minimum margin | day plan: per kWh, below this no cycle | 0.02 |
 | Expected house load | day plan: the part of a discharge that covers the house and is worth the import price; the rest is sold | 400 W |
-| Charge efficiency, Discharge efficiency | day plan: grid to cells, cells to house | 95 %, 96 % |
+| Charge efficiency, Discharge efficiency | day plan: grid to cells, cells to house | 95 %, 95 % |
 | Electricity price | the price the sensor gives, per kWh in Home Assistant's currency | — |
 | Import price, Export price | now, from the formulas | — |
 | Plan | day plan: `charge`, `discharge` or `idle` now; the charge and discharge blocks ahead, each with the power its mode runs at, as attributes | — |
 | Expected margin | day plan: what the plan earns over the prices known, after losses and wear | — |
 | Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`; the target mode and both prices as attributes, and `prices_held` / `prices_held_until` while it runs on a held price list | — |
 
-The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus 10 % and two cents. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
+The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus two cents, without VAT. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
 
 **What the price sensor holds.** The day plan works back to the bare spot price, because the formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the whole import price. See [Setting up spot prices for the day plan](#setting-up-spot-prices-for-the-day-plan).
 
@@ -327,53 +340,63 @@ This replay is simpler than the one above: it leaves out the standby draw and th
 
 **One writer.** Leave price control off when an automation or planner of your own already sets the Operation mode; two writers would undo each other's choices.
 
-<a id="setting-up-nord-pool-for-the-day-plan"></a>
-
 ### Setting up spot prices for the day plan
 
-The day plan needs a price sensor with the prices of today and tomorrow. Fixed prices work with any price sensor. This section uses the **Nord Pool** integration from HACS ([custom-components/nordpool](https://github.com/custom-components/nordpool)), the quickest route: it carries the attributes `raw_today` and `raw_tomorrow`, per quarter of an hour or per hour, with tomorrow's prices from about 13:00. **EPEX Spot**, **Zonneplan** and others work as well, see [other price sources](#other-price-sources-epex-spot-zonneplan-and-more).
+The day plan needs a price sensor with the prices of today and tomorrow. Fixed prices work with any price sensor. The day-ahead price is one price per price area, set once a day for all of Europe, so every dynamic contract works with the bare spot price and your own tariff in Price Control, whatever the supplier is called (see [Your tariff](#your-tariff)). This section uses **EPEX Spot** from HACS ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)), the recommended source: its *Market price* sensor carries the attribute `data`, per quarter of an hour where the source has them, with tomorrow's prices from about 13:00. **Nord Pool** works just as well ([below](#nord-pool-instead-of-epex-spot)); Zonneplan and Frank Energie customers can also use their supplier's own integration ([other price sources](#other-price-sources-epex-spot-zonneplan-and-more)).
+
+> **Recommended price sensor:** `sensor.epex_spot_data_market_price` (EPEX Spot, Market Price) with *The price sensor holds* set to **Spot price excl. VAT**. The integration applies VAT and supplier and tax surcharges itself, so the result is correct in every country. Do not use the Total Price sensor: its VAT setting differs per installation and causes double or missing VAT. Netherlands (Zonneplan, 2026): import = spot × 1.21 + 0.1308481 €/kWh; feed-in from 2027 = spot + 0.02 €/kWh.
 
 What to install, both from HACS:
 
 | | For | Install |
 |---|---|---|
-| **Nord Pool** (integration) | the day-ahead prices, or another [price source](#other-price-sources-epex-spot-zonneplan-and-more) | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration), or **HACS → search *Nord Pool* → Download**; restart Home Assistant |
+| **EPEX Spot** (integration) | the day-ahead prices, or another [price source](#other-price-sources-epex-spot-zonneplan-and-more) | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration), or **HACS → search *EPEX Spot* → Download**; restart Home Assistant |
 | **ApexCharts Card** (dashboard card) | the chart of the plan on the *Price Control* tab and the charts on the *History* tab (version 2.1 or later); without it the day plan runs and the dashboard shows a note instead | [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin), or **HACS → search *ApexCharts Card* → Download**; refresh the browser |
 
 Install ApexCharts Card **before** the dashboard is created: the integration adds the charts only when the card is there. Already have the dashboard? Tick *Replace the existing dashboard* under the battery's **Configure**.
 
 **1. Install** both, as above.
 
-**2. Add the integration.** **Settings → Devices & services → Add integration → Nord Pool**:
+**2. Add the integration.** **Settings → Devices & services → Add integration → EPEX Spot**, with the market area of your contract: `NL`, `BE`, `DE-LU`, `AT`, … It makes the sensor *Market price*, `sensor.epex_spot_data_market_price`. Check under **Developer tools → States** that it has the attribute `data`.
 
-| Field | Choose | Why |
-|---|---|---|
-| Region | your price area: `NL`, `BE`, `GER` (Germany), `FR`, `AT`, `SE3`, `DK1`, … | the day-ahead prices your contract follows |
-| Currency | the currency of your contract, `EUR` in the euro area | Price Control works in Home Assistant's currency |
-| Include VAT | **on** | matches *Spot price incl. VAT* in Price Control |
-| Decimal rounding precision | `3` or more | quarter prices differ by tenths of a cent |
-| Low price percentage | leave at `1` | not used |
-| Price in cents | **off** | cents and MWh are converted anyway, but euros per kWh read most easily |
-| Energy scale | `kWh` | as above |
-| Template for additional costs | leave as it is (`{{0.0\|float}}`) | the tariff goes into Price Control, not here |
-
-The sensor is called `sensor.nordpool_kwh_<area>_<currency>_<precision>_<cutoff>_<vat>`, for example `sensor.nordpool_kwh_nl_eur_3_10_021`. Check under **Developer tools → States** that it has the attribute `raw_today`.
-
-**3. Point Price Control at it.** Add Price Control (**Add integration → Zendure RestAPI → Price control**) or, if you have one, open its **Configure**. Choose the Nord Pool sensor and set *The price sensor holds*:
-
-| The Nord Pool sensor is set up with | The price sensor holds |
-|---|---|
-| Include VAT on, no additional costs (as above) | **Spot price incl. VAT** |
-| Include VAT off, no additional costs | **Spot price excl. VAT** |
-| Your whole tariff in *additional costs* (VAT on) | **Import price (whole tariff)** |
-
-With *Spot price incl. VAT*, the import factor is taken as the VAT factor to find the spot price: set it to 1 + your VAT rate.
+**3. Point Price Control at it.** Add Price Control (**Add integration → Zendure RestAPI → Price control**) or, if you have one, open its **Configure**. Choose *Market price* and set *The price sensor holds* to **Spot price excl. VAT**. Set the import factor and surcharge as in [Your tariff](#your-tariff).
 
 **4. Choose the day plan.** Set **Decision** to **Day plan**; in the Netherlands, switch **Net metering** on until 1 January 2027 (it is off by default). Switching either fills in the modes per band with their presets. Straight away the *Plan* sensor shows what it would do, and the *Price Control* tab of the dashboard the charge and discharge periods ahead. Price Control writes nothing while its own switch is off, so you can watch the plan first.
 
 **5. Check the price.** Compare **Import price** with what your supplier charges for the current quarter (app or website). A difference of a few tenths of a cent is rounding; more means a surcharge or the VAT setting is off.
 
+<a id="setting-up-nord-pool-for-the-day-plan"></a>
+
+#### Nord Pool instead of EPEX Spot
+
+Nord Pool publishes the same day-ahead price. Install **Nord Pool** from HACS ([custom-components/nordpool](https://github.com/custom-components/nordpool), [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=custom-components&repository=nordpool&category=integration)) instead of EPEX Spot, restart, and add it under **Add integration → Nord Pool** bare, without VAT or costs:
+
+| Field | Choose | Why |
+|---|---|---|
+| Region | your price area: `NL`, `BE`, `GER` (Germany), `FR`, `AT`, `SE3`, `DK1`, … | the day-ahead prices your contract follows |
+| Currency | the currency of your contract, `EUR` in the euro area | Price Control works in Home Assistant's currency |
+| Include VAT | **off** | Price Control applies the VAT, as with EPEX Spot |
+| Decimal rounding precision | **`7`** | the bare price, not rounded |
+| Low price percentage | **`0`** | not used |
+| Price in cents | **off** | euros per kWh read most easily |
+| Energy scale | `kWh` | as above |
+| Template for additional costs | leave as it is (`{{0.0\|float}}`) | the tariff goes into Price Control, not here |
+
+The sensor is called `sensor.nordpool_kwh_<area>_<currency>_<precision>_<cutoff>_<vat>`, in the Netherlands `sensor.nordpool_kwh_nl_eur_7_00_0`. Check under **Developer tools → States** that it has the attribute `raw_today`. In Price Control choose it with *The price sensor holds* on **Spot price excl. VAT**, then steps 4 and 5 as above.
+
+A Nord Pool sensor set up otherwise also works, as long as *The price sensor holds* matches it:
+
+| The Nord Pool sensor is set up with | The price sensor holds |
+|---|---|
+| Include VAT off, no additional costs (recommended) | **Spot price excl. VAT** |
+| Include VAT on, no additional costs | **Spot price incl. VAT**; the import factor is then taken as the VAT factor to find the spot price, so set it to 1 + your VAT rate |
+| Your whole tariff in *additional costs* (VAT on) | **Import price (whole tariff)** |
+
+A sensor with VAT and 3 decimals, such as `sensor.nordpool_kwh_nl_eur_3_10_021`, is rounded to a tenth of a cent and carries the VAT: fine for a first look, less exact for the plan.
+
 #### Other price sources: EPEX Spot, Zonneplan and more
+
+**One price per country.** The day-ahead price is set once a day, for all of Europe in one auction. EPEX Spot and Nord Pool both publish its outcome, so for the same price area and the same quarter they give the same price. A dynamic contract is that price plus your supplier's surcharge, energy tax and VAT, which you set in [Your tariff](#your-tariff). That is why any dynamic contract works with **EPEX Spot** or **Nord Pool** as the price sensor, whatever the supplier is called. EPEX Spot is the easier of the two to set up and is the recommended source.
 
 Price Control recognises the price list itself; you only choose the sensor. The status sensor shows which list it found in the attribute `price_format`.
 
@@ -390,6 +413,18 @@ Price Control recognises the price list itself; you only choose the sensor. The 
 
 Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; Tibber via EPEX Spot is tested by a user; the other four (including the Tibber template) are read from their documented attributes. A list that is recognised but not named shows `price_format: other`.
 
+**Suppliers.** Examples of dynamic contracts that follow the day-ahead price, and so work with EPEX Spot or Nord Pool (market area `NL` or `DE-LU`):
+
+| Country | Supplier (contract) | Billed per |
+|---|---|---|
+| Netherlands | Vattenfall (FlexPrijs), Eneco (Dynamisch), Essent, Budget Energie, NextEnergy | hour |
+| Netherlands | Zonneplan, Tibber, Frank Energie (optional), Coolblue Energie | quarter |
+| Netherlands | Vandebron, ANWB Energie, EnergyZero | see your contract |
+| Germany | Tibber, Ostrom (SimplyDynamic) | hour |
+| Germany | E.ON (dynamic tariff) | see your contract |
+
+Contract terms change: what counts is your own contract.
+
 **EPEX Spot** ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)) fetches the day-ahead prices for many market areas, per quarter of an hour where the source has them. Install it from HACS ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)), restart, and add it under **Add integration → EPEX Spot** with your market area. It makes two sensors that both work:
 
 - **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import factor and surcharge in Price Control, as in [Your tariff](#your-tariff). With **Tibber** as the source in the EPEX Spot options (API token), *Market price* is Tibber's total price, all-in: choose **Import price (whole tariff)** instead.
@@ -403,16 +438,56 @@ Compare **Import price** with your supplier's price for the current quarter, as 
 
 #### Your tariff
 
-Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor*
-+ *export surcharge*, or the import price while *Net metering* is on ([more](#net-metering-and-the-export-price)). All per kWh including VAT.
+Import price = spot × *import factor* + *import surcharge*; export price = spot × *export factor* + *export surcharge*, or the import price while *Net metering* is on ([more](#net-metering-and-the-export-price)). All per kWh including VAT.
 
 | Contract | Import factor | Import surcharge | Export | Net metering |
 |---|---|---|---|---|
-| Dutch dynamic contract, 2026 (default tariff) | 1.21 | supplier surcharge + energy tax incl. VAT, 0.13505 | — | **switch on** until 31 December 2026 (default off) |
-| The same from 2027 | 1.21 | the new energy tax and surcharge | factor and surcharge from your contract, default 1.10 and 0.02 | off |
-| Other country | 1 + VAT rate, e.g. 1.19 in Germany | grid fees, taxes and supplier surcharge per kWh, incl. VAT | factor and surcharge from your contract | off |
+| Dutch dynamic contract, 2026 (default tariff) | 1.21 | energy tax + your supplier's purchase cost, incl. VAT: 0.1108481 + the [purchase cost](#import-surcharge-per-supplier-netherlands); default 0.1308481 | — | **switch on** until 31 December 2026 (default off) |
+| The same from 2027 | 1.21 | the energy tax of 2027 incl. VAT + the purchase cost | factor and surcharge from your contract, default 1.00 and 0.02 (spot + 0.02, no VAT) | off |
+| Other country | 1 + VAT rate, see [other countries](#other-countries) | grid fees, taxes and supplier surcharge per kWh, incl. VAT | factor and surcharge from your contract | off |
 
-Your supplier's price page or invoice lists the surcharge and the energy tax per kWh. A supplier that adds a percentage on top of the spot price instead of a fixed amount: multiply it into the import factor, for instance 1.21 × 1.02.
+Your supplier's price page or invoice lists the surcharge and the energy tax per kWh. A supplier that adds a percentage on top of the spot price instead of a fixed amount: multiply it into the import factor, for instance 1.21 × 1.02. Contract bonuses (such as a bonus on solar feed-in) are paid on the invoice and are left out of the day plan.
+
+##### Import surcharge per supplier (Netherlands)
+
+On a Dutch dynamic contract the import price per kWh is **spot price × 1.21 + energy tax + purchase cost**. The spot price is the day-ahead price excl. VAT (EPEX Spot *Market price*), and 1.21 adds 21 % VAT. The energy tax is the same for every supplier: in 2026 € 0.09161 per kWh excl. VAT, **€ 0.1108481 incl. VAT**. The purchase cost is your supplier's fixed fee per kWh, incl. VAT. So set *Import factor* to **1.21** and *Import surcharge* to 0.1108481 + the purchase cost of your supplier, for Zonneplan 0.1108481 + 0.0200 = 0.1308481.
+
+| Supplier | Purchase cost per kWh |
+|---|---|
+| Budget Thuis | 0.0170 |
+| Zonneplan | 0.0200 |
+| Pure Energie | 0.0200 |
+| Vandebron | 0.0260 |
+| Powerpeers | 0.0090 |
+| Vattenfall | 0.0260 |
+| Energiedirect | 0.0210 |
+| Essent | 0.0250 |
+| Noord Energie | 0.0190 |
+| Energiek | 0.0180 |
+
+Source: [energievergelijk.nl, dynamic energy contracts](https://www.energievergelijk.nl/dynamisch-energiecontract), purchase costs per kWh as published in October 2026, the ten lowest monthly costs. Prices change; what counts is your own contract. Standing charges and the tax reduction (*heffingskorting*) are per month or per year and do not change a plan per quarter, so they are left out. From 1 January 2027 the energy tax changes: the surcharge becomes the new energy tax incl. VAT + the purchase cost, and *Net metering* goes off.
+
+##### Other countries
+
+The formula is the same everywhere: the bare spot price of your price area, times 1 + VAT, plus every cost per kWh on your invoice incl. VAT. What differs is the VAT rate and what goes into the surcharge. A cost per kWh that is the same at every hour fits the surcharge; a cost that changes with the time of day, or a subsidy that depends on the price, does not, and the plan is then only as good as the average you enter.
+
+| Country | Price area | Import factor | Import surcharge per kWh, incl. VAT | Does not fit a fixed surcharge |
+|---|---|---|---|---|
+| Belgium | `BE` | 1.06 (6 % VAT) | supplier fee, distribution and transmission per kWh, levies and excise | Flanders: part of the grid fee follows the highest quarter-hour peak of the month (capacity tariff). `smart_matching` covers the house up to the battery's output power, which lowers that peak; a peak limit of its own is not built in |
+| Germany | `DE-LU` (Nord Pool `GER`) | 1.19 | grid fee (*Netzentgelt*, per postcode, on your contract), electricity tax, concession fee, levies, supplier fee | time-variable grid fees for controllable devices (§ 14a EnWG, module 3) |
+| Austria | `AT` | 1.20 | grid fees, levies and supplier fee | — |
+| Denmark | `DK1`, `DK2` | 1.25 | electricity tax (*elafgift*), supplier fee | the grid tariff changes by the hour, highest from 17:00 to 21:00 |
+| Sweden | `SE1`–`SE4` | 1.25 | energy tax (*energiskatt*), grid fee per kWh, supplier fee | — |
+| Norway | `NO1`–`NO5` | 1.25 | grid fee per kWh, electricity tax, supplier fee | electricity support that depends on the price; a grid fee in capacity steps |
+| Finland | `FI` | 1.255 | electricity tax, grid fee per kWh, supplier fee | — |
+
+The United Kingdom bills per half hour, in pounds, with regional network charges; no UK price list has been tested with the day plan. VAT rates as of 2026; your invoice decides.
+
+##### On a fixed-price contract
+
+The battery needs no price sensor and no Price Control on a fixed-price contract: `smart_matching` soaks up the solar surplus and gives it back to the house in the evening.
+
+Storing pays when the round-trip efficiency is above (feed-in compensation − feed-in costs) / import price. Example: import 0.25, feed-in compensation 0.16 and feed-in costs 0.15 per kWh: (0.16 − 0.15) / 0.25 = 4 %. The round trip depends on the power, because the converter loses about 44 W while charging and 33 W while discharging, whatever it delivers: about 7 % at 50 W, 40 % at 100 W, over 70 % from 300 W (see [Conversion efficiency](#conversion-efficiency)). At 50 W that is just above the 4 % of the example; only the smallest flows cost more than they store. Under Dutch net metering an exported kWh is worth the import price, so storing earns little until 1 January 2027; from then on every kWh stored instead of exported is worth almost the full import price.
 
 #### Net metering and the export price
 
@@ -437,7 +512,9 @@ Switching it also fills in the modes per band with their presets (see [Price con
 
 ---
 
-## An external P1 meter
+<a id="an-external-p1-meter"></a>
+
+## 🔌 An external P1 meter
 
 The control loops can take their grid reading from a P1 reader other than the Zendure meter. The structure is generic — one adapter per reader, an endpoint and a parser — so readers are added without touching the loops. **A Zendure P1 meter is not required**: with an external reader configured and the meter source on `auto` (the default), the smart modes run on that reader alone.
 
@@ -551,7 +628,9 @@ Subclass `ExternalMeter` in `p1meter.py`, set `kind` and `path`, implement `pars
 
 ---
 
-## What happens with a Zendure firmware upgrade
+<a id="what-happens-with-a-zendure-firmware-upgrade"></a>
+
+## 🔄 What happens with a Zendure firmware upgrade
 
 When the Zendure app installs new firmware, the battery is gone for a few minutes and comes back as if it had been switched off and on. Measured on a 3000 Mix AC+ with Operation mode on `standby` (battery pack firmware 4142 to 4144):
 
@@ -586,7 +665,17 @@ New keys in the report after an upgrade raise a repair as well, see [Reporting a
 
 ---
 
-## How the controller works
+<a id="several-batteries"></a>
+
+## 🔋 Several batteries
+
+*Since v1.7.0.* A **battery cluster** lets up to three batteries, one per phase, hold the grid of the whole connection at zero together. One battery is primary and runs the loop described below, unchanged; the others are secondary and hold a fixed limit that the cluster sets at most every 30 seconds. Below 300 W of demand the primary works alone. Add it under *Add integration → Zendure RestAPI → Battery cluster*; the batteries become its sub-entries.
+
+Everything about it — setting up, how it regulates, its entities, its status and its limits — is in its own guide: **[docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md)**.
+
+<a id="how-the-controller-works"></a>
+
+## 🧠 How the controller works
 
 The strategy is a single `select` entity, `Operation mode`:
 
@@ -683,7 +772,7 @@ That is also what keeps the `writer` column in the trace meaningful: outside tha
 
 **Choosing standby again sends the command again** (v1.6.8). It skips what the battery already holds, so it writes nothing when nothing is wrong.
 
-**A limit this integration wrote is stopped even if the report does not show it yet** (v1.6.10). The report can lag behind a write. If you switch to standby right after the integration wrote a limit, the last report may still read 0; skipping the command as a no-op would leave the battery running at that limit while the status reads *passive*. When this integration wrote a limit, the command is therefore sent in full (both limits and `smartMode`), whatever the last report shows. A battery this integration wrote nothing to is still left alone when it already rests.
+**A limit this integration wrote is stopped even if the report does not show it yet** (v1.7.0; v1.6.10 on the stable line). The report can lag behind a write. If you switch to standby right after the integration wrote a limit, the last report may still read 0; skipping the command as a no-op would leave the battery running at that limit while the status reads *passive*. When this integration wrote a limit, the command is therefore sent in full (both limits and `smartMode`), whatever the last report shows. A battery this integration wrote nothing to is still left alone when it already rests.
 
 **Not at startup** (v1.6.10). When standby is already the chosen mode as Home Assistant starts or the entry reloads, nothing is written: a battery that is only watched, or whose limits were set by hand, keeps them. The command goes out when you switch into standby from another mode, or choose standby again (also from an automation, for instance one that sets standby when Home Assistant starts). One exception: if this integration wrote a limit earlier in the same Home Assistant session and has not stopped it yet (a reload right after a smart mode ran), the command is still sent once, so the battery is not left charging or discharging at a limit nothing controls anymore.
 
@@ -746,10 +835,11 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 
 ---
 
-## What the P1 meter does and does not give you
+<a id="what-the-p1-meter-does-and-does-not-give-you"></a>
 
-The meter is the only feedback the control loop has, so it is worth being precise about what it can tell you. What follows was measured on a three-phase meter (`meterType` 3, `protocolType`
-51) against a second, independent P1 reader on the same connection point through a splitter — so both saw the same electricity at the same instant. Roughly 1,300 paired samples at 0.36 s and 1.1 s intervals, in two runs, one with the controller in `standby` so nothing was steering the grid.
+## 📡 What the P1 meter does and does not give you
+
+The meter is the only feedback the control loop has, so it is worth being precise about what it can tell you. What follows was measured on a three-phase meter (`meterType` 3, `protocolType` 51) against a second, independent P1 reader on the same connection point through a splitter — so both saw the same electricity at the same instant. Roughly 1,300 paired samples at 0.36 s and 1.1 s intervals, in two runs, one with the controller in `standby` so nothing was steering the grid.
 
 ### What it gets right
 
@@ -819,13 +909,17 @@ Each of these is something the hardware already has and the API does not expose.
 
 ---
 
-## zenSDK and this integration
+<a id="zensdk-and-this-integration"></a>
+
+## 🧩 zenSDK and this integration
 
 [Zendure/zenSDK](https://github.com/Zendure/zenSDK) is the protocol source: the local HTTP API and the property reference. Its property document was last changed on 17 February 2026, the repository on 27 March 2026. Its product list names eight devices; the SolarFlow 3000 Mix AC+ — the reference device here — and the 4000 Mix AC+, 800 Pro 2 and 4000 Mix Pro are not on it. This integration covers those models as well, and corrects the document where live hardware disagrees with it: see [Notes on correctness](#notes-on-correctness).
 
 ---
 
-## Notes on correctness
+<a id="notes-on-correctness"></a>
+
+## 🎯 Notes on correctness
 
 The zenSDK document is wrong or incomplete in several places. Each correction below was found by comparing it against live hardware.
 
@@ -852,7 +946,9 @@ The cell-count agreement also identifies the pack as 8S LFP.
 
 ---
 
-## The Energy dashboard
+<a id="the-energy-dashboard"></a>
+
+## ⚡ The Energy dashboard
 
 The device publishes no cumulative counters, so kilowatt-hours are integrated here.
 
@@ -951,7 +1047,9 @@ Short windows are unreliable here: window 2 spans nine points, where rounding of
 
 ---
 
-## Measured diagnostics
+<a id="measured-diagnostics"></a>
+
+## 📏 Measured diagnostics
 
 The settings of price control are figures you type in once: a charge and a discharge efficiency, a wear cost. Since v1.6.3 the integration measures what the battery actually does while it runs, so those figures can be checked against the battery itself. Nothing here steers: compare, and adjust the settings yourself.
 
@@ -1008,7 +1106,9 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 
 ---
 
-## Supported Entities
+<a id="supported-entities"></a>
+
+## 📋 Supported Entities
 
 **Terms.** *Battery* is the SolarFlow itself, with its inverter. A *pack* is one battery pack connected to it — one entry of `packData` in the zenSDK report, numbered 1 to N. Pack entities are named *Pack 1 …*, *Pack 2 …*, with entity IDs to match, for example `sensor.zendure_solarflow_2400_ac_pack_2_state_of_charge` for *Pack 2 State of charge*.
 
@@ -1024,6 +1124,7 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
+| **Battery cluster entry** | 12 | Operation mode, Meter source, Status, Group power, Group state of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Concentrate below, Redistribute every — see [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1053,7 +1154,9 @@ The smart modes act on it themselves; see [Safety](#safety).
 
 ---
 
-## The database
+<a id="the-database"></a>
+
+## 🗄️ The database
 
 Home Assistant writes a row to its database every time a state changes, and keeps those rows for 10 days (`purge_keep_days`). The statistics behind the Energy dashboard and the longer charts are kept apart, per 5 minutes and per hour, and stay small.
 
@@ -1091,7 +1194,9 @@ data:
 
 The statistics are not affected by either. For the raw readings at full resolution beyond those days, switch on **Trace recording**: it writes every sample of the meters and the battery to CSV, one file per hour, outside the database.
 
-## Debug logging
+<a id="debug-logging"></a>
+
+## 🐞 Debug logging
 
 The controller logs every decision it makes at `DEBUG`: which property is written and what it held before, which writes are skipped because the device already holds the value, why a reversal pause started and how long remains, and the resulting state with the readings behind it.
 
@@ -1154,19 +1259,21 @@ At one sample a second a day of recording is roughly 86,000 rows and some 15 MB.
 
 ---
 
-## Tests
+<a id="tests"></a>
+
+## 🧪 Tests
 
 Since v1.6.8 the repository has a `tests/` folder. The tests pin nine things:
 
-- **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again; standby that is already chosen at startup writes nothing, and a stop after a limit it wrote is not skipped when the report still reads 0 (v1.6.10). The order decides what the battery keeps in flash.
+- **What the integration writes to the battery**, per mode and in which order: standby, the direction changes, and choosing a mode again. The order decides what the battery keeps in flash. Since v1.7.0 also standby after a mode in which the integration set the limits: the stop for both limits goes out even when the last poll already reads 0, with smartMode 0 last. Since v1.6.10 standby that is already chosen at startup writes nothing; after a reload with a limit of its own still running it sends the stop once.
 - **A device restart**: recognised from `messageId` or `smartMode`, recorded, shown as a repair in standby, and never answered with a write; a report that is only late is not a restart, and neither is `messageId` turning from 255 to 0.
 - **Prices held through an outage** (v1.6.9): a price list once read carries the day plan when the sensor drops out or gives a shorter list, until it runs out; a list that reaches as far replaces it.
 - **The dashboard template** (v1.6.9): the version tile next to *Error*, and the status card naming the controller entity once.
 - **A meter recognised by its report** (v1.6.7, issue #7): the Smart Meter 3CT without `meterType` is a meter, the P1 meter is unchanged, and a battery stays a battery, also without `product`.
+- **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
 - **The change of clocks** (v1.6.10): the night with 25 hours and the night with 23 give every quarter once and a quarter of an hour long, with Nord Pool and with prices as text.
 - **The Inverter power limit** (v1.6.10): its slider reaches the reported value, a higher value is refused and not written, lowering is written, without a reported value nothing is written, and *Charge power limit* keeps its range.
-- **A former battery entry** (v1.6.10): a Smart Meter 3CT that was added as a battery loses the battery entities it no longer has; the meter's own entities, also the disabled ones, stay; the generic meter name has no brand in it.
-- **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
+- **A former battery entry** (v1.6.10): a Smart Meter 3CT that was added as a battery loses the battery entities it no longer has; the meter's own entities, also the disabled ones, stay; the generic meter name has no brand in it. The clean-up looks only at the meter entry, never at a cluster or a Virtual cluster.
 
 Run them from the root of the repository:
 
@@ -1179,7 +1286,9 @@ No running Home Assistant is needed: the battery, the meter and the repairs are 
 
 ---
 
-## Reporting an unsupported property
+<a id="reporting-an-unsupported-property"></a>
+
+## 📨 Reporting an unsupported property
 
 The integration logs every reported key it has no entity for, once each, at `INFO` level. For a complete picture, download diagnostics from the device page: the file contains the device report plus the full list of unrecognised keys.
 
@@ -1189,13 +1298,17 @@ Diagnostics files end up attached to public issues, so identifying values are st
 
 ---
 
-## Brand images
+<a id="brand-images"></a>
+
+## 🎨 Brand images
 
 The integration ships its own icon and logo in `custom_components/zendure_restapi/brand/`. Home Assistant 2026.3 and later picks these up directly, taking priority over the brands CDN; older versions ignore the folder and fall back to the default placeholder. No submission to `home-assistant/brands` is needed.
 
 ---
 
-## Known limitations
+<a id="known-limitations"></a>
+
+## ⚠️ Known limitations
 
 **No failsafe if Home Assistant stops.** A limit written before the outage keeps executing — the device has no watchdog that returns it to zero. Keep `Max charge power` and `Max discharge power` at values you would accept running unattended.
 
@@ -1236,21 +1349,29 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 **Efficiency cannot be read off a trace with transients in it.** `battery_ac_w` and `pack_dc_w` are 5 to 10 seconds out of step, so on any edge the same division returns nonsense — in one otherwise clean night, 43% and 104% on bands with 70 and 130 samples. Only long stretches at a stable power level give a usable number, and the shape of the curve above 200 W is not established under `closed`. That needs a run holding several fixed power levels for long enough to average out the sampling offset between the AC and cell readings.
 
----
-
 **Time axis on the day the clocks change.** On the two days a year when the clocks change (a day of 25 or of 23 hours), the time labels under a chart that starts at midnight, such as the day plan chart on *Price Control*, can be one hour off after the change. ApexCharts Card counts the labels from the start of the range in days of a fixed length. Only the labels are affected: the data, the *now* line and the tooltip, which is worked out per point, show the real time. The labels correct themselves as soon as the range no longer holds the change, for a chart of 48 hours from midnight at 00:00 the next day. At the change to summer time the labels are one hour early instead of late. Nothing in the integration is changed for this.
 
-## Coming in 1.7: clusters
-
-Several Zendure batteries behind one grid connection work as one cluster: one controller regulates the net on the measured properties of each battery, with no fixed master/slave relation. Roles (primary, secondary) follow from the regulation at each moment. A single battery behaves as in 1.6.x; existing entities and automations keep working.
-
-Status: tested on a simulator, not yet with real batteries. Testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
-
 ---
 
-## Changelog
+<a id="changelog"></a>
+
+## 📝 Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.7.0 — A battery cluster: up to three batteries, one per phase
+
+A single battery decides exactly as in v1.6.10. Home Assistant 2025.3 or newer is now required (the cluster's batteries are sub-entries). After updating, restart Home Assistant. Existing entities and automations of a single battery keep working. Tested on a simulator, not yet with real batteries: testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
+
+- **Licence: Apache 2.0** instead of MIT, with a NOTICE file. The v1.6 line and earlier stay under MIT.
+- **Battery cluster.** A new entry under *Add integration → Zendure RestAPI*: up to three batteries, one per phase, hold the total of the connection at zero together. One battery is primary and runs the single-battery loop, unchanged, on the cluster's meter, buffers and start thresholds; the others are secondary and hold a fixed limit, set at most every 30 s (*Redistribute every*) or sooner when the primary sits at its maximum or at nothing. Below *Concentrate below* (300 W) the primary works alone, which saves the fixed loss of a second inverter. When the load drops away the secondaries are lowered at once rather than the whole group stopping; a real direction change waits until the secondaries have stopped. In the group the cluster, not the single battery's SOC protection, decides about a battery below its floor: it does not discharge and is not charged from the grid against the others. Guide: [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md).
+- **Batteries as sub-entries.** *Add battery*, *Reconfigure* (phase, Priority, Max share) and *Delete* under the cluster. Priority decides who is primary; among equals the battery with the fastest measured response.
+- **On a battery in the group** the Operation mode shows `coordinated`, the controller status `secondary` on a secondary, and a new switch **Take part** takes it out for a while. Its own meter, buffers and thresholds are kept but not used. A Price Control entry of such a battery writes nothing and shows `paused`.
+- **A cluster that steers nothing blocks nothing.** With no battery taking part, or the group in standby or a quick mode, a battery outside it steers on its own as before.
+- **Fixed: standby stops a battery that had just started.** The stop on entering standby was skipped when the last poll did not yet report a limit written moments before, and the battery kept running. When the controller set the limit itself, the stop is now always sent.
+- **Not yet:** control per phase, several batteries on one phase, other brands, and a dashboard tab for the cluster (a card to paste is in the guide). The cluster has no grid sensor of its own, as the battery since v1.6.6; its figures are written only when they move, as the energy counters since v1.6.7.
+- **Roles:** the batteries of a cluster are *primary* and *secondary*, in every language; the *Controller status* of a secondary reads `secondary`, and the cluster status names its `primary`.
+- **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging. A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
 
 ### v1.6.10 — The Inverter power limit is not raised from Home Assistant; standby leaves the battery alone at startup
 
@@ -1313,7 +1434,7 @@ The control loop decides as before; the dashboard, the battery's options and one
 - **History without the text block.** The explanation above the measured diagnostics is gone; it is in [Measured diagnostics](#measured-diagnostics).
 - **Replace the dashboard.** A new option under **Configure** replaces the existing dashboard with a fresh one, instead of deleting it first.
 - **Price Control tab.** The text block under *Decision* is gone (the choices are explained in [Price control](#price-control)). With solar from outside the battery, *Battery and grid* shows it next to the battery power. The day plan text and chart have a row of their own, full width; the chart shows today and tomorrow. Its state of charge axis reads 0, 25, 50, 75, 100 %; PV and state of charge there come from the 5-minute statistics, so their line no longer starts late when the value stood still.
-- **Tibber.** Price Control names a Tibber price list (`price_format: tibber`), read from a template sensor filled by `tibber.get_prices`. Thanks @Noxeus (#6).
+- **Tibber.** Price Control names a Tibber price list (`price_format: tibber`), read from a template sensor filled by `tibber.get_prices`.
 
 ### v1.6.5 — The grid reading that steers; meters from Home Assistant; EPEX Spot and Zonneplan prices
 
@@ -1417,7 +1538,7 @@ No change to the integration: the code is the v1.5.4 code, only the version numb
 - **The two P1 meters measured again**, now both read by this integration: the YouLess sees a load step 0.9 s earlier on average, and the Zendure meter repeats its previous value in 28 % of the seconds. See [Why](#why).
 - **[Keeping the status in the history](#keeping-the-status-in-the-history)**: a recorder exclude glob on `sensor.zendure_*` also drops the controller status; how to keep it.
 - **The short READMEs** (English, Dutch, German) list more of what the integration does, each with the measurement behind it: standby draw, flash wear, a full battery left alone, efficiency sensors, any Home Assistant power sensor as meter, and replays before every release.
-- **Validation runs no longer pile up**: a new push cancels a run still in progress for the same branch or tag.
+- **Validation runs no longer pile up**: a new push cancels a run that is still running for the same branch or tag.
 
 Since then, documentation only and without a new version: a forum topic, a table of tested setups and the key measurements in the short READMEs.
 
@@ -1582,17 +1703,22 @@ The point at which every defect found against live hardware had been fixed and t
 
 ---
 
-## Inspiration & Acknowledgements
+<a id="inspiration--acknowledgements"></a>
+
+## 🙏 Inspiration & Acknowledgements
 
 | Resource | Used for |
 |---|---|
 | [Zendure/zenSDK](https://github.com/Zendure/zenSDK) | Local HTTP API and SolarFlow property reference |
 | Zendure SolarFlow FAQ | The grid-monitoring explanation for standby draw (VDE-AR-N 4105, UL 1741), since shown to be incomplete |
 | Community zenSDK automation | Control-loop structure: undershot first step, idle gating, direction hold |
+| [Zendure/Zendure-HA](https://github.com/Zendure/Zendure-HA) (MIT, Copyright (c) 2024 peteS-UK) | The battery pack table: serial prefix and packType to model and capacity (see [NOTICE](NOTICE)) |
 
 ---
 
-## Disclaimer
+<a id="disclaimer"></a>
+
+## ℹ️ Disclaimer
 
 This software is **not affiliated with or endorsed by Zendure** in any way. The Zendure name and product names are trademarks of Zendure.
 
@@ -1600,6 +1726,8 @@ This integration writes directly to a grid-connected battery inverter. Provided 
 
 ---
 
-## Licence
+<a id="licence"></a>
 
-[MIT](LICENSE)
+## 📜 Licence
+
+[Apache License 2.0](LICENSE) since v1.7.0, with a [NOTICE](NOTICE) file that has to go along with any copy or derived work. Versions v1.6.x and earlier were released under the MIT License and stay available under it; the NOTICE file keeps that notice, and names the parts of other projects used here.

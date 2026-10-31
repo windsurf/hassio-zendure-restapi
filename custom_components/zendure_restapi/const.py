@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.6.10"
+INTEGRATION_VERSION = "1.7.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -270,9 +270,12 @@ PRICE_STATUS_CHEAP = "cheap"
 PRICE_STATUS_BETWEEN = "between"
 PRICE_STATUS_EXPENSIVE = "expensive"
 PRICE_STATUS_NO_PLAN = "no_plan"
+# The battery belongs to a battery cluster (v1.7.0): price control writes
+# nothing, the group's Operation mode is set on the cluster.
+PRICE_STATUS_PAUSED = "paused"
 PRICE_STATUSES = (
     PRICE_STATUS_OFF, PRICE_STATUS_NO_PRICE, PRICE_STATUS_NO_PLAN, PRICE_STATUS_CHEAP,
-    PRICE_STATUS_BETWEEN, PRICE_STATUS_EXPENSIVE,
+    PRICE_STATUS_BETWEEN, PRICE_STATUS_EXPENSIVE, PRICE_STATUS_PAUSED,
 )
 SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 
@@ -292,6 +295,53 @@ RETIRED_EXTERNAL_ENTITIES: tuple[tuple[str, str], ...] = (("sensor", "telegram_a
 RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
     ("select", "net_metering_mode"),    # v1.6.0; replaced by In-between mode in v1.6.1
 )
+
+# ── Battery cluster (v1.7.0) ─────────────────────────────────────────
+# Up to three batteries, one per phase, holding the grid of the whole
+# connection at zero together: one is primary with the loop of a single battery,
+# the others are secondary with fixed limits. An entry of its own with a subentry per
+# battery; the logic lives in cluster/, the Zendure side in member.py.
+DEVICE_TYPE_CLUSTER = "cluster"
+CLUSTER_DEVICE_NAME = "Battery cluster"
+CLUSTER_MODEL = "Battery cluster"
+CLUSTER_UNIQUE_ID = "battery_cluster"
+SUBENTRY_BATTERY = "battery"
+CONF_PHASE = "phase"
+CONF_PRIORITY = "priority"
+CONF_MAX_SHARE = "max_share"
+# Option values are lower case (a translation key); shown as L1, L2, L3.
+PHASES = ("l1", "l2", "l3")
+DEFAULT_PRIORITY = 5
+OPT_CONCENTRATE_BELOW = "concentrate_below"
+OPT_REDISTRIBUTE = "redistribute_every"
+# On a battery: off takes it out of the group for a while, without deleting
+# its subentry. Only while the battery belongs to a cluster.
+OPT_TAKE_PART = "take_part"
+# Modes the group offers: the battery's own, less manual.
+CLUSTER_MODES = (
+    MODE_STANDBY,
+    MODE_SMART_MATCHING,
+    MODE_SMART_DISCHARGE,
+    MODE_SMART_CHARGE,
+    MODE_QUICK_CHARGE,
+    MODE_QUICK_DISCHARGE,
+)
+# What a secondary battery runs: hold the limit the cluster gives it.
+# Internal, never offered on a select.
+MODE_FOLLOW = "follow"
+# Shown on a battery's Operation mode while the cluster steers it.
+MODE_COORDINATED = "coordinated"
+CLUSTER_STATUSES = (
+    "standby", "idle", "regulating", "concentrated", "reversing", "quick", "meter_stale",
+)
+SIGNAL_CLUSTER = f"{DOMAIN}_cluster_update"
+# Where the cluster entry sits in hass.data[DOMAIN] while it is set up.
+CLUSTER_KEY = "_cluster"
+# Settings of a member that come from the cluster while it takes part.
+COORDINATED_KEYS = frozenset({
+    "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
+    "meter_source", "external_meter",
+})
 
 # ── Price control: the day plan (v1.6.0) ─────────────────────────────────
 # A second way to decide, next to the two fixed prices: a plan over the
@@ -381,19 +431,24 @@ DEFAULTS = {
     OPT_PRICE_BETWEEN_MODE: MODE_SMART_MATCHING,
     # Day plan. The tariff defaults are a Dutch dynamic contract in 2026:
     # import = spot x 1.21 + supplier surcharge and energy tax incl. VAT,
-    # export = spot x 1.10 + 0.02 once net metering has ended.
+    # export = spot + 0.02 (no VAT) once net metering has ended; contract
+    # bonuses are left out of the plan.
     OPT_PRICE_DECISION: DECISION_FIXED,
     OPT_PRICE_CONTAINS: "spot_vat",     # the Nord Pool sensor's own default
     OPT_NET_METERING: False,
     OPT_IMPORT_FACTOR: 1.21,
-    OPT_IMPORT_SURCHARGE: 0.13505,      # per kWh
-    OPT_EXPORT_FACTOR: 1.10,
+    OPT_IMPORT_SURCHARGE: 0.1308481,    # per kWh: 0.02 supplier + 0.1108481 energy tax 2026
+    OPT_EXPORT_FACTOR: 1.00,
     OPT_EXPORT_SURCHARGE: 0.02,         # per kWh
     OPT_WEAR_COST: 0.02,                # per kWh through the battery
     OPT_MIN_MARGIN: 0.02,               # per kWh, below this no cycle
     OPT_HOUSE_LOAD: 400,                # W the battery covers while discharging
     OPT_CHARGE_EFFICIENCY: 95,          # %, grid to cells
-    OPT_DISCHARGE_EFFICIENCY: 96,       # %, cells to house
+    OPT_DISCHARGE_EFFICIENCY: 95,       # %, cells to house
+    # Battery cluster (v1.7.0)
+    OPT_CONCENTRATE_BELOW: 300,         # W, below this one battery works alone
+    OPT_REDISTRIBUTE: 30,               # s between two splits over the secondaries
+    OPT_TAKE_PART: True,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────

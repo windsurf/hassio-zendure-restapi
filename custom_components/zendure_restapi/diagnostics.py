@@ -14,6 +14,8 @@ documented, so it is summarised rather than copied.
 
 from __future__ import annotations
 
+import dataclasses
+
 import re
 from typing import Any
 
@@ -21,6 +23,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .cluster.runtime import ClusterCoordinator
 from .const import CONF_EXTERNAL_HOST, CONF_HOST, DOMAIN, INTEGRATION_VERSION
 from .coordinator import ZendureCoordinator
 from .p1meter import ExternalMeter
@@ -66,6 +69,19 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     stored = hass.data[DOMAIN][entry.entry_id]
+    if isinstance(stored, ClusterCoordinator):
+        # The battery cluster (v1.7.0): what it decided and what it read.
+        return {
+            "integration_version": INTEGRATION_VERSION,
+            "entry": {"data": dict(entry.data), "options": dict(entry.options)},
+            "batteries": [
+                {"title": sub.title, "data": dict(sub.data)} for sub in entry.subentries.values()
+            ],
+            "status": stored.status,
+            "attributes": stored.attributes,
+            "grid": stored.grid,
+            "readings": [dataclasses.asdict(r) for r in stored.readings],
+        }
     if isinstance(stored, ExternalMeter):
         return {
             "integration_version": INTEGRATION_VERSION,
