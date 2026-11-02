@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.0"
+INTEGRATION_VERSION = "1.7.1"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -343,6 +343,36 @@ COORDINATED_KEYS = frozenset({
     "meter_source", "external_meter",
 })
 
+# ── Virtual cluster (v1.7.1) ───────────────────────────────────────────────
+# A copy of an existing battery, up to three times, under a cluster of
+# its own with a virtual P1: house load x Load factor - what the clones
+# deliver. Writes nothing to the real battery and does not claim the grid.
+# The model lives in sim/.
+DEVICE_TYPE_VIRTUAL = "virtual_cluster"
+VIRTUAL_DEVICE_NAME = "Virtual cluster"
+VIRTUAL_MODEL = "Virtual cluster (test)"
+VIRTUAL_UNIQUE_ID = "virtual_cluster"
+CONF_SOURCE_BATTERY = "source_battery"
+OPT_CLONES = "clones"
+OPT_LOAD_FACTOR = "load_factor"
+OPT_SOC_OFFSET_2 = "soc_offset_2"
+OPT_SOC_OFFSET_3 = "soc_offset_3"
+# Extra response time of clones 2 and 3, on top of the measured 1.8 s (v1.7.1).
+OPT_RESPONSE_OFFSET_2 = "response_offset_2"
+OPT_RESPONSE_OFFSET_3 = "response_offset_3"
+# Follow the Operation mode of the real battery, and so its planner.
+MODE_FOLLOW_SOURCE = "follow_source"
+VIRTUAL_MODES = (*CLUSTER_MODES, MODE_FOLLOW_SOURCE)
+VIRTUAL_DEFAULTS = {
+    OPT_CLONES: 3,
+    OPT_LOAD_FACTOR: 1.0,
+    OPT_SOC_OFFSET_2: -20,
+    OPT_SOC_OFFSET_3: 15,
+    OPT_RESPONSE_OFFSET_2: 1.0,
+    OPT_RESPONSE_OFFSET_3: 3.0,
+}
+MAX_CLONES = 3
+
 # ── Price control: the day plan (v1.6.0) ─────────────────────────────────
 # A second way to decide, next to the two fixed prices: a plan over the
 # prices of today and tomorrow (Nord Pool, EPEX Spot and others), with separate
@@ -449,6 +479,8 @@ DEFAULTS = {
     OPT_CONCENTRATE_BELOW: 300,         # W, below this one battery works alone
     OPT_REDISTRIBUTE: 30,               # s between two splits over the secondaries
     OPT_TAKE_PART: True,
+    # Virtual cluster (v1.7.1)
+    **VIRTUAL_DEFAULTS,
 }
 
 # ── Controller tuning ────────────────────────────────────────────────────

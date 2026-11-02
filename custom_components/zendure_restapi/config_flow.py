@@ -74,6 +74,12 @@ from .const import (
     CLUSTER_UNIQUE_ID,
     DEFAULT_PRIORITY,
     DEVICE_TYPE_CLUSTER,
+    DEVICE_TYPE_VIRTUAL,
+    CONF_SOURCE_BATTERY,
+    VIRTUAL_DEVICE_NAME,
+    VIRTUAL_UNIQUE_ID,
+    MODE_FOLLOW_SOURCE,
+    VIRTUAL_DEFAULTS,
     EXTERNAL_NONE,
     MODE_STANDBY,
     OPT_CHARGE_BUFFER,
@@ -315,7 +321,53 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             for e in self._async_current_entries(include_ignore=False)
         ):
             options.append("battery_cluster")
+        if not any(
+            e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL
+            for e in self._async_current_entries(include_ignore=False)
+        ):
+            options.append("virtual_cluster")
         return self.async_show_menu(step_id="user", menu_options=options)
+
+    # ── Virtual cluster (v1.7.1) ───────────────────────────────────────────
+
+    async def async_step_virtual_cluster(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Copies of one battery under a cluster of their own, for testing.
+
+        The buffers and thresholds start as the real battery's, so the copy
+        regulates as the original does; the group follows the real battery's
+        Operation mode until another is chosen.
+        """
+        await self.async_set_unique_id(VIRTUAL_UNIQUE_ID)
+        self._abort_if_unique_id_configured()
+        batteries = self._batteries()
+        if not batteries:
+            return self.async_abort(reason="no_battery")
+        labels = {battery_label(e): e for e in batteries}
+        if user_input is not None and user_input.get(CONF_SOURCE_BATTERY) in labels:
+            source = labels[user_input[CONF_SOURCE_BATTERY]]
+            copied = {
+                key: source.options[key]
+                for key in (OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER, OPT_START_CHARGE_AT, OPT_START_DISCHARGE_AT)
+                if key in source.options
+            }
+            return self.async_create_entry(
+                title=VIRTUAL_DEVICE_NAME,
+                data={
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_VIRTUAL,
+                    CONF_DEVICE_NAME: VIRTUAL_DEVICE_NAME,
+                    CONF_SOURCE_BATTERY: source.entry_id,
+                },
+                options={**copied, **VIRTUAL_DEFAULTS, OPT_OPERATION_MODE: MODE_FOLLOW_SOURCE},
+            )
+        names = list(labels)
+        schema = vol.Schema({
+            vol.Required(CONF_SOURCE_BATTERY, default=names[0]): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=names, mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
+        })
+        return self.async_show_form(step_id="virtual_cluster", data_schema=schema)
 
     @classmethod
     @callback
@@ -827,6 +879,12 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "sn": (result.identity if result else "") or "",
             },
         )
+
+    @classmethod
+    @callback
+    def async_supports_options_flow(cls, config_entry: config_entries.ConfigEntry) -> bool:
+        """A Virtual cluster has its settings as entities; nothing to configure."""
+        return config_entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_VIRTUAL
 
     @staticmethod
     def async_get_options_flow(

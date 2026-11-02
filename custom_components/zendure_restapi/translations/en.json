@@ -9,7 +9,8 @@
           "external_meter": "External grid meter over IP — fastest (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "External grid meter from Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Price control — charge when power is cheap, discharge when it is expensive (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Battery cluster — up to three batteries, one per phase, as one system"
+          "battery_cluster": "Battery cluster — up to three batteries, one per phase, as one system",
+          "virtual_cluster": "Virtual cluster (test) — copies of a battery under a cluster, writing nothing real"
         }
       },
       "zendure": {
@@ -96,6 +97,16 @@
       "battery_cluster": {
         "title": "Battery cluster",
         "description": "Give each battery that takes part the phase it is connected to: one battery per phase. Choose *not taking part* to leave a battery out. Buffers, start thresholds and the meter are taken from the first battery; the group starts in standby. Batteries can be added, changed or removed later under the cluster."
+      },
+      "virtual_cluster": {
+        "title": "Virtual cluster (test)",
+        "description": "Up to three copies of one of your batteries under a cluster of their own, with a virtual P1: the house load times the Load factor, minus what the copies deliver. Nothing is written to the real battery and the grid is not claimed; the test costs only computing power. Clones, Load factor, the SoC offsets and Reset are entities of the Virtual cluster.",
+        "data": {
+          "source_battery": "Battery to copy"
+        },
+        "data_description": {
+          "source_battery": "The copies take its model, maxima, SOC limits and tuning; the first copy starts on its state of charge."
+        }
       }
     },
     "error": {
@@ -654,6 +665,24 @@
       "members": {
         "name": "Batteries taking part"
       },
+      "virtual_p1_power": {
+        "name": "Power"
+      },
+      "virtual_p1_house_load": {
+        "name": "House load"
+      },
+      "virtual_p1_real_grid": {
+        "name": "Real grid"
+      },
+      "virtual_p1_load_factor": {
+        "name": "Load factor"
+      },
+      "input_limit": {
+        "name": "Charge limit"
+      },
+      "output_limit": {
+        "name": "Discharge limit"
+      },
       "cluster_status": {
         "name": "Status",
         "state": {
@@ -810,6 +839,24 @@
       },
       "redistribute_every": {
         "name": "Redistribute every"
+      },
+      "clones": {
+        "name": "Clones"
+      },
+      "load_factor": {
+        "name": "Load factor"
+      },
+      "soc_offset_2": {
+        "name": "SoC offset clone 2"
+      },
+      "soc_offset_3": {
+        "name": "SoC offset clone 3"
+      },
+      "response_offset_2": {
+        "name": "Response offset clone 2"
+      },
+      "response_offset_3": {
+        "name": "Response offset clone 3"
       }
     },
     "switch": {
@@ -830,6 +877,14 @@
       },
       "take_part": {
         "name": "Take part"
+      }
+    },
+    "button": {
+      "reset": {
+        "name": "Reset"
+      },
+      "rebuild_dashboard": {
+        "name": "Rebuild dashboard"
       }
     }
   },

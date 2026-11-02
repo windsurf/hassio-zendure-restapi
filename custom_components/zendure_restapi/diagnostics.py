@@ -82,6 +82,16 @@ async def async_get_config_entry_diagnostics(
             "grid": stored.grid,
             "readings": [dataclasses.asdict(r) for r in stored.readings],
         }
+    if hasattr(stored, "clones") and hasattr(stored, "cluster"):
+        # A Virtual cluster (v1.7.1): the copies, the virtual P1 and the group.
+        return {
+            "integration_version": INTEGRATION_VERSION,
+            "entry": {"data": dict(entry.data), "options": dict(entry.options)},
+            "virtual_cluster": stored.diagnostics(),
+            "status": stored.status,
+            "attributes": stored.attributes,
+            "readings": [dataclasses.asdict(r) for r in stored.readings],
+        }
     if isinstance(stored, ExternalMeter):
         return {
             "integration_version": INTEGRATION_VERSION,

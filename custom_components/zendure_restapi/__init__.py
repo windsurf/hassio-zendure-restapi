@@ -100,6 +100,7 @@ from .const import (
     CONF_SOURCE_DEVICE,
     SLOW_METER_SECONDS,
     DEVICE_TYPE_CLUSTER,
+    DEVICE_TYPE_VIRTUAL,
     MODE_STANDBY,
     OPT_CHARGE_BUFFER,
     OPT_CONCENTRATE_BELOW,
@@ -123,6 +124,7 @@ from .cluster.contract import GroupSettings
 from .cluster.runtime import ClusterCoordinator
 from .member import ZendureMember
 from .settings import SettingsView, ZendureSettings
+from .cluster_dashboard import async_cluster_dashboard, cluster_dashboard_exists, notify_changed
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -137,7 +139,8 @@ PLATFORMS: list[Platform] = [
 # An external meter entry has no switches, selects or numbers of its own.
 EXTERNAL_PLATFORMS: list[Platform] = [Platform.SENSOR]
 PRICE_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT]
-CLUSTER_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT]
+CLUSTER_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON]
+VIRTUAL_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON]
 
 RUNTIME_SUFFIX = "_runtime"
 
@@ -152,6 +155,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return await _async_setup_price(hass, entry)
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
         return await _async_setup_cluster(hass, entry)
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
+        return await _async_setup_virtual(hass, entry)
 
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
@@ -339,6 +344,8 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # A battery added, changed or removed: set up again. A setting: decide now.
         now = {sid: dict(sub.data) for sid, sub in entry.subentries.items()}
         if now != known:
+            if set(now) != set(known):
+                notify_changed(hass, entry)
             hass.config_entries.async_schedule_reload(entry.entry_id)
             return
         _link_meters(hass)
@@ -347,7 +354,65 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_changed))
     cluster.start()
     entry.async_on_unload(cluster.stop)
+    _offer_cluster_dashboard(hass, entry)
     return True
+
+
+async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """A Virtual cluster: copies of a real battery, writing nothing real (v1.7.1)."""
+    # Imported here: the model is loaded only when a Virtual cluster exists.
+    from .sim.cluster import VirtualCluster
+
+    vc = VirtualCluster(hass, entry)
+    if not vc.source_ready():
+        raise ConfigEntryNotReady("The battery the Virtual cluster copies is not set up yet")
+    await vc.async_start()
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = vc
+    await hass.config_entries.async_forward_entry_setups(entry, VIRTUAL_PLATFORMS)
+    clones = vc.clone_count()
+
+    async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        # Another number of clones: set up again. Anything else: decide now.
+        if vc.clone_count() != clones:
+            notify_changed(hass, entry)
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+            return
+        await vc.cluster.async_evaluate()
+
+    entry.async_on_unload(entry.add_update_listener(_changed))
+    _remove_extra_clones(hass, entry, vc)
+    _offer_cluster_dashboard(hass, entry)
+    return True
+
+
+@callback
+def _offer_cluster_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """The cluster dashboard, once Home Assistant runs, unless one exists (v1.7.1)."""
+
+    async def _create(_hass: HomeAssistant) -> None:
+        if not cluster_dashboard_exists(hass):
+            await async_cluster_dashboard(hass, entry, replace=False)
+
+    entry.async_on_unload(async_at_started(hass, _create))
+
+
+@callback
+def _remove_extra_clones(hass: HomeAssistant, entry: ConfigEntry, vc: Any) -> None:
+    """Fewer clones than before: their entities and devices go from the registries."""
+    from .compat import device_by_identifier
+    from .const import MAX_CLONES
+
+    tail = entry.entry_id[-6:].upper()
+    registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    for index in range(len(vc.clones) + 1, MAX_CLONES + 1):
+        serial = f"SIMULATED{index}{tail}"
+        for item in list(registry.entities.values()):
+            if item.platform == DOMAIN and str(item.unique_id).startswith(f"{serial}_"):
+                registry.async_remove(item.entity_id)
+        device = device_by_identifier(devices, (DOMAIN, serial), entry.entry_id)
+        if device is not None:
+            devices.async_remove_device(device.id)
 
 
 @callback
@@ -676,9 +741,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         EXTERNAL_PLATFORMS if kind == DEVICE_TYPE_EXTERNAL
         else PRICE_PLATFORMS if kind == DEVICE_TYPE_PRICE
         else CLUSTER_PLATFORMS if kind == DEVICE_TYPE_CLUSTER
+        else VIRTUAL_PLATFORMS if kind == DEVICE_TYPE_VIRTUAL
         else PLATFORMS
     )
     unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
+    if kind == DEVICE_TYPE_VIRTUAL:
+        vc = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None) if unloaded else None
+        if vc is not None:
+            await vc.async_stop()
+        return unloaded
     if unloaded and kind == DEVICE_TYPE_CLUSTER:
         store = hass.data.get(DOMAIN, {})
         cluster = store.pop(entry.entry_id, None)
@@ -708,10 +779,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """A removed coordinator: reload its batteries, so their Take part switch goes."""
-    if entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_CLUSTER:
+    """A removed cluster: reload its batteries, so their Take part switch goes.
+
+    The last cluster or Virtual cluster to go takes the Cluster dashboard with
+    it (v1.7.1), so Home Assistant is as it was before one was added.
+    """
+    kind = entry.data.get(CONF_DEVICE_TYPE)
+    if kind not in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
         return
-    _reload_mismatched(hass, set())
+    others = [
+        e for e in hass.config_entries.async_entries(DOMAIN)
+        if e.entry_id != entry.entry_id and e.data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL)
+    ]
+    if not others:
+        from .cluster_dashboard import async_remove_cluster_dashboard
+
+        await async_remove_cluster_dashboard(hass)
+    if kind == DEVICE_TYPE_CLUSTER:
+        _reload_mismatched(hass, set())
 
 
 @callback
@@ -759,6 +844,84 @@ def _prefix(registry: er.EntityRegistry, unique_id: str, suffix: str) -> str | N
     return object_id[: -len(suffix)] if object_id.endswith(suffix) else None
 
 
+def dashboard_args(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+    """What build_config needs for one battery: its prefixes, meters, ceiling (v1.7.1).
+
+    Shared by the battery's own dashboard and its tab on the cluster dashboard.
+    """
+    store = hass.data.get(DOMAIN, {})
+    coordinator = store.get(entry.entry_id)
+    registry = er.async_get(hass)
+    device_id = coordinator.device_id or entry.unique_id or entry.entry_id
+    model = entry.data.get(CONF_MODEL) or "SolarFlow"
+    battery = (
+        _prefix(registry, f"{device_id}_controller_status", "controller_status")
+        or f"{slugify(f'Zendure {model}')}_"
+    )
+    meter = None
+    meters = [
+        (key, c) for key, c in store.items()
+        if isinstance(c, ZendureCoordinator) and c.device_type == DEVICE_TYPE_METER
+    ]
+    if len(meters) == 1:
+        key, meter_coordinator = meters[0]
+        meter_entry = hass.config_entries.async_get_entry(key)
+        meter_id = meter_coordinator.device_id or (meter_entry.unique_id if meter_entry else None) or key
+        meter = _prefix(registry, f"{meter_id}_total_power", "grid_power_total")
+    price = None
+    for other in hass.config_entries.async_entries(DOMAIN):
+        if other.data.get(CONF_BATTERY_ENTRY) == entry.entry_id:
+            price = _prefix(registry, f"{other.entry_id}_price_control_status", "status")
+    try:
+        ceiling = int((coordinator.data or {}).get("inverseMaxPower") or 3000)
+    except (TypeError, ValueError):
+        ceiling = 3000
+    # The external meter's real entity ids, read off their unique ids: the
+    # template's sensor.external_p1_meter_* is only right for an English
+    # installation that kept the default device name (v1.6.4).
+    external_ids: dict[str, str] = {}
+    ext_ids = [k for k, m in hass.data.get(DOMAIN, {}).items() if isinstance(m, ExternalMeter)]
+    runtime = store.get(f"{entry.entry_id}{RUNTIME_SUFFIX}") or {}
+    controller = runtime.get("controller")
+    linked = getattr(controller, "external", None)
+    # The meter this battery is linked to first, so its sensors are the ones named.
+    ext_ids.sort(key=lambda k: hass.data[DOMAIN][k] is not linked)
+    if ext_ids:
+        ext_id = ext_ids[0]
+        if ext_id:
+            for key in ("power", "status", "energy_imported", "energy_exported"):
+                found = registry.async_get_entity_id("sensor", DOMAIN, f"{ext_id}_{key}")
+                if found:
+                    external_ids[key] = found
+    # The grid figures name the sensor of the meter that steers, with its
+    # history (v1.6.6): the Zendure P1 meter's total or the external one.
+    grid = None
+    source = controller.grid_source() if controller is not None else METER_SOURCE_ZENDURE
+    zendure_grid = f"sensor.{meter}grid_power_total" if meter else None
+    external_grid = external_ids.get("power") if linked is not None or not meter else None
+    if source == METER_SOURCE_EXTERNAL:
+        grid = external_grid or zendure_grid
+    else:
+        grid = zendure_grid or external_grid
+    return {
+        # Disabled entities have no state; a card for one says "not found".
+        "known": {
+            e.entity_id for e in registry.entities.values()
+            if e.platform == DOMAIN and e.disabled_by is None
+        },
+        "external_ids": external_ids,
+        "battery": battery,
+        "meter": meter,
+        "external": bool(external_meters(hass)),
+        "ceiling": min(max(ceiling, 800), 5000),
+        "price": price,
+        "solar_power": entry.options.get(OPT_SOLAR_POWER) or None,
+        "solar_energy": entry.options.get(OPT_SOLAR_ENERGY) or None,
+        "own_pv": _own_pv(hass, registry, device_id),
+        "grid": grid,
+    }
+
+
 async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle a request for the dashboard once, then clear the request."""
     store = hass.data.get(DOMAIN, {})
@@ -773,77 +936,9 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     replace = bool(entry.options.get(OPT_REBUILD_DASHBOARD))
     requested = bool(entry.options.get(OPT_CREATE_DASHBOARD)) or replace
     try:
-        registry = er.async_get(hass)
-        device_id = coordinator.device_id or entry.unique_id or entry.entry_id
-        model = entry.data.get(CONF_MODEL) or "SolarFlow"
-        battery = (
-            _prefix(registry, f"{device_id}_controller_status", "controller_status")
-            or f"{slugify(f'Zendure {model}')}_"
-        )
-        meter = None
-        meters = [
-            (key, c) for key, c in store.items()
-            if isinstance(c, ZendureCoordinator) and c.device_type == DEVICE_TYPE_METER
-        ]
-        if len(meters) == 1:
-            key, meter_coordinator = meters[0]
-            meter_entry = hass.config_entries.async_get_entry(key)
-            meter_id = meter_coordinator.device_id or (meter_entry.unique_id if meter_entry else None) or key
-            meter = _prefix(registry, f"{meter_id}_total_power", "grid_power_total")
-        price = None
-        for other in hass.config_entries.async_entries(DOMAIN):
-            if other.data.get(CONF_BATTERY_ENTRY) == entry.entry_id:
-                price = _prefix(registry, f"{other.entry_id}_price_control_status", "status")
-        try:
-            ceiling = int((coordinator.data or {}).get("inverseMaxPower") or 3000)
-        except (TypeError, ValueError):
-            ceiling = 3000
-        # The external meter's real entity ids, read off their unique ids: the
-        # template's sensor.external_p1_meter_* is only right for an English
-        # installation that kept the default device name (v1.6.4).
-        external_ids: dict[str, str] = {}
-        ext_ids = [k for k, m in hass.data.get(DOMAIN, {}).items() if isinstance(m, ExternalMeter)]
-        runtime = store.get(f"{entry.entry_id}{RUNTIME_SUFFIX}") or {}
-        controller = runtime.get("controller")
-        linked = getattr(controller, "external", None)
-        # The meter this battery is linked to first, so its sensors are the ones named.
-        ext_ids.sort(key=lambda k: hass.data[DOMAIN][k] is not linked)
-        if ext_ids:
-            ext_id = ext_ids[0]
-            if ext_id:
-                for key in ("power", "status", "energy_imported", "energy_exported"):
-                    found = registry.async_get_entity_id("sensor", DOMAIN, f"{ext_id}_{key}")
-                    if found:
-                        external_ids[key] = found
-        # The grid figures name the sensor of the meter that steers, with its
-        # history (v1.6.6): the Zendure P1 meter's total or the external one.
-        grid = None
-        source = controller.grid_source() if controller is not None else METER_SOURCE_ZENDURE
-        zendure_grid = f"sensor.{meter}grid_power_total" if meter else None
-        external_grid = external_ids.get("power") if linked is not None or not meter else None
-        if source == METER_SOURCE_EXTERNAL:
-            grid = external_grid or zendure_grid
-        else:
-            grid = zendure_grid or external_grid
-        result = await async_create_dashboard(
-            hass,
-            # Disabled entities have no state; a card for one says "not found".
-            known={
-                e.entity_id for e in registry.entities.values()
-                if e.platform == DOMAIN and e.disabled_by is None
-            },
-            external_ids=external_ids,
-            battery=battery,
-            meter=meter,
-            external=bool(external_meters(hass)),
-            ceiling=min(max(ceiling, 800), 5000),
-            price=price,
-            solar_power=entry.options.get(OPT_SOLAR_POWER) or None,
-            solar_energy=entry.options.get(OPT_SOLAR_ENERGY) or None,
-            own_pv=_own_pv(hass, registry, device_id),
-            replace=replace,
-            grid=grid,
-        )
+        args = dashboard_args(hass, entry)
+        battery = args["battery"]
+        result = await async_create_dashboard(hass, replace=replace, **args)
         # Unasked, a dashboard that is already there needs no message.
         if requested or result != EXISTS:
             notify(hass, result, battery)

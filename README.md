@@ -183,7 +183,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 - [Battery cluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — up to three batteries, one per phase, as one system
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Latest release – v1.7.0:** a **battery cluster**: up to three batteries, one per phase, hold the grid at zero together — one is primary, the others secondary; a single battery works as before.
+**Latest release – v1.7.1:** a **Virtual cluster** — up to three copies of your battery under a cluster of their own, with a **virtual P1 meter** as a device of its own, to see how a cluster would regulate in your house without buying a second battery; nothing is written to the real battery. A **cluster dashboard** with a Cluster tab and a tab per battery; for the Virtual cluster *Virtual Cluster*, with a tab per copy. **v1.7.0:** a **battery cluster**: up to three batteries, one per phase, hold the grid at zero together — one is primary, the others secondary; a single battery works as before.
 
 <a id="more"></a>
 

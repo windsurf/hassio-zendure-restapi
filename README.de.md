@@ -183,7 +183,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 - [Akku-Cluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — bis zu drei Akkus, einer pro Phase, als ein System (Englisch)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Neueste Version – v1.7.0:** ein **Akku-Cluster**: bis zu drei Akkus, einer pro Phase, halten das Netz gemeinsam auf null — einer ist Primary, die anderen Secondary; ein einzelner Akku arbeitet wie bisher.
+**Neueste Version – v1.7.1:** ein **virtueller Cluster** — bis zu drei Kopien deines Akkus unter einem eigenen Cluster, mit einem virtuellen P1, um zu sehen, wie eine Cluster in deinem Haus regeln würde, ohne einen zweiten Akku zu kaufen; an den echten Akku wird nichts geschrieben. Ein **Cluster-Dashboard** mit einem Tab Cluster und einem Tab pro Akku; für den virtuellen Cluster *Virtual Cluster*, mit einem Tab pro Kopie. **v1.7.0:** ein **Akku-Cluster**: bis zu drei Akkus, einer pro Phase, halten das Netz gemeinsam auf null — einer ist Primary, die anderen Secondary; ein einzelner Akku arbeitet wie bisher.
 
 <a id="mehr"></a>
 

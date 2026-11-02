@@ -106,6 +106,7 @@ Removing the cluster returns every battery to its own settings, in standby.
 | Group power | sensor | the AC power of the batteries together, positive while discharging |
 | Group state of charge | sensor | weighted by capacity; attribute `spread` (highest minus lowest) |
 | Batteries taking part | sensor | how many are available; attributes per battery |
+| Rebuild dashboard | button | builds the dashboard *Cluster* again (v1.7.1) |
 
 The grid reading itself has no sensor of its own here, as on a battery since v1.6.6: use the sensor of the meter, which keeps its history. Like the energy counters since v1.6.7, the cluster's figures are written only when they move: *Status* when the status, the primary or a battery's role or limit changes, *Group power* per 50 W, *Group state of charge* per 0.5 %, and each at most once a minute otherwise. The decision itself is taken every 2 seconds.
 
@@ -117,7 +118,7 @@ The grid reading itself has no sensor of its own here, as on a battery since v1.
 - Meter source, External meter, buffers and start thresholds of the battery are not used while it takes part; their values are kept.
 - A Price Control entry of a battery in the group writes nothing and shows `paused`.
 
-The dashboard of this version has no cluster tab yet. A card to paste:
+**Dashboard.** Since v1.7.1 the cluster gets the dashboard **Cluster** (`/zendure-cluster`): a *Cluster* tab with the distribution over primary and secondaries, power and state of charge per battery and a 24-hour chart, and a tab per battery, named and headed after the battery, like the first page of the battery dashboard. *Grid at last distribution* on the status card is the reading the last distribution was decided on, once per *Redistribute every*. It is made once, when the cluster is set up and no such dashboard exists; after a battery is added or removed a notification offers *Rebuild dashboard*, which replaces it, edits included. Deleting the last cluster or Virtual cluster removes it. A Virtual cluster gets the dashboard *Virtual Cluster* instead: see [virtual_cluster.md](virtual_cluster.md#dashboard). For a dashboard of your own, a card to paste:
 
 ```yaml
 type: entities
@@ -158,7 +159,7 @@ entities:
 
 ## Limits of this version
 
-| In 1.7.0 | Later, in a separate product |
+| In 1.7.x | Later, in a separate product |
 |---|---|
 | the total of the connection | control per phase, and the total and single phases side by side |
 | one battery per phase, up to three | several batteries on one phase |
@@ -168,9 +169,10 @@ entities:
 | Zendure batteries of this integration | other brands |
 | no limits per phase | import/export limit per phase, main fuse, total output cap |
 | Price Control pauses for batteries in the group | Price Control and day plan for the group |
-| no dashboard tab | a *Cluster* tab |
 
 ## Testing your setup
+
+No second battery yet? A **Virtual cluster** (v1.7.1) runs this cluster on up to three copies of your battery against your real house load, writing nothing real — see [virtual_cluster.md](virtual_cluster.md).
 
 1. Each battery on its own first, the others in standby: an hour in `smart_matching` with *Trace recording* on. The Measured tab gives response time and lost writes per battery, which decide who is primary.
 2. Then the cluster in `smart_matching` for a day, with trace recording on every battery. Share the traces and the cluster's *Status* history.

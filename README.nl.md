@@ -183,7 +183,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [Accucluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — tot drie accu's, één per fase, als één systeem (Engels)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.7.0:** een **accucluster**: tot drie accu's, één per fase, houden samen het net op nul — één is primary, de andere secondary; één accu werkt als voorheen.
+**Laatste release – v1.7.1:** een **virtueel cluster** — tot drie kopieën van je accu onder een eigen cluster, met een virtuele P1, om te zien hoe een cluster in jouw huis zou regelen zonder een tweede accu te kopen; er wordt niets naar de echte accu geschreven. Een **clusterdashboard** met een tabblad Cluster en een tabblad per accu; voor het virtuele cluster *Virtual Cluster*, met een tabblad per kopie. **v1.7.0:** een **accucluster**: tot drie accu's, één per fase, houden samen het net op nul — één is primary, de andere secondary; één accu werkt als voorheen.
 
 <a id="meer"></a>
 

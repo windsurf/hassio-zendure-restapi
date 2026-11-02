@@ -205,6 +205,8 @@ class ZendureController:
     ) -> None:
         self.coordinator = coordinator
         self.settings = settings
+        # A clone in a virtual cluster (v1.7.1): its device is a model.
+        self.virtual = False
         self.state = ControllerState()
         self.meter: ZendureCoordinator | None = None
         self.external: ExternalMeter | None = None
@@ -1227,6 +1229,10 @@ class ZendureController:
         deliberately not attempted here: it changes the loop, and no
         installation with two devices has been measured.
         """
+        # A clone of a virtual cluster steers on its virtual P1: it neither holds
+        # nor contests the real grid, so the real battery is never blocked (v1.7.1).
+        if self.virtual:
+            return None
         store = self.coordinator.hass.data.setdefault(DOMAIN, {})
         # With a battery cluster set up, its primary holds the grid and a
         # battery outside it stands aside, whoever came first (v1.7.0).

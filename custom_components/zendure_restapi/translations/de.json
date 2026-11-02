@@ -9,7 +9,8 @@
           "external_meter": "Externer Netzzähler über IP — am schnellsten (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externer Netzzähler aus Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Preissteuerung — laden, wenn Strom günstig ist, entladen, wenn er teuer ist (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Akku-Cluster — bis zu drei Akkus, einer pro Phase, als ein System"
+          "battery_cluster": "Akku-Cluster — bis zu drei Akkus, einer pro Phase, als ein System",
+          "virtual_cluster": "Virtueller Cluster (Test) — Kopien eines Akkus unter einem Cluster, schreibt nichts Echtes"
         }
       },
       "zendure": {
@@ -96,6 +97,16 @@
       "battery_cluster": {
         "title": "Akku-Cluster",
         "description": "Gib jedem Akku, der mitmacht, die Phase, an der er angeschlossen ist: ein Akku pro Phase. Wähle *macht nicht mit*, um einen Akku draußen zu lassen. Puffer, Startschwellen und Zähler werden vom ersten Akku übernommen; die Gruppe startet im Standby. Akkus lassen sich später unter dem Cluster hinzufügen, ändern oder entfernen."
+      },
+      "virtual_cluster": {
+        "title": "Virtueller Cluster (Test)",
+        "description": "Bis zu drei Kopien eines deiner Akkus unter einem eigenen Cluster, mit einem virtuellen P1: Hauslast mal Lastfaktor, minus was die Kopien liefern. An den echten Akku wird nichts geschrieben und das Netz wird nicht beansprucht; der Test kostet nur Rechenleistung. Klone, Lastfaktor, die SoC-Abweichungen und Reset sind Entitäten des virtuellen Clusters.",
+        "data": {
+          "source_battery": "Zu kopierender Akku"
+        },
+        "data_description": {
+          "source_battery": "Die Kopien übernehmen Modell, Maxima, SOC-Grenzen und Einstellungen; die erste Kopie startet mit seinem Ladezustand."
+        }
       }
     },
     "error": {
@@ -654,6 +665,24 @@
       "members": {
         "name": "Akkus, die mitmachen"
       },
+      "virtual_p1_power": {
+        "name": "Leistung"
+      },
+      "virtual_p1_house_load": {
+        "name": "Hauslast"
+      },
+      "virtual_p1_real_grid": {
+        "name": "Echtes Netz"
+      },
+      "virtual_p1_load_factor": {
+        "name": "Lastfaktor"
+      },
+      "input_limit": {
+        "name": "Ladelimit"
+      },
+      "output_limit": {
+        "name": "Entladelimit"
+      },
       "cluster_status": {
         "name": "Status",
         "state": {
@@ -810,6 +839,24 @@
       },
       "redistribute_every": {
         "name": "Neu verteilen alle"
+      },
+      "clones": {
+        "name": "Klone"
+      },
+      "load_factor": {
+        "name": "Lastfaktor"
+      },
+      "soc_offset_2": {
+        "name": "SoC-Abweichung Klon 2"
+      },
+      "soc_offset_3": {
+        "name": "SoC-Abweichung Klon 3"
+      },
+      "response_offset_2": {
+        "name": "Zusätzliche Reaktionszeit Klon 2"
+      },
+      "response_offset_3": {
+        "name": "Zusätzliche Reaktionszeit Klon 3"
       }
     },
     "switch": {
@@ -830,6 +877,14 @@
       },
       "take_part": {
         "name": "Mitmachen"
+      }
+    },
+    "button": {
+      "reset": {
+        "name": "Zurücksetzen"
+      },
+      "rebuild_dashboard": {
+        "name": "Dashboard neu aufbauen"
       }
     }
   },

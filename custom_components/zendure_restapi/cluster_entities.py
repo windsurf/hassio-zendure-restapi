@@ -13,6 +13,7 @@ import logging
 import time
 from typing import Any
 
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription, NumberMode
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.components.sensor import (
@@ -103,6 +104,10 @@ SOC_DESCRIPTION = SensorEntityDescription(
     key="group_state_of_charge", name="Group state of charge", native_unit_of_measurement=PERCENTAGE,
     device_class=SensorDeviceClass.BATTERY, state_class=SensorStateClass.MEASUREMENT,
 )
+REBUILD_DESCRIPTION = ButtonEntityDescription(
+    key="rebuild_dashboard", name="Rebuild dashboard", icon="mdi:view-dashboard-edit-outline",
+    entity_category=EntityCategory.CONFIG,
+)
 MEMBERS_DESCRIPTION = SensorEntityDescription(
     key="members", name="Batteries taking part", state_class=SensorStateClass.MEASUREMENT,
     icon="mdi:battery-sync-outline",
@@ -117,6 +122,8 @@ def cluster_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
         return [ClusterSelect(entry, cluster, d, settings, key) for d, key in CLUSTER_SELECTS]
     if platform == Platform.NUMBER:
         return [ClusterNumber(entry, cluster, d, settings, key) for d, key in CLUSTER_NUMBERS]
+    if platform == Platform.BUTTON:
+        return [RebuildButton(entry, cluster, REBUILD_DESCRIPTION)]
     if platform == Platform.SENSOR:
         return [
             ClusterStatus(entry, cluster, STATUS_DESCRIPTION),
@@ -267,3 +274,16 @@ class ClusterValue(ClusterEntity, SensorEntity):
         if not self._extra:
             return None
         return {key: fn(self._cluster) for key, fn in self._extra.items()}
+
+
+class RebuildButton(ClusterEntity, ButtonEntity):
+    """Build the cluster dashboard again: a Cluster tab and a tab per battery (v1.7.1)."""
+
+    def __init__(self, entry: ConfigEntry, cluster: Any, description: ButtonEntityDescription) -> None:
+        super().__init__(entry, cluster, description)
+        self._entry = entry
+
+    async def async_press(self) -> None:
+        from .cluster_dashboard import async_cluster_dashboard
+
+        await async_cluster_dashboard(self.hass, self._entry, replace=True)

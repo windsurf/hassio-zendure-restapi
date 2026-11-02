@@ -66,7 +66,7 @@ from .properties import (
 )
 
 from homeassistant.const import Platform
-from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_PRICE
+from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_PRICE, DEVICE_TYPE_VIRTUAL
 from .cluster_entities import cluster_entities
 from .price_entities import price_entities
 _LOGGER = logging.getLogger(__name__)
@@ -394,6 +394,11 @@ async def async_setup_entry(
         return
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
         async_add_entities(cluster_entities(Platform.SENSOR, hass, entry))
+        return
+    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
+        from .sim.entities import virtual_entities
+
+        async_add_entities(virtual_entities(Platform.SENSOR, hass, entry))
         return
     stored = hass.data[DOMAIN][entry.entry_id]
     if isinstance(stored, ExternalMeter):

@@ -9,7 +9,8 @@
           "external_meter": "Externe netmeter via IP — het snelst (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externe netmeter uit Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Prijssturing — laden als stroom goedkoop is, ontladen als hij duur is (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Accucluster — tot drie accu's, één per fase, als één systeem"
+          "battery_cluster": "Accucluster — tot drie accu's, één per fase, als één systeem",
+          "virtual_cluster": "Virtueel cluster (test) — kopieën van een accu onder een cluster, schrijft niets echt"
         }
       },
       "zendure": {
@@ -96,6 +97,16 @@
       "battery_cluster": {
         "title": "Accucluster",
         "description": "Geef elke accu die meedoet de fase waarop hij is aangesloten: één accu per fase. Kies *doet niet mee* om een accu buiten de groep te laten. Buffers, startdrempels en de meter worden overgenomen van de eerste accu; de groep start in standby. Accu's toevoegen, wijzigen of verwijderen kan later onder het cluster."
+      },
+      "virtual_cluster": {
+        "title": "Virtueel cluster (test)",
+        "description": "Tot drie kopieën van een van je accu's onder een eigen cluster, met een virtuele P1: de huislast maal de lastfactor, min wat de kopieën leveren. Er wordt niets naar de echte accu geschreven en het net wordt niet geclaimd; de test kost alleen rekenkracht. Klonen, lastfactor, de SoC-afwijkingen en Reset zijn entiteiten van het virtuele cluster.",
+        "data": {
+          "source_battery": "Accu om te kopiëren"
+        },
+        "data_description": {
+          "source_battery": "De kopieën nemen model, maxima, SOC-grenzen en afstelling over; de eerste kopie start op zijn laadtoestand."
+        }
       }
     },
     "error": {
@@ -654,6 +665,24 @@
       "members": {
         "name": "Accu's die meedoen"
       },
+      "virtual_p1_power": {
+        "name": "Vermogen"
+      },
+      "virtual_p1_house_load": {
+        "name": "Huislast"
+      },
+      "virtual_p1_real_grid": {
+        "name": "Echt net"
+      },
+      "virtual_p1_load_factor": {
+        "name": "Lastfactor"
+      },
+      "input_limit": {
+        "name": "Laadlimiet"
+      },
+      "output_limit": {
+        "name": "Ontlaadlimiet"
+      },
       "cluster_status": {
         "name": "Status",
         "state": {
@@ -810,6 +839,24 @@
       },
       "redistribute_every": {
         "name": "Herverdelen elke"
+      },
+      "clones": {
+        "name": "Klonen"
+      },
+      "load_factor": {
+        "name": "Lastfactor"
+      },
+      "soc_offset_2": {
+        "name": "SoC-afwijking kloon 2"
+      },
+      "soc_offset_3": {
+        "name": "SoC-afwijking kloon 3"
+      },
+      "response_offset_2": {
+        "name": "Extra reactietijd kloon 2"
+      },
+      "response_offset_3": {
+        "name": "Extra reactietijd kloon 3"
       }
     },
     "switch": {
@@ -830,6 +877,14 @@
       },
       "take_part": {
         "name": "Meedoen"
+      }
+    },
+    "button": {
+      "reset": {
+        "name": "Reset"
+      },
+      "rebuild_dashboard": {
+        "name": "Dashboard opnieuw opbouwen"
       }
     }
   },

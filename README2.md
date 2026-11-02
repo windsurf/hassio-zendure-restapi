@@ -450,36 +450,40 @@ Your supplier's price page or invoice lists the surcharge and the energy tax per
 
 ##### Import surcharge per supplier (Netherlands)
 
-On a Dutch dynamic contract the import price per kWh is **spot price × 1.21 + energy tax + purchase cost**. The spot price is the day-ahead price excl. VAT (EPEX Spot *Market price*), and 1.21 adds 21 % VAT. The energy tax is the same for every supplier: in 2026 € 0.09161 per kWh excl. VAT, **€ 0.1108481 incl. VAT**. The purchase cost is your supplier's fixed fee per kWh, incl. VAT. So set *Import factor* to **1.21** and *Import surcharge* to 0.1108481 + the purchase cost of your supplier, for Zonneplan 0.1108481 + 0.0200 = 0.1308481.
+On a Dutch dynamic contract the import price per kWh is **spot price × 1.21 + energy tax + purchase cost**. The spot price is the day-ahead price excl. VAT (EPEX Spot *Market price*), and 1.21 adds 21 % VAT. The energy tax is the same for every supplier: in 2026 € 0.09161 per kWh excl. VAT, **€ 0.1108481 incl. VAT**. The purchase cost is your supplier's fixed fee per kWh, incl. VAT. Enter the last two columns in Price Control. **Valid until 31 December 2026.**
 
-| Supplier | Purchase cost per kWh |
-|---|---|
-| Budget Thuis | 0.0170 |
-| Zonneplan | 0.0200 |
-| Pure Energie | 0.0200 |
-| Vandebron | 0.0260 |
-| Powerpeers | 0.0090 |
-| Vattenfall | 0.0260 |
-| Energiedirect | 0.0210 |
-| Essent | 0.0250 |
-| Noord Energie | 0.0190 |
-| Energiek | 0.0180 |
+| Supplier | Purchase cost per kWh | Import factor | Import surcharge |
+|---|---|---|---|
+| Budget Thuis | 0.0170 | 1.21 | 0.1278481 |
+| Zonneplan | 0.0200 | 1.21 | 0.1308481 |
+| Pure Energie | 0.0200 | 1.21 | 0.1308481 |
+| Vandebron | 0.0260 | 1.21 | 0.1368481 |
+| Powerpeers | 0.0090 | 1.21 | 0.1198481 |
+| Vattenfall | 0.0260 | 1.21 | 0.1368481 |
+| Energiedirect | 0.0210 | 1.21 | 0.1318481 |
+| Essent | 0.0250 | 1.21 | 0.1358481 |
+| Noord Energie | 0.0190 | 1.21 | 0.1298481 |
+| Energiek | 0.0180 | 1.21 | 0.1288481 |
 
-Source: [energievergelijk.nl, dynamic energy contracts](https://www.energievergelijk.nl/dynamisch-energiecontract), purchase costs per kWh as published in October 2026, the ten lowest monthly costs. Prices change; what counts is your own contract. Standing charges and the tax reduction (*heffingskorting*) are per month or per year and do not change a plan per quarter, so they are left out. From 1 January 2027 the energy tax changes: the surcharge becomes the new energy tax incl. VAT + the purchase cost, and *Net metering* goes off.
+Source: [energievergelijk.nl, dynamic energy contracts](https://www.energievergelijk.nl/dynamisch-energiecontract), purchase costs per kWh as published in October 2026, the ten lowest monthly costs. Prices change; what counts is your own contract. Standing charges and the tax reduction (*heffingskorting*) are per month or per year and do not change a plan per quarter, so they are left out. From 1 January 2027 the energy tax changes: the import surcharge becomes the new energy tax incl. VAT + the purchase cost, and *Net metering* goes off.
 
 ##### Other countries
 
 The formula is the same everywhere: the bare spot price of your price area, times 1 + VAT, plus every cost per kWh on your invoice incl. VAT. What differs is the VAT rate and what goes into the surcharge. A cost per kWh that is the same at every hour fits the surcharge; a cost that changes with the time of day, or a subsidy that depends on the price, does not, and the plan is then only as good as the average you enter.
 
-| Country | Price area | Import factor | Import surcharge per kWh, incl. VAT | Does not fit a fixed surcharge |
-|---|---|---|---|---|
-| Belgium | `BE` | 1.06 (6 % VAT) | supplier fee, distribution and transmission per kWh, levies and excise | Flanders: part of the grid fee follows the highest quarter-hour peak of the month (capacity tariff). `smart_matching` covers the house up to the battery's output power, which lowers that peak; a peak limit of its own is not built in |
-| Germany | `DE-LU` (Nord Pool `GER`) | 1.19 | grid fee (*Netzentgelt*, per postcode, on your contract), electricity tax, concession fee, levies, supplier fee | time-variable grid fees for controllable devices (§ 14a EnWG, module 3) |
-| Austria | `AT` | 1.20 | grid fees, levies and supplier fee | — |
-| Denmark | `DK1`, `DK2` | 1.25 | electricity tax (*elafgift*), supplier fee | the grid tariff changes by the hour, highest from 17:00 to 21:00 |
-| Sweden | `SE1`–`SE4` | 1.25 | energy tax (*energiskatt*), grid fee per kWh, supplier fee | — |
-| Norway | `NO1`–`NO5` | 1.25 | grid fee per kWh, electricity tax, supplier fee | electricity support that depends on the price; a grid fee in capacity steps |
-| Finland | `FI` | 1.255 | electricity tax, grid fee per kWh, supplier fee | — |
+| Country | Price area | Import factor | Import surcharge per kWh, incl. VAT | Where to find it on your bill | Does not fit a fixed surcharge |
+|---|---|---|---|---|---|
+| Belgium | `BE` | 1.06 (6 % VAT) | supplier fee, distribution and transmission per kWh, levies and excise | *distributiekosten* / *frais de distribution*, *transmissiekosten*, *bijzondere accijns* / *accise spéciale*, *energiebijdrage* / *cotisation énergie*, and your supplier's fee per kWh | Flanders: part of the grid fee follows the highest quarter-hour peak of the month (capacity tariff). `smart_matching` covers the house up to the battery's output power, which lowers that peak; a peak limit of its own is not built in |
+| Germany | `DE-LU` (Nord Pool `GER`) | 1.19 | grid fee (*Netzentgelt*, per postcode), electricity tax, concession fee, levies, supplier fee | the *Arbeitspreis* of the *Netzentgelt* (your grid operator's *Preisblatt*), *Stromsteuer*, *Konzessionsabgabe*, *Umlagen*, and your supplier's fee; a dynamic supplier's app often shows them together as *Netzentgelte, Steuern und Abgaben* | time-variable grid fees for controllable devices (§ 14a EnWG, module 3) |
+| Austria | `AT` | 1.20 | grid fees, levies and supplier fee | *Netznutzungsentgelt*, *Netzverlustentgelt*, *Elektrizitätsabgabe*, and your supplier's fee per kWh | — |
+| Denmark | `DK1`, `DK2` | 1.25 | electricity tax, supplier fee | *elafgift*, *Energinet* tariffs and your supplier's fee; the *nettarif* changes by the hour | the grid tariff changes by the hour, highest from 17:00 to 21:00 |
+| Sweden | `SE1`–`SE4` | 1.25 | energy tax, grid fee per kWh, supplier fee | *energiskatt*, the *överföringsavgift* of your *elnät* bill, and your supplier's *påslag* | — |
+| Norway | `NO1`–`NO5` | 1.25 | grid fee per kWh, electricity tax, supplier fee | *energiledd* of the *nettleie*, *elavgift* (*forbruksavgift*), and your supplier's *påslag* | electricity support that depends on the price; a grid fee in capacity steps |
+| Finland | `FI` | 1.255 | electricity tax, grid fee per kWh, supplier fee | *sähkövero*, the *siirtomaksu* of your grid bill, and your supplier's *marginaali* | — |
+
+Add up the amounts per kWh **incl. VAT**. An amount listed without VAT: multiply it by the import factor first. Amounts per month or per year (standing charges, metering) are left out: they do not change a plan per quarter.
+
+**Example, Germany 2026.** Averages for a household from the [BDEW electricity price analysis](https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf), in ct per kWh excl. VAT: grid fee 9.24, electricity tax 2.05, concession fee 1.67, special grid use levy 1.56, offshore grid levy 0.94, CHP levy 0.45; together 15.90, or **0.1892 €/kWh incl. VAT**. Add your supplier's fee per kWh incl. VAT, and set *Import factor* 1.19 and *Import surcharge* 0.1892 + that fee. Your own figure differs: the grid fee depends on your postcode, the concession fee on the size of your municipality, and the average includes part of the standing charge. Take the *Arbeitspreis* from your grid operator's *Preisblatt* for the exact value.
 
 The United Kingdom bills per half hour, in pounds, with regional network charges; no UK price list has been tested with the day plan. VAT rates as of 2026; your invoice decides.
 
@@ -672,6 +676,10 @@ New keys in the report after an upgrade raise a repair as well, see [Reporting a
 *Since v1.7.0.* A **battery cluster** lets up to three batteries, one per phase, hold the grid of the whole connection at zero together. One battery is primary and runs the loop described below, unchanged; the others are secondary and hold a fixed limit that the cluster sets at most every 30 seconds. Below 300 W of demand the primary works alone. Add it under *Add integration → Zendure RestAPI → Battery cluster*; the batteries become its sub-entries.
 
 Everything about it — setting up, how it regulates, its entities, its status and its limits — is in its own guide: **[docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md)**.
+
+*v1.7.1.* A **Virtual cluster** shows what a cluster would do in your house without a second battery: up to three copies of one of your batteries under a cluster of their own, steering on a virtual P1 meter — a device of its own: the house load times a *Load factor*, minus what the copies deliver. Each copy runs this integration's own controller on a model of the device, with the real battery's tuning. Nothing is written to the real battery and it is never `blocked`; the test costs only computing power. Add it under *Add integration → Zendure RestAPI → Virtual cluster (test)*. Guide: **[docs/virtual_cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/virtual_cluster.md)**.
+
+The cluster gets the dashboard **Cluster** (`/zendure-cluster`): a *Cluster* tab with the distribution over primary and secondaries and a 24-hour chart, and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets the same dashboard as **Virtual Cluster**, with a tab per copy (*Virtual Mix 1, 2, 3*) and none for the real battery, which keeps its own. It is made once; after a change in the group a notification offers *Rebuild dashboard*.
 
 <a id="how-the-controller-works"></a>
 
@@ -1124,7 +1132,7 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 19 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Charge buffer, Discharge buffer, Trim strength, SOC protection, Trace recording, Mode threshold, Trim threshold |
-| **Battery cluster entry** | 12 | Operation mode, Meter source, Status, Group power, Group state of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Concentrate below, Redistribute every — see [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
+| **Battery cluster entry** | 13 | Operation mode, Meter source, Status, Group power, Group state of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1359,6 +1367,18 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.7.1 — A Virtual cluster, and a cluster dashboard
+
+A single battery decides exactly as in v1.7.0. After updating, restart Home Assistant.
+
+- **Virtual cluster (test).** A new entry under *Add integration → Zendure RestAPI*: up to three copies of one battery under a cluster of their own, to see how a cluster regulates in your house before buying one. The copies run this integration's controller on a model of the device — write in the device after 1.8 s, first power ~8 s after a write from standstill, 200 W/s up, a stop in ~3 s, 95 % conversion, 29 or 5 W at rest — with the real battery's maxima, SOC limits and tuning. They steer on a **virtual P1**: house load (real grid plus the real battery's power) times *Load factor* (1–3), minus what the copies deliver. Nothing is written to the real battery, the grid is not claimed, and the copies have no energy counters.
+- **Virtual P1 meter.** A device of its own under the Virtual cluster, with Power (the virtual P1), House load, Real grid and Load factor, so the meter can be read and charted like a real one.
+- **Settings on the Virtual cluster:** Clones (1–3), Load factor, SoC offset of clones 2 and 3 against the first, which starts on the real battery's state of charge, Response offset of clones 2 and 3 (0–10 s on top of the measured 1.8 s), Operation mode with `follow_source` (the real battery's mode, and so its planner), the group settings of the cluster, and **Reset**: every copy back to the start. Guide: [docs/virtual_cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/virtual_cluster.md).
+- **Cluster dashboard.** *Cluster* (`/zendure-cluster`) for a cluster, *Virtual Cluster* for the Virtual cluster: a *Cluster* tab with mode, status, primary, *Grid at last distribution*, the role, direction and limit of every battery, power and state of charge per battery, a 24-hour chart of the grid against the group and each battery, and the settings; then a tab per battery by name, like the first page of the battery dashboard. The Virtual cluster gets a tab per copy, headed *Virtual Mix n (simulated)* with its offsets, the offsets in the settings named after their copy, and no tab for the real battery. Tabs show their names, not icons. Made once; after a change in the group a notification offers **Rebuild dashboard**, a new button on the cluster and on the Virtual cluster. Deleting the last cluster or Virtual cluster removes the dashboard and its notification, so Home Assistant is as it was before.
+- **Ready for Home Assistant 2027.8.** The Virtual cluster looks up and links its devices with the calls Home Assistant 2026.8 introduced, and with the old ones before that version.
+- **Next to a battery steered elsewhere.** When this integration only monitors the battery (`standby`, limits set by an automation of your own or a HEMS), give the Virtual cluster a mode of its own: the copies regulate on the virtual P1, the integration writes nothing to the battery, and deleting the Virtual cluster leaves Home Assistant as it was before (tested in a simulation).
+- **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging. A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
+
 ### v1.7.0 — A battery cluster: up to three batteries, one per phase
 
 A single battery decides exactly as in v1.6.10. Home Assistant 2025.3 or newer is now required (the cluster's batteries are sub-entries). After updating, restart Home Assistant. Existing entities and automations of a single battery keep working. Tested on a simulator, not yet with real batteries: testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
@@ -1371,7 +1391,6 @@ A single battery decides exactly as in v1.6.10. Home Assistant 2025.3 or newer i
 - **Fixed: standby stops a battery that had just started.** The stop on entering standby was skipped when the last poll did not yet report a limit written moments before, and the battery kept running. When the controller set the limit itself, the stop is now always sent.
 - **Not yet:** control per phase, several batteries on one phase, other brands, and a dashboard tab for the cluster (a card to paste is in the guide). The cluster has no grid sensor of its own, as the battery since v1.6.6; its figures are written only when they move, as the energy counters since v1.6.7.
 - **Roles:** the batteries of a cluster are *primary* and *secondary*, in every language; the *Controller status* of a secondary reads `secondary`, and the cluster status names its `primary`.
-- **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging. A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
 
 ### v1.6.10 — The Inverter power limit is not raised from Home Assistant; standby leaves the battery alone at startup
 
