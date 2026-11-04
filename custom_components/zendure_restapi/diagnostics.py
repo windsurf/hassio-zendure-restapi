@@ -123,6 +123,7 @@ async def async_get_config_entry_diagnostics(
         "unknown_keys": sorted(coordinator.unknown_keys),
         "unknown_keys_first_seen": dict(sorted(coordinator.first_seen.items())),
         "restarts": list(coordinator.restarts),
+        "message_id_resets": list(coordinator.message_id_resets),
         "flat_data": _redact_flat(coordinator.data or {}),
         "raw_report": async_redact_data(dict(coordinator.raw or {}), REDACT),
         "mqtt_status": _summarise_mqtt(mqtt_status),

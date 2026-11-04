@@ -30,8 +30,8 @@ Since v1.5.3 there may be several external meters — a YouLess, a HomeWizard
 and a Home Assistant sensor side by side on one splitter, say — and each
 battery's `External meter` select says which of them it uses.
 
-Since v1.7.0 a battery cluster lets up to three batteries, one per phase,
-hold the grid at zero together: an entry of its own with a subentry per
+Since v1.7.0 a battery cluster lets several batteries (up to four since
+v1.7.2, on any phase) hold the grid at zero together: an entry of its own with a subentry per
 battery. The logic lives in cluster/ and member.py; here it is only wired up.
 """
 

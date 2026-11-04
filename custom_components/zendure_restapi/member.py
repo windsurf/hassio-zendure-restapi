@@ -17,7 +17,7 @@ from .settings import SettingsView, ZendureSettings
 
 
 def phase_number(value: Any) -> int:
-    """'L2' or 2 to 2; anything else to 1."""
+    """'L2' or 2 to 2; anything else to 1. A label: no decision uses it."""
     text = str(value or "").upper().lstrip("L")
     return int(text) if text in ("1", "2", "3") else 1
 

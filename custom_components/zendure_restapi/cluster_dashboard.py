@@ -3,17 +3,20 @@
 One dashboard, `/zendure-cluster`, for the battery cluster or the Virtual
 cluster (the one it is made from names it): *Cluster* or *Virtual Cluster*.
 
-* Cluster — the group's mode and status, who is primary, a row per battery
-  with role, direction and limit, power and state of charge per battery, a
-  24 h chart of the grid against the group and every battery, and the
-  group's settings. A Virtual cluster adds its Virtual P1 meter, and its
-  settings name each offset after the virtual battery it belongs to;
+* Cluster — since v1.7.2 in the layout of the battery dashboard: tiles under
+  the title, the operation mode with one status text, gauges, a row per battery
+  with role, direction, limit and power, the group's settings as sliders, and
+  a chart of today and tomorrow (ApexCharts Card, else a history graph). A
+  Virtual cluster adds its Virtual P1 meter, its test settings (Clones, Load
+  factor), and in the chart the real battery and its day plan. Price Control
+  and the device itself stay on the battery dashboard;
 * a battery cluster: one tab per member, built from the first page of the
   battery dashboard (dashboard.py, the same template and the same rules for
   missing entities), headed with the member's name;
-* a Virtual cluster: one tab per virtual battery (Virtual Mix 1, 2, 3). The
-  real battery is no member and keeps its own dashboard; it gets no tab here
-  and shows on the Cluster tab only, for comparison.
+* a Virtual cluster: one tab per virtual battery (Virtual Mix 1, 2, 3), with
+  its own settings as sliders (Max share, SoC offset, extra response time). The real battery is no member and keeps its own
+  dashboard; it gets no tab here and shows on the Cluster tab only, for
+  comparison.
 
 Tabs carry their title, not an icon, so they can be told apart. Every virtual
 battery is called by its device name (Virtual Mix n) throughout.
@@ -26,6 +29,7 @@ brings a notification, never a silent overwrite.
 from __future__ import annotations
 
 import copy
+import json
 import logging
 from typing import Any
 
@@ -102,104 +106,216 @@ def _markdown(content: str) -> dict[str, Any]:
     return {"type": "markdown", "content": content, "grid_options": {"columns": "full", "rows": "auto"}}
 
 
+def distribution_table(status: str, powers: dict[str, str]) -> str:
+    """The Distribution table: what the cluster asks of each battery, and what it does.
+
+    A secondary holds the limit the cluster gives it. The primary runs its own
+    loop on the meter and gets no limit from the cluster, so its direction is
+    read from its measured power (more than 25 W either way) and its limit reads
+    *own loop* (v1.7.2). `powers` maps a battery's name to its power sensor.
+    """
+    return (
+        "| Battery | Role | Direction | Limit | Power |\n|---|---|---|---:|---:|\n"
+        "{% set b = state_attr('" + status + "', 'batteries') or {} %}"
+        "{% set p = " + json.dumps(powers) + " %}"
+        "{% for name, v in b.items() %}"
+        "{% set w = states(p[name]) | float(none) if name in p else none %}"
+        "{% if v.role == 'primary' %}"
+        "{% set d = 'none' if w is none or (w | abs) <= 25 else ('discharge' if w > 0 else 'charge') %}"
+        "| {{ name }} | primary | {{ d }} | own loop |"
+        "{% else %}"
+        "| {{ name }} | {{ v.role }} | {{ v.direction }} | {{ v.limit }} W |"
+        "{% endif %}"
+        " {{ (w | round(0) | int) ~ ' W' if w is not none else '–' }} |\n{% endfor %}"
+    )
+
+
+APEX = "custom:apexcharts-card"
+STEP_W = 500                    # one grid line per 500 W per battery in the chart
+POWER_SEV = {"green": -1500, "yellow": 0, "red": 1500}
+SOC_SEV = {"green": 70, "yellow": 30, "red": 0}
+
+
+def _gauge(entity_id: str | None, lo: int, hi: int, severity: dict[str, int] | None = None) -> dict[str, Any] | None:
+    """A gauge as on the battery dashboard: named after its entity, six columns wide."""
+    if not entity_id:
+        return None
+    card: dict[str, Any] = {"type": "gauge", "entity": entity_id, "min": lo, "max": hi, "needle": True,
+                            "grid_options": {"columns": 6, "rows": "auto"}}
+    if severity:
+        card["severity"] = severity
+    if CARD_NAMING:
+        card["name"] = {"type": "entity"}
+    return card
+
+
+def _control(entity_id: str | None, style: str = "slider", wide: bool = False, **extra: Any) -> dict[str, Any] | None:
+    """A setting as on the battery dashboard: a tile with a slider (or buttons)."""
+    card = _tile(entity_id, features_position="bottom", features=[{"type": "numeric-input", "style": style}], **extra)
+    if card and wide:
+        card["grid_options"] = {"columns": 12, "rows": 2}
+    return card
+
+
+def status_text(group: dict[str, Any], virtual: bool) -> str:
+    """One status text under Operation mode: status and reason, primary, how many
+    run, demand, the grid the last distribution was decided on; for a Virtual
+    cluster the virtual P1 as the sum it is, and the spread of the copies (v1.7.2)."""
+    s, soc = str(group.get("status")), str(group.get("soc"))
+    text = (
+        "{% set s = '" + s + "' %}{% set b = state_attr(s, 'batteries') or {} %}\n"
+        "**Status** {{ states(s) }} – {{ state_attr(s, 'reason') }}\n\n"
+        "**Primary** {{ state_attr(s, 'primary') or '–' }} | **Running** "
+        "{{ b.values() | selectattr('limit', 'gt', 0) | list | count + (1 if state_attr(s, 'primary') else 0) }} of {{ b | count }}"
+        " | **Demand** {{ state_attr(s, 'demand') }} W | **Grid at last distribution** {{ state_attr(s, 'grid') }} W\n"
+    )
+    if virtual and group.get("virtual_grid") and group.get("house_load"):
+        lf = group.get("load_factor")
+        text += (
+            "\n{% set p1 = states('" + group["virtual_grid"] + "') | float(0) %}"
+            "{% set house = states('" + group["house_load"] + "') | float(0) %}"
+            "{% set lf = " + (f"states('{lf}') | float(1)" if lf else "1") + " %}"
+            "**Virtual P1** {{ p1 | round(0) | int }} W = house {{ house | round(0) | int }} W × {{ lf }}"
+            " − copies {{ (house * lf - p1) | round(0) | int }} W"
+            " | **SoC spread** {{ state_attr('" + soc + "', 'spread') }} points\n"
+        )
+    return text
+
+
+def _series(entity_id: str, name: str, color: str, kind: str = "line", axis: str = "power", **extra: Any) -> dict[str, Any]:
+    serie: dict[str, Any] = {
+        "entity": entity_id, "name": name, "type": kind, "unit": "%" if axis == "soc" else "W", "color": color,
+        "stroke_width": 1 if kind == "area" else 1.5, "curve": "monotoneCubic", "float_precision": 0,
+        "extend_to": "now", "show": {"in_header": False, "legend_value": False}, "yaxis_id": axis,
+        "statistics": {"type": "mean", "period": "5minute", "align": "middle"},
+    }
+    if kind == "area":
+        serie["opacity"] = 0.3
+    serie.update(extra)
+    return serie
+
+
+def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | None] | None,
+              plan: str | None, count: int) -> dict[str, Any]:
+    """The chart of today and tomorrow, as the day plan chart of the battery
+    dashboard: the grid, the group discharging and charging, the group's state
+    of charge; for a Virtual cluster also the real battery and its plan. One grid
+    line per 500 W per battery, a label every second line (v1.7.2)."""
+    step = STEP_W * max(1, count)
+    series: list[dict[str, Any]] = []
+    if grid:
+        series.append(_series(grid, "Virtual P1" if real else "Grid", "#1E88E5", "area"))
+    if group.get("power"):
+        series.append(_series(group["power"], "Discharging", "#4CAF50", "area", transform="return x > 0 ? x : 0;"))
+        series.append(_series(group["power"], "Charging", "#E53935", "area", transform="return x < 0 ? x : 0;"))
+    if real and real.get("power"):
+        series.append(_series(real["power"], "Real battery", "#757575"))
+    if plan:
+        series.append({
+            "entity": plan, "name": "Plan (real battery)", "type": "line", "unit": "W", "stroke_width": 1.5,
+            "curve": "stepline", "float_precision": 0, "color": "#757575",
+            "show": {"in_header": False, "legend_value": False}, "yaxis_id": "power",
+            "data_generator": (
+                "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n"
+                "[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n"
+                "  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n"
+                "  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\n"
+                "if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\n"
+                "pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n"
+            ),
+        })
+    if group.get("soc"):
+        series.append(_series(group["soc"], "SoC group", "#9575CD", axis="soc", stroke_width=2, stroke_dash=4))
+    if real and real.get("soc"):
+        series.append(_series(real["soc"], "SoC real", "#757575", axis="soc", stroke_dash=2))
+    return {
+        "type": APEX, "graph_span": "48h", "span": {"start": "day"}, "now": {"show": True, "label": "Now"},
+        "header": {"show": False},
+        "yaxis": [
+            {"id": "power", "min": "~-3000", "decimals": 0, "align_to": step, "apex_config": {
+                "stepSize": step,
+                "labels": {"formatter": "EVAL:function (v) { return Math.round(v) % "
+                           + str(2 * step) + " === 0 ? Math.round(v) : \"\"; }"}}},
+            {"id": "soc", "opposite": True, "min": 0, "max": 100, "decimals": 0,
+             "apex_config": {"tickAmount": 4, "labels": {"style": {"fontSize": "10px"}}}},
+        ],
+        "apex_config": {"chart": {"height": 240}, "legend": {"show": True}, "tooltip": {"x": {"format": "dd-MM HH:mm"}},
+                        "grid": {"borderColor": "rgba(127, 127, 127, 0.25)", "strokeDashArray": 0},
+                        "fill": {"type": "solid"}},
+        "series": series, "grid_options": {"columns": "full", "rows": "auto"}, "hours_12": False,
+    }
+
+
 def cluster_view(
     group: dict[str, Any],
     batteries: list[dict[str, str | None]],
     grids: list[dict[str, str | None]],
     virtual: bool,
     clones: list[tuple[int, str]] | None = None,
+    custom_cards: set[str] | None = None,
+    plan: str | None = None,
 ) -> dict[str, Any]:
-    """The Cluster tab. `group` holds the entity ids of the group's own
-    entities, `batteries` per battery name, power and soc, `grids` the grid
-    sensors for the chart with their name, `clones` index and name of each
-    virtual battery. Order: Status, Virtual P1 meter, Distribution, Settings,
-    Last 24 hours."""
-    clones = clones or []
-    names = dict(clones)
-    status = group.get("status")
-    table = (
-        "| Battery | Role | Direction | Limit |\n|---|---|---|---:|\n"
-        "{% set b = state_attr('" + str(status) + "', 'batteries') or {} %}"
-        "{% for name, v in b.items() %}| {{ name }} | {{ v.role }} | {{ v.direction }} | {{ v.limit }} W |\n{% endfor %}"
-    )
-    # `grid` is the reading the last distribution was decided on, once per
-    # Redistribute every; the P1 sensors follow every telegram.
-    summary = (
-        "{% set s = '" + str(status) + "' %}"
-        "**Status** {{ states(s) }} – {{ state_attr(s, 'reason') }}\n\n"
-        "**Primary** {{ state_attr(s, 'primary') or '–' }} | **Demand** {{ state_attr(s, 'demand') }} W"
-        " | **Grid at last distribution** {{ state_attr(s, 'grid') }} W"
-    )
-    if virtual and group.get("virtual_grid"):
-        summary += (
-            "\n\n**Virtual P1** {{ states('" + group["virtual_grid"] + "') }} W"
-            " | **House** {{ states('" + str(group.get("house_load")) + "') }} W"
-            " | **Real P1** {{ states('" + str(group.get("real_grid")) + "') }} W"
-        )
+    """The Cluster tab, in the layout of the battery dashboard (v1.7.2): a row
+    of tiles under the title, the operation mode with one status text, gauges,
+    the distribution, the settings of the group as sliders, and the chart of
+    today and tomorrow. What is set per battery lives on its own tab; Price
+    Control and the device itself stay on the battery dashboard.
 
-    def offset_tile(key: str, index: int, label: str) -> dict[str, Any] | None:
-        name = names.get(index)
-        return _tile(group.get(key), name=f"{name} {label}") if name else None
+    `group` holds the entity ids of the group's own entities, `batteries` per
+    battery name, power and soc (a Virtual cluster's real battery first, named
+    REAL), `grids` the grid sensors with their name, `clones` index and name of
+    each virtual battery, `custom_cards` the custom cards installed (None: all),
+    `plan` the day plan of the real battery behind a Virtual cluster.
+    """
+    clones = clones or []
+    real = next((b for b in batteries if b.get("name") == REAL), None) if virtual else None
+    members = [b for b in batteries if b is not real]
+    count = len(clones) if virtual else len(members)
+    grid = group.get("virtual_grid") if virtual else next((g["entity"] for g in grids if g.get("entity")), None)
+    real_grid = next((g["entity"] for g in grids if g.get("entity") and g.get("entity") != grid), None) if virtual else None
+    powers = {b["name"]: b["power"] for b in batteries if b.get("power")}
+    cap = 3000 * max(1, count)
+
+    if custom_cards is None or APEX in custom_cards:
+        chart: dict[str, Any] = day_chart(group, grid, real, plan if virtual else None, count)
+    else:
+        chart = {"type": "history-graph", "hours_to_show": 24, "grid_options": {"columns": "full", "rows": 6},
+                 "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries)) if e]}
 
     sections = [
-        _section("Status", "mdi:battery-sync", [
-            _tile(group.get("mode"), features_position="bottom", features=[{"type": "select-options"}],
-                  grid_options={"columns": 12, "rows": 2}),
-            _markdown(summary),
-            _tile(group.get("status")),
-            _tile(group.get("power")),
-            _tile(group.get("soc")),
+        _section(cluster_title(virtual), CLONE_ICON, [
+            _tile(group.get("soc"), icon="mdi:battery-charging"),
+            _tile(group.get("power"), icon="mdi:flash"),
+            _tile(group.get("members"), icon="mdi:battery-sync-outline"),
+            _tile(grid, icon="mdi:transmission-tower"),
+            _tile(group.get("house_load"), icon="mdi:home-lightning-bolt") if virtual else None,
+            _tile(group.get("real_grid"), icon="mdi:transmission-tower-import") if virtual else None,
+        ], span=4, badges=[e for e in (group.get("soc"), group.get("status"), group.get("mode")) if e]),
+        _section("Operation mode", "mdi:state-machine", [
+            _markdown(status_text(group, virtual)) if group.get("status") else None,
+            _tile(group.get("mode"), icon="mdi:state-machine", features_position="bottom",
+                  features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
+            _tile(group.get("reset"), icon="mdi:restart"),
+            _tile(group.get("rebuild")),
+        ], badges=[e for e in (group.get("mode"), group.get("status")) if e]),
+        _section("Overview", "mdi:gauge", [
+            _gauge(grid, -3000, 3000, POWER_SEV),
+            _gauge(group.get("soc"), 0, 100, SOC_SEV),
+            _gauge(group.get("power"), -cap, cap),
+            _gauge(real_grid, -3000, 3000, POWER_SEV),
         ]),
-        _section("Virtual P1 meter", "mdi:meter-electric-outline", [
-            _tile(group.get("virtual_grid")),
-            _tile(group.get("house_load")),
-            _tile(group.get("real_grid")),
-            _tile(group.get("load_factor")),
-        ]) if virtual else None,
         _section("Distribution", "mdi:call-split", [
-            _markdown(table),
-            *[card for b in batteries for card in (
-                _tile(b.get("power"), name=f"{b['name']} power"),
-                _tile(b.get("soc"), name=f"{b['name']} SoC"),
-            )],
+            _markdown(distribution_table(str(group.get("status")), powers)) if group.get("status") else None,
         ]),
-        _section("Settings", "mdi:tune-variant", [
-            *(_tile(group.get(k)) for k in ("clones", "load_factor")),
-            offset_tile("soc_offset_2", 2, "SoC offset"),
-            offset_tile("soc_offset_3", 3, "SoC offset"),
-            offset_tile("response_offset_2", 2, "extra response time"),
-            offset_tile("response_offset_3", 3, "extra response time"),
-            *(_tile(group.get(k)) for k in (
+        _section("Cluster settings", "mdi:tune", [
+            _control(group.get("clones"), icon="mdi:content-copy"),
+            _control(group.get("load_factor"), icon="mdi:multiplication"),
+            *(_control(group.get(k)) for k in (
                 "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
                 "concentrate_below", "redistribute_every",
             )),
-            _tile(group.get("reset")),
-            _tile(group.get("rebuild")),
         ]),
-        {
-            "type": "grid",
-            "column_span": 4,
-            "cards": [
-                {"type": "heading", "heading": "Last 24 hours", "heading_style": "title", "icon": "mdi:chart-line"},
-                {
-                    "type": "history-graph",
-                    "hours_to_show": 24,
-                    "grid_options": {"columns": "full", "rows": 6},
-                    "entities": [
-                        *({"entity": g["entity"], **({"name": g["name"]} if g.get("name") else {})} for g in grids),
-                        *({"entity": e, **({"name": "Group power"} if virtual else {})}
-                          for e in (group.get("power"),) if e),
-                        *({"entity": b["power"], "name": b["name"]} for b in batteries if b.get("power")),
-                    ],
-                },
-                {
-                    "type": "history-graph",
-                    "hours_to_show": 24,
-                    "grid_options": {"columns": "full", "rows": 4},
-                    "entities": [{"entity": b["soc"], "name": b["name"]} for b in batteries if b.get("soc")],
-                },
-            ],
-        },
+        _section("Today and tomorrow", "mdi:chart-line", [chart], span=4),
     ]
     return {
         "title": "Cluster",
@@ -231,43 +347,45 @@ def battery_view(template: dict[str, Any], args: dict[str, Any], title: str, pat
 
 
 def clone_view(prefix: str, index: int, name: str, group: dict[str, Any], known: set[str]) -> dict[str, Any]:
-    """The tab of one virtual battery: what its controller does on the model
-    of the device, headed with its name and, from the second on, its offsets;
-    the meter it steers on, its state of charge and its limits as gauges."""
+    """The tab of one virtual battery (v1.7.2): what its
+    controller does on the model of the device, gauges, its own settings as
+    sliders (Max share, SoC offset, extra response time; copy 1 too since
+    v1.7.2) and its measured response time."""
     status = f"sensor.{prefix}controller_status"
 
     def own(key: str) -> str | None:
         entity = f"sensor.{prefix}{key}"
         return entity if entity in known else None
 
-    soc, delay = group.get(f"soc_offset_{index}"), group.get(f"response_offset_{index}")
-    first = index == 1 or not (soc and delay)
     card = (
         "{% set c = '" + status + "' %}\n**Status** {{ states(c) }} - {{ state_attr(c, 'reason') }}\n\n"
         "**Direction** {{ state_attr(c, 'direction') }} | **Target** {{ state_attr(c, 'target_power') }} W\n\n"
         "**Virtual P1** {{ state_attr(c, 'meter_power') }} W | **Battery** {{ state_attr(c, 'battery_power') }} W\n\n"
         "**Trim writes** {{ state_attr(c, 'trim_writes') }}\n"
     )
-    gauge = {"needle": True, "grid_options": {"columns": 6, "rows": "auto"}}
+    response = own("response_time")
     sections = [
         _section(f"{name} (simulated)", CLONE_ICON, [
             _tile(own("state_of_charge"), icon="mdi:battery-charging"),
             _tile(own("battery_power"), icon="mdi:flash"),
             _tile(status if status in known else None, icon="mdi:cog-sync-outline"),
-            None if first else _tile(soc, name="SoC offset"),
-            None if first else _tile(delay, name="Extra response time"),
-            _tile(own("response_time")),
-        ], span=4),
+            _tile(response),
+        ], span=4, badges=[e for e in (own("state_of_charge"), status if status in known else None) if e]),
         _section("Operation mode", "mdi:state-machine", [_markdown(card)] if status in known else []),
         _section("Overview", "mdi:gauge", [
-            *({"type": "gauge", "entity": e, "name": n, "min": lo, "max": hi, **gauge,
-               **({"severity": sev} if sev else {})}
-              for e, n, lo, hi, sev in (
-                  (group.get("virtual_grid"), "Virtual P1", -3000, 3000, {"green": -1500, "yellow": 0, "red": 1500}),
-                  (own("state_of_charge"), "State of charge", 0, 100, {"green": 70, "yellow": 30, "red": 0}),
-                  (own("charge_limit"), "Charge limit", 0, 3000, None),
-                  (own("discharge_limit"), "Discharge limit", 0, 3000, None),
-              ) if e),
+            _gauge(group.get("virtual_grid"), -3000, 3000, POWER_SEV),
+            _gauge(own("state_of_charge"), 0, 100, SOC_SEV),
+            _gauge(own("charge_limit"), 0, 3000),
+            _gauge(own("discharge_limit"), 0, 3000),
+        ]),
+        _section("Copy settings", "mdi:tune-variant", [
+            _control(group.get(f"max_share_clone_{index}"), wide=True, icon="mdi:arrow-collapse-vertical"),
+            _control(group.get(f"soc_offset_{index}"), wide=True, icon="mdi:battery-arrow-up-outline"),
+            _control(group.get(f"response_offset_{index}"), wide=True, icon="mdi:timer-sand"),
+        ]),
+        _section("Measured", "mdi:stethoscope", [
+            _tile(response, icon="mdi:timer-outline", features_position="bottom",
+                  features=[{"type": "trend-graph", "hours_to_show": 24}], grid_options={"columns": 12, "rows": 2}),
         ]),
     ]
     return {
@@ -293,13 +411,16 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         "status": _entity(registry, "sensor", f"{eid}_cluster_status"),
         "power": _entity(registry, "sensor", f"{eid}_group_power"),
         "soc": _entity(registry, "sensor", f"{eid}_group_state_of_charge"),
+        "members": _entity(registry, "sensor", f"{eid}_members"),
         "virtual_grid": _entity(registry, "sensor", f"{eid}_virtual_p1_power"),
         "house_load": _entity(registry, "sensor", f"{eid}_virtual_p1_house_load"),
         "real_grid": _entity(registry, "sensor", f"{eid}_virtual_p1_real_grid"),
         "reset": _entity(registry, "button", f"{eid}_reset"),
         "rebuild": _entity(registry, "button", f"{eid}_rebuild_dashboard"),
     }
-    for key in ("clones", "load_factor", "soc_offset_2", "soc_offset_3", "response_offset_2", "response_offset_3", "charge_buffer", "discharge_buffer",
+    for key in ("clones", "load_factor", "soc_offset_1", "soc_offset_2", "soc_offset_3",
+                "response_offset_1", "response_offset_2", "response_offset_3",
+                "max_share_clone_1", "max_share_clone_2", "max_share_clone_3", "charge_buffer", "discharge_buffer",
                 "start_charge_at", "start_discharge_at", "concentrate_below", "redistribute_every"):
         group[key] = _entity(registry, "number", f"{eid}_{key}")
 
@@ -307,6 +428,7 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
     batteries: list[dict[str, str | None]] = []
     grids: list[dict[str, str | None]] = []
     clones: list[tuple[int, str]] = []
+    plan: str | None = None
     store = hass.data.get(DOMAIN, {})
 
     def add_battery(battery_entry: ConfigEntry, name: str, grid_name: str | None) -> dict[str, Any]:
@@ -330,7 +452,11 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         if source is not None:
             # The real battery is shown for comparison, not as a member, and
             # keeps its own dashboard: no tab here.
-            add_battery(source, REAL, "Real P1")
+            args = add_battery(source, REAL, "Real P1")
+            # The real battery's day plan: the copies follow it in follow_source.
+            price = args.get("price")
+            if price and f"sensor.{price}plan" in known:
+                plan = f"sensor.{price}plan"
         for clone in getattr(vc, "clones", []):
             prefix = None
             status = _entity(registry, "sensor", f"{clone.device_id}_controller_status")
@@ -359,7 +485,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
             if view:
                 views.append(view)
 
-    return {"title": cluster_title(virtual), "views": [cluster_view(group, batteries, grids, virtual, clones), *views]}
+    cluster = cluster_view(group, batteries, grids, virtual, clones, custom_cards, plan)
+    return {"title": cluster_title(virtual), "views": [cluster, *views]}
 
 
 async def _sync_title(collection: Any, title: str) -> None:

@@ -89,6 +89,7 @@ from .const import (
     OPT_OPERATION_MODE,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    MAX_MEMBERS,
     PHASES,
     SUBENTRY_BATTERY,
 )
@@ -158,16 +159,15 @@ def member_subentry(
 class BatterySubentryFlow(config_entries.ConfigSubentryFlow):
     """Add a battery to the cluster, or change its phase, priority and Max share."""
 
-    def _taken(self, skip: str | None = None) -> tuple[set[str], set[str]]:
-        """Batteries and phases already under the cluster."""
+    def _taken(self) -> set[str]:
+        """Batteries already under the cluster. Phases are not taken: several
+        batteries may share one (v1.7.2)."""
         entry = self._get_entry()
-        batteries, phases = set(), set()
-        for sid, sub in entry.subentries.items():
-            if sub.subentry_type != SUBENTRY_BATTERY or sid == skip:
-                continue
-            batteries.add(str(sub.data.get(CONF_BATTERY_ENTRY)))
-            phases.add(str(sub.data.get(CONF_PHASE)))
-        return batteries, phases
+        return {
+            str(sub.data.get(CONF_BATTERY_ENTRY))
+            for sub in entry.subentries.values()
+            if sub.subentry_type == SUBENTRY_BATTERY
+        }
 
     @staticmethod
     def _fields(phases: tuple[str, ...], data: dict[str, Any]) -> dict[Any, Any]:
@@ -184,17 +184,18 @@ class BatterySubentryFlow(config_entries.ConfigSubentryFlow):
         }
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.SubentryFlowResult:
-        taken, phases_taken = self._taken()
+        taken = self._taken()
+        if len(taken) >= MAX_MEMBERS:
+            return self.async_abort(
+                reason="cluster_full", description_placeholders={"max": str(MAX_MEMBERS)}
+            )
         free = [
             e for e in self.hass.config_entries.async_entries(DOMAIN)
             if e.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_BATTERY) == DEVICE_TYPE_BATTERY
             and e.entry_id not in taken
         ]
-        phases = tuple(p for p in PHASES if p not in phases_taken)
         if not free:
             return self.async_abort(reason="no_free_battery")
-        if not phases:
-            return self.async_abort(reason="no_free_phase")
         if user_input is not None:
             battery = next(e for e in free if e.entry_id == user_input[CONF_BATTERY_ENTRY])
             sub = member_subentry(
@@ -210,14 +211,12 @@ class BatterySubentryFlow(config_entries.ConfigSubentryFlow):
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            **self._fields(phases, {}),
+            **self._fields(PHASES, {}),
         }
         return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> config_entries.SubentryFlowResult:
         subentry = self._get_reconfigure_subentry()
-        _, phases_taken = self._taken(skip=subentry.subentry_id)
-        phases = tuple(p for p in PHASES if p not in phases_taken)
         if user_input is not None:
             battery = self.hass.config_entries.async_get_entry(subentry.data.get(CONF_BATTERY_ENTRY))
             data = {**subentry.data, **{
@@ -228,7 +227,7 @@ class BatterySubentryFlow(config_entries.ConfigSubentryFlow):
             title = f"{battery_label(battery)} · {str(data[CONF_PHASE]).upper()}" if battery is not None else subentry.title
             return self.async_update_and_abort(self._get_entry(), subentry, data=data, title=title)
         return self.async_show_form(
-            step_id="reconfigure", data_schema=vol.Schema(self._fields(phases, dict(subentry.data)))
+            step_id="reconfigure", data_schema=vol.Schema(self._fields(PHASES, dict(subentry.data)))
         )
 
 
@@ -384,9 +383,10 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_battery_cluster(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Up to three batteries, one per phase, as one system.
+        """Up to four batteries as one system, on any phase (v1.7.2).
 
         One field per battery, named after it, with its phase or `none`. The
+        phase is a label: several batteries may share one. The
         settings that steer are taken from the first battery chosen, so an
         installation that was tuned keeps its buffers and thresholds; the
         group starts in standby.
@@ -403,11 +403,10 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 (labels[label], phase) for label, phase in user_input.items()
                 if label in labels and phase in PHASES
             ]
-            phases = [phase for _, phase in chosen]
             if not chosen:
                 errors["base"] = "no_member"
-            elif len(set(phases)) != len(phases):
-                errors["base"] = "phase_taken"
+            elif len(chosen) > MAX_MEMBERS:
+                errors["base"] = "too_many_batteries"
             else:
                 first = chosen[0][0]
                 copied = {
@@ -438,6 +437,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="battery_cluster",
             data_schema=vol.Schema(fields),
             errors=errors,
+            description_placeholders={"max": str(MAX_MEMBERS)},
         )
 
     async def async_step_ha_meter(

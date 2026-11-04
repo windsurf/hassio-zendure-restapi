@@ -48,7 +48,7 @@ class Reading:
 
     key: str                    # the subentry id
     name: str
-    phase: int                  # 1 to 3
+    phase: int                  # 1 to 3, a label; several batteries may share one
     priority: int               # 1 to 9, higher is primary first
     available: bool             # reporting, and taking part
     power: float                # W on the AC side, positive while discharging

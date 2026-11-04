@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.1"
+INTEGRATION_VERSION = "1.7.2"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -297,8 +297,9 @@ RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
 )
 
 # ── Battery cluster (v1.7.0) ─────────────────────────────────────────
-# Up to three batteries, one per phase, holding the grid of the whole
-# connection at zero together: one is primary with the loop of a single battery,
+# Up to four batteries, on any phase, holding the grid of the whole
+# connection at zero together (v1.7.2: the phase is a label, several batteries
+# may share one; the group regulates the total, not a phase): one is primary with the loop of a single battery,
 # the others are secondary with fixed limits. An entry of its own with a subentry per
 # battery; the logic lives in cluster/, the Zendure side in member.py.
 DEVICE_TYPE_CLUSTER = "cluster"
@@ -310,7 +311,11 @@ CONF_PHASE = "phase"
 CONF_PRIORITY = "priority"
 CONF_MAX_SHARE = "max_share"
 # Option values are lower case (a translation key); shown as L1, L2, L3.
+# A label only: no decision uses it, and several batteries may share one.
 PHASES = ("l1", "l2", "l3")
+# The most batteries one cluster takes (v1.7.2). Until v1.7.1 one per phase,
+# so three; the distribution itself works for any number.
+MAX_MEMBERS = 4
 DEFAULT_PRIORITY = 5
 OPT_CONCENTRATE_BELOW = "concentrate_below"
 OPT_REDISTRIBUTE = "redistribute_every"
@@ -355,21 +360,32 @@ VIRTUAL_UNIQUE_ID = "virtual_cluster"
 CONF_SOURCE_BATTERY = "source_battery"
 OPT_CLONES = "clones"
 OPT_LOAD_FACTOR = "load_factor"
+# Copy 1 has them too since v1.7.2, at 0 by default: it is the twin of the real
+# battery until they are changed.
+OPT_SOC_OFFSET_1 = "soc_offset_1"
 OPT_SOC_OFFSET_2 = "soc_offset_2"
 OPT_SOC_OFFSET_3 = "soc_offset_3"
-# Extra response time of clones 2 and 3, on top of the measured 1.8 s (v1.7.1).
+# Extra response time of the clones, on top of the measured 1.8 s (v1.7.1).
+OPT_RESPONSE_OFFSET_1 = "response_offset_1"
 OPT_RESPONSE_OFFSET_2 = "response_offset_2"
 OPT_RESPONSE_OFFSET_3 = "response_offset_3"
+# Max share per clone, as a battery under a real cluster has it: the most it
+# gives or takes in the group, 0 = its own maximum (v1.7.2).
+OPT_MAX_SHARE_CLONES = ("max_share_clone_1", "max_share_clone_2", "max_share_clone_3")
+MAX_SHARE_LIMIT = 5000
 # Follow the Operation mode of the real battery, and so its planner.
 MODE_FOLLOW_SOURCE = "follow_source"
 VIRTUAL_MODES = (*CLUSTER_MODES, MODE_FOLLOW_SOURCE)
 VIRTUAL_DEFAULTS = {
     OPT_CLONES: 3,
     OPT_LOAD_FACTOR: 1.0,
+    OPT_SOC_OFFSET_1: 0,
+    OPT_RESPONSE_OFFSET_1: 0.0,
     OPT_SOC_OFFSET_2: -20,
     OPT_SOC_OFFSET_3: 15,
     OPT_RESPONSE_OFFSET_2: 1.0,
     OPT_RESPONSE_OFFSET_3: 3.0,
+    **{key: 0 for key in OPT_MAX_SHARE_CLONES},
 }
 MAX_CLONES = 3
 

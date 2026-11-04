@@ -9,7 +9,7 @@
           "external_meter": "Contatore di rete esterno via IP — il più veloce (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Contatore di rete esterno da Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Controllo in base al prezzo — caricare quando l'energia costa poco, scaricare quando costa molto (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Cluster di batterie — fino a tre batterie, una per fase, come un unico sistema",
+          "battery_cluster": "Cluster di batterie — fino a quattro batterie, su qualsiasi fase, come un unico sistema",
           "virtual_cluster": "Virtual cluster (test) — copies of a battery under a cluster, writing nothing real"
         }
       },
@@ -96,7 +96,7 @@
       },
       "battery_cluster": {
         "title": "Cluster di batterie",
-        "description": "Indica per ogni batteria che partecipa la fase a cui è collegata: una batteria per fase. Scegli *non partecipa* per lasciare fuori una batteria. Buffer, soglie di avvio e contatore vengono presi dalla prima batteria; il gruppo parte in standby. Le batterie si possono aggiungere, modificare o rimuovere in seguito sotto il cluster."
+        "description": "Indica per ogni batteria che partecipa la fase a cui è collegata: più batterie possono condividere una fase, fino a {max} batterie in totale. Scegli *non partecipa* per lasciare fuori una batteria. Buffer, soglie di avvio e contatore vengono presi dalla prima batteria; il gruppo parte in standby. Le batterie si possono aggiungere, modificare o rimuovere in seguito sotto il cluster."
       },
       "virtual_cluster": {
         "title": "Virtual cluster (test)",
@@ -118,7 +118,7 @@
       "same_entity": "Il sensore di immissione deve essere diverso dal sensore di potenza.",
       "no_power_total": "Nessun sensore di potenza di questo dispositivo dà un totale di rete. Scegli allora i sensori a mano.",
       "no_member": "Scegli una fase per almeno una batteria.",
-      "phase_taken": "Due batterie su una fase: questa versione accetta una batteria per fase."
+      "too_many_batteries": "Più di {max} batterie: un cluster ne accetta al massimo {max}."
     },
     "abort": {
       "already_configured": "Questo dispositivo è già configurato.",
@@ -846,17 +846,32 @@
       "load_factor": {
         "name": "Load factor"
       },
+      "soc_offset_1": {
+        "name": "SoC offset clone 1"
+      },
       "soc_offset_2": {
         "name": "SoC offset clone 2"
       },
       "soc_offset_3": {
         "name": "SoC offset clone 3"
       },
+      "response_offset_1": {
+        "name": "Response offset clone 1"
+      },
       "response_offset_2": {
         "name": "Response offset clone 2"
       },
       "response_offset_3": {
         "name": "Response offset clone 3"
+      },
+      "max_share_clone_1": {
+        "name": "Max share clone 1"
+      },
+      "max_share_clone_2": {
+        "name": "Max share clone 2"
+      },
+      "max_share_clone_3": {
+        "name": "Max share clone 3"
       }
     },
     "switch": {
@@ -936,7 +951,7 @@
       "step": {
         "user": {
           "title": "Aggiungi una batteria",
-          "description": "Una batteria di questa integrazione che non appartiene ancora al cluster, su una fase ancora libera.",
+          "description": "Una batteria di questa integrazione che non appartiene ancora al cluster. Più batterie possono condividere una fase.",
           "data": {
             "battery_entry": "Batteria",
             "phase": "Fase",
@@ -964,7 +979,7 @@
       },
       "abort": {
         "no_free_battery": "Tutte le batterie appartengono già al cluster.",
-        "no_free_phase": "Ogni fase ha già una batteria.",
+        "cluster_full": "Il cluster ha già {max} batterie, il massimo.",
         "reconfigure_successful": "Salvato."
       }
     }

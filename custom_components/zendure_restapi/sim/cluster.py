@@ -48,8 +48,12 @@ from ..const import (
     OPT_OPERATION_MODE,
     OPT_PRICE_CONTROL,
     OPT_REDISTRIBUTE,
+    OPT_SOC_OFFSET_1,
     OPT_SOC_OFFSET_2,
     OPT_SOC_OFFSET_3,
+    OPT_MAX_SHARE_CLONES,
+    MAX_SHARE_LIMIT,
+    OPT_RESPONSE_OFFSET_1,
     OPT_RESPONSE_OFFSET_2,
     OPT_RESPONSE_OFFSET_3,
     OPT_START_CHARGE_AT,
@@ -159,6 +163,8 @@ class Clone:
         self.controller = controller
         self.member = member
         self.unsub: Any = None
+        # Start SoC minus the real battery's SoC at the last start or Reset (v1.7.2).
+        self.start_offset: float | None = None
 
     @property
     def device_id(self) -> str:
@@ -182,6 +188,9 @@ class VirtualCluster:
         self.cluster = ClusterCoordinator(hass, self.group_settings, self._on_decision)
         self.meter: VirtualMeter | None = None
         self._unsubs: list[Any] = []
+        # How the copies started (v1.7.2): the real SoC, the centring and the shift.
+        self.start_info: dict[str, Any] = {}
+        self.start_offsets: list[float] = []
 
     # ── What the entities read ──────────────────────────────────────────
 
@@ -191,7 +200,7 @@ class VirtualCluster:
 
     @property
     def attributes(self) -> dict[str, Any]:
-        return self.cluster.attributes
+        return {**self.cluster.attributes, **self.start_info}
 
     @property
     def readings(self):
@@ -249,14 +258,70 @@ class VirtualCluster:
             return MAX_CLONES
 
     def start_socs(self) -> list[float]:
-        """Twin on the real state of charge, the others offset from it."""
-        twin = self._source_soc()
-        offsets = [0.0, float(self.settings.get(OPT_SOC_OFFSET_2) or 0), float(self.settings.get(OPT_SOC_OFFSET_3) or 0)]
-        return [max(SOC_MIN, min(SOC_MAX, twin + off)) for off in offsets[: self.clone_count()]]
+        """The start SoC of every copy (v1.7.2).
+
+        Centred on the real state of charge: each copy gets the real SoC plus
+        its own offset minus the mean offset, so the copies average the real
+        battery. Then the whole set shifts until it lies within 5-100 %, so the
+        differences between the copies stay the offsets that were set. Only a
+        set wider than 95 points is cut: the lowest on 5 %, the rest at most
+        100 %. Only the differences between the offsets count: with one copy
+        its offset centres away, and it starts on the real SoC. Kept in `start_info` and `start_offsets`.
+        """
+        real = self._source_soc()
+        count = self.clone_count()
+        offsets = [self._offset(OPT_SOC_OFFSET_1), self._offset(OPT_SOC_OFFSET_2),
+                   self._offset(OPT_SOC_OFFSET_3)][:count]
+        centre = sum(offsets) / len(offsets)
+        raw = [real + offset - centre for offset in offsets]
+        low, high = min(raw), max(raw)
+        if low < SOC_MIN or high - low > SOC_MAX - SOC_MIN:
+            shift = SOC_MIN - low
+        elif high > SOC_MAX:
+            shift = SOC_MAX - high
+        else:
+            shift = 0.0
+        socs = [max(SOC_MIN, min(SOC_MAX, value + shift)) for value in raw]
+        self.start_info = {
+            "start_soc_real": round(real, 1),
+            "start_centre": round(-centre, 2),
+            "start_shift": round(shift, 2),
+        }
+        self.start_offsets = [round(soc - real, 1) for soc in socs]
+        _LOGGER.info(
+            "Virtual cluster start: real SoC %.1f %%, centring %+.2f, shift %+.2f, copies %s",
+            real, -centre, shift, [round(soc, 1) for soc in socs],
+        )
+        return socs
+
+    def _offset(self, key: str) -> float:
+        try:
+            return float(self.settings.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def max_share(self, index: int) -> int:
+        """Max share of clone `index` in W; 0 is its own maximum (v1.7.2)."""
+        if not 1 <= index <= len(OPT_MAX_SHARE_CLONES):
+            return 0
+        try:
+            return max(0, min(MAX_SHARE_LIMIT, int(self.settings.get(OPT_MAX_SHARE_CLONES[index - 1]) or 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    def apply_max_share(self, index: int) -> None:
+        """A changed Max share counts at once: from the next reading of the clone,
+        for its own loop and for the cluster's split."""
+        value = self.max_share(index)
+        for clone in self.clones:
+            if clone.index == index:
+                clone.member.max_share = value
+                if clone.view.group is not None:
+                    clone.view.max_share = value
 
     def response_offset(self, index: int) -> float:
-        """Extra seconds before a write is in clone `index`; the twin has none."""
-        key = {2: OPT_RESPONSE_OFFSET_2, 3: OPT_RESPONSE_OFFSET_3}.get(index)
+        """Extra seconds before a write is in clone `index` (copy 1 too since v1.7.2, 0 by default)."""
+        key = {1: OPT_RESPONSE_OFFSET_1, 2: OPT_RESPONSE_OFFSET_2, 3: OPT_RESPONSE_OFFSET_3}.get(index)
         if key is None:
             return 0.0
         try:
@@ -289,6 +354,7 @@ class VirtualCluster:
         model = model_name(source_coord.product) if source_coord.product else "SolarFlow"
         short = "Mix" if "Mix" in model else "battery"
         capacity = self._capacity()
+        self.energy = self.energy_per_percent()
         scan = int((source_entry.options if source_entry else {}).get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
 
         self.meter = VirtualMeter(self.source, lambda: [c.device for c in self.clones], self.load_factor)
@@ -305,16 +371,20 @@ class VirtualCluster:
         for index, soc in enumerate(socs, start=1):
             serial = f"SIMULATED{index}{tail}"
             device = SimDevice(source_coord.raw, serial, soc, capacity,
-                               extra_delay=lambda i=index: self.response_offset(i))
+                               extra_delay=lambda i=index: self.response_offset(i),
+                               wh_per_percent=self.energy["wh_per_percent"],
+                               charge_efficiency=self.energy["charge_efficiency"])
             coordinator = SimCoordinator(self.hass, SimApi(device), scan)
             settings = MemorySettings(own)
             view = SettingsView(settings)
             controller = ZendureController(coordinator, view)
             controller.virtual = True
             name = f"Virtual {short} {index}"
-            data = {CONF_PHASE: f"l{index}", CONF_PRIORITY: 6 if index == 1 else 5, CONF_MAX_SHARE: 0}
+            data = {CONF_PHASE: f"l{index}", CONF_PRIORITY: 6 if index == 1 else 5,
+                    CONF_MAX_SHARE: self.max_share(index)}
             member = ZendureMember(f"clone{index}", name, data, controller, view, settings)
             self.clones.append(Clone(index, name, model, device, coordinator, settings, view, controller, member))
+            self.clones[-1].start_offset = self.start_offsets[index - 1]
 
         for clone in self.clones:
             await clone.coordinator.async_refresh()
@@ -332,8 +402,10 @@ class VirtualCluster:
         self._unsubs.append(async_dispatcher_connect(self.hass, SIGNAL_EXTERNALS_CHANGED, self._on_relinked))
         self.cluster.start()
         _LOGGER.info(
-            "Virtual cluster: %d clone(s) of %s, %.1f kWh each, SoC %s, load factor %.1f",
+            "Virtual cluster: %d clone(s) of %s, %.1f kWh each, SoC %s, load factor %.1f, "
+            "%.1f Wh per %% discharging and %.1f charging (%s)",
             len(self.clones), self.source_name, capacity, [round(s) for s in socs], self.load_factor(),
+            self.energy["wh_per_percent_out"], self.energy["wh_per_percent_in"], self.energy["source"],
         )
 
     async def async_stop(self) -> None:
@@ -369,8 +441,9 @@ class VirtualCluster:
 
     async def async_reset(self) -> None:
         """Every clone back to the start: still, limits 0, the twin on the real SoC."""
-        for clone, soc in zip(self.clones, self.start_socs()):
+        for clone, soc, offset in zip(self.clones, self.start_socs(), self.start_offsets):
             clone.device.reset(soc)
+            clone.start_offset = offset
             await clone.coordinator.async_refresh()
         self.cluster.distributor.primary = None
         self.cluster.distributor.last_split = None
@@ -391,9 +464,47 @@ class VirtualCluster:
             total += kwh or 0.0
         return total or 8.0
 
+    def energy_per_percent(self) -> dict[str, Any]:
+        """Wh per percent of the copies, from the real battery's measurements (v1.7.2).
+
+        Discharging: the last measured usable capacity over the range it was
+        measured on (full to empty, e.g. 100 -> 5 %). Charging: that divided by
+        the measured round trip efficiency of the cells. Without a measurement
+        the nominal capacity over 100 %, both ways, as before.
+        """
+        measure = getattr(self.source, "measure", None) if self.source else None
+        capacities = list(getattr(measure, "capacities", None) or [])
+        last = capacities[-1] if capacities else None
+        wh = None
+        span = None
+        if isinstance(last, dict):
+            try:
+                span = float(last.get("from_soc")) - float(last.get("to_soc"))
+                kwh = float(last.get("kwh"))
+            except (TypeError, ValueError):
+                span = None
+            if span and span >= 50 and kwh > 0:
+                wh = kwh * 1000.0 / span
+        efficiency = 1.0
+        if wh is not None and measure is not None:
+            try:
+                rt = measure.round_trip("dc")
+            except Exception:  # noqa: BLE001 - a measurement that is not there yet
+                rt = None
+            if rt and 50 <= float(rt) <= 100:
+                efficiency = float(rt) / 100.0
+        if wh is None:
+            return {"wh_per_percent": None, "charge_efficiency": 1.0, "source": "nominal",
+                    "wh_per_percent_out": round(self._capacity() * 10, 1),
+                    "wh_per_percent_in": round(self._capacity() * 10, 1)}
+        return {"wh_per_percent": wh, "charge_efficiency": efficiency, "source": "measured",
+                "wh_per_percent_out": round(wh, 1), "wh_per_percent_in": round(wh / efficiency, 1)}
+
     def diagnostics(self) -> dict[str, Any]:
         return {
             "source": self.source_name,
+            "energy_per_percent": {k: v for k, v in getattr(self, "energy", {}).items()
+                                   if k in ("source", "wh_per_percent_out", "wh_per_percent_in")},
             "mode": self.mode(),
             "load_factor": self.load_factor(),
             "meter": self.meter.diagnostics() if self.meter else None,

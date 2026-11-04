@@ -1,14 +1,14 @@
 # Battery cluster
 
-The battery cluster lets **up to three Zendure batteries, one per phase**, hold the grid of the whole connection at zero together. Without a cluster nothing changes: one battery steers in a smart mode and a second one reports `blocked`, as before. The same holds while the cluster steers nothing — no battery taking part, or the group in standby or a quick mode.
+The battery cluster lets **up to four Zendure batteries, on any phase**, hold the grid of the whole connection at zero together. Without a cluster nothing changes: one battery steers in a smart mode and a second one reports `blocked`, as before. The same holds while the cluster steers nothing — no battery taking part, or the group in standby or a quick mode.
 
 This first version is deliberately simple:
 
 - **One group, on the total of the meter.** Meters in the Netherlands, Belgium and most of Germany add up the three phases; that total is what the cluster holds at zero.
-- **One battery per phase.** Three batteries on three phases, or two on two, or a single one.
+- **Up to four batteries, on any phase** (v1.7.2). Several batteries may share a phase: the meter measures the total, and the total is what the cluster regulates. The phase is a label for later; no decision uses it. Until v1.7.1 one battery per phase, so three at most.
 - **Zendure batteries of this integration only.**
 
-Control per phase, several batteries on one phase, limits per phase and other brands are not in this version (see [Limits of this version](#limits-of-this-version)).
+Control per phase, limits per phase (fuse protection) and other brands are not in this version (see [Limits of this version](#limits-of-this-version)).
 
 ## Contents
 
@@ -47,7 +47,9 @@ Zendure SolarFlow 2400 AC+ (…9B12)   [ L2 ▾ ]
 Zendure SolarFlow 800 Plus (…C044)   [ L3 ▾ ]
 ```
 
-Give each battery that takes part the phase it is connected to, or *not taking part*. Two batteries on one phase are refused in this version. The serial number tail tells two of the same model apart.
+Give each battery that takes part the phase it is connected to, or *not taking part*. Several batteries may share a phase; more than four are refused. The serial number tail tells two of the same model apart.
+
+**The load per phase is yours to check.** The cluster holds the total at zero and knows nothing of the groups and fuses behind it: four 800 W batteries on one phase put 3.2 kW on that phase, in both directions. Whether a group or the phase can carry that is a matter of the installation, not of this integration.
 
 After *Submit*:
 
@@ -59,7 +61,7 @@ Later, under the cluster in *Devices & services*:
 
 | Action | What it does |
 |---|---|
-| **Add battery** | a battery that is not in the group yet, on a free phase, with Priority and Max share |
+| **Add battery** | a battery that is not in the group yet, on any phase, with Priority and Max share; not when the group has four |
 | **Reconfigure** (on a battery) | phase, Priority, Max share |
 | **Delete** (on a battery) | the battery leaves the group and stays in standby until you choose a mode |
 | **Configure** (on the cluster) | which external meter the group uses |
@@ -118,7 +120,7 @@ The grid reading itself has no sensor of its own here, as on a battery since v1.
 - Meter source, External meter, buffers and start thresholds of the battery are not used while it takes part; their values are kept.
 - A Price Control entry of a battery in the group writes nothing and shows `paused`.
 
-**Dashboard.** Since v1.7.1 the cluster gets the dashboard **Cluster** (`/zendure-cluster`): a *Cluster* tab with the distribution over primary and secondaries, power and state of charge per battery and a 24-hour chart, and a tab per battery, named and headed after the battery, like the first page of the battery dashboard. *Grid at last distribution* on the status card is the reading the last distribution was decided on, once per *Redistribute every*. It is made once, when the cluster is set up and no such dashboard exists; after a battery is added or removed a notification offers *Rebuild dashboard*, which replaces it, edits included. Deleting the last cluster or Virtual cluster removes it. A Virtual cluster gets the dashboard *Virtual Cluster* instead: see [virtual_cluster.md](virtual_cluster.md#dashboard). For a dashboard of your own, a card to paste:
+**Dashboard.** Since v1.7.1 the cluster gets the dashboard **Cluster** (`/zendure-cluster`): a *Cluster* tab with the distribution over primary and secondaries (since v1.7.2 in the layout of the battery dashboard: tiles, one status text, gauges, the group's settings as sliders, a chart of today and tomorrow; the distribution with each battery's power, and for the primary *own loop* with the direction it runs), power and state of charge per battery and a 24-hour chart, and a tab per battery, named and headed after the battery, like the first page of the battery dashboard. *Grid at last distribution* on the status card is the reading the last distribution was decided on, once per *Redistribute every*. It is made once, when the cluster is set up and no such dashboard exists; after a battery is added or removed a notification offers *Rebuild dashboard*, which replaces it, edits included. Deleting the last cluster or Virtual cluster removes it. A Virtual cluster gets the dashboard *Virtual Cluster* instead: see [virtual_cluster.md](virtual_cluster.md#dashboard). For a dashboard of your own, a card to paste:
 
 ```yaml
 type: entities
@@ -162,7 +164,7 @@ entities:
 | In 1.7.x | Later, in a separate product |
 |---|---|
 | the total of the connection | control per phase, and the total and single phases side by side |
-| one battery per phase, up to three | several batteries on one phase |
+| up to four batteries, on any phase (v1.7.2; until v1.7.1 one per phase) | more than four |
 | phase entered by hand | phase detection, phase values from the meters |
 | one set of settings for the group | settings per phase group |
 | split by room | split by SOC or by priority |

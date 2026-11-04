@@ -994,7 +994,8 @@ class ZendureController:
         The direction change delay still applies, and the device's own SOC
         bounds are respected the way the smart modes respect them.
         """
-        group = getattr(self.settings, "group_name", None) or "the cluster"
+        # The status says "the cluster", whichever it is; coordinated_by names it (v1.7.2).
+        group = "the cluster"
         direction, limit = self.follow_direction, int(self.follow_limit)
         charging = direction == "charge"
         full, empty = self._bounds(data)
@@ -1279,7 +1280,7 @@ class ZendureController:
             name = other.coordinator.device_id or "another battery"
             reason = (
                 f"{name} already steers on the grid; smart modes run on one battery "
-                "at a time — a battery cluster lets up to three steer together"
+                "at a time — a battery cluster lets up to four steer together"
             )
         if not self._aside_logged:
             _LOGGER.warning("Smart mode refused: %s", reason)

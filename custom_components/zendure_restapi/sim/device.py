@@ -10,10 +10,18 @@ Timings, as measured on a SolarFlow 3000 Mix AC+ and in Zendure's own replay
 
     a written limit is in the device after          1.8 s
     from standstill the first power flows after     ~8 s from the write
-    the power rises at                              200 W/s
+    from standstill full power follows within       ~2 s after that (v1.7.2)
+    a running battery changes its power at          200 W/s
     a stop is complete after                        ~3 s from the write
     conversion, both ways                           95 %
     draw at rest                                    29 W with smartMode 1, 5 W with 0
+
+Energy per percent (v1.7.2), measured on the same device over full
+cycles: discharging takes the usable capacity over the range it was measured
+on (7.97 kWh over 100 -> 5 %, 84 Wh per %), charging that divided by the
+round trip efficiency of the cells (0.96, so 87.5 Wh per %). Before v1.7.2 the
+model took the capacity over 100 % both ways and ran 4 % fast discharging and
+8 % fast charging. Without a measurement it still does.
 
 The model needs no task of its own: it advances on every read and write by
 the time that has passed.
@@ -27,7 +35,8 @@ from typing import Any, Callable
 
 SETPOINT_DELAY_S = 1.8      # a write is in the device after this
 START_DELAY_S = 6.2         # from standstill: first power this long after the setpoint
-RAMP_UP_W_S = 200.0
+RAMP_UP_W_S = 200.0         # a running battery
+RAMP_UP_COLD_W_S = 1500.0   # from standstill: 0 to 3 kW in ~2 s, measured (v1.7.2)
 RAMP_DOWN_W_S = 2500.0      # a 3 kW stop in ~1.2 s after the setpoint: ~3 s from the write
 EFFICIENCY = 0.95
 REST_DRAW_FLAG_W = 29.0     # cells at rest with smartMode 1 (backup closed)
@@ -58,6 +67,8 @@ class SimDevice:
         capacity_kwh: float,
         clock: Callable[[], float] = time.monotonic,
         extra_delay: Callable[[], float] = lambda: 0.0,
+        wh_per_percent: float | None = None,
+        charge_efficiency: float = 1.0,
     ) -> None:
         self._clock = clock
         # Slower than the measured device by this many seconds per write: a
@@ -78,6 +89,12 @@ class SimDevice:
         self.product = report.get("product") or "solarFlow3000MixAC+"
         self.version = report.get("version")
         self.capacity_wh = max(100.0, float(capacity_kwh) * 1000.0)
+        # Wh of the cells per percent (v1.7.2): discharging, and charging,
+        # which needs more for the same percent by the loss in the cells.
+        per = float(wh_per_percent) if wh_per_percent else self.capacity_wh / 100.0
+        self.wh_per_percent_out = max(1.0, per)
+        efficiency = max(0.5, min(1.0, float(charge_efficiency or 1.0)))
+        self.wh_per_percent_in = self.wh_per_percent_out / efficiency
 
         # Start still, in the state a battery is in after standby.
         for key, value in (("outputLimit", 0), ("inputLimit", 0), ("smartMode", 0)):
@@ -90,6 +107,7 @@ class SimDevice:
         self.power = 0.0                 # AC, positive while discharging
         self.pending: list[tuple[float, dict[str, Any]]] = []
         self.flow_at = 0.0
+        self.cold = False                # rising from standstill
         self.writes = 0
         self._last = self._clock()
         self._refresh()
@@ -132,6 +150,7 @@ class SimDevice:
         self.props.update({"outputLimit": 0, "inputLimit": 0})
         self.power = 0.0
         self.flow_at = 0.0
+        self.cold = False
         self.soc = max(0.0, min(100.0, float(soc)))
         self._last = self._clock()
         self._refresh()
@@ -177,7 +196,8 @@ class SimDevice:
             dc = self.power * EFFICIENCY
         else:
             dc = REST_DRAW_FLAG_W if _int(self.props.get("smartMode")) == 1 else REST_DRAW_W
-        self.soc -= dc * dt / 3600.0 / self.capacity_wh * 100.0
+        per = self.wh_per_percent_out if dc > 0 else self.wh_per_percent_in
+        self.soc -= dc * dt / 3600.0 / per
         self.soc = max(0.0, min(100.0, self.soc))
 
         t = self.target()
@@ -194,15 +214,24 @@ class SimDevice:
             self.flow_at = 0.0
         if abs(self.power) < FLOW_W and abs(t) >= FLOW_W and self.flow_at == 0.0:
             self.flow_at = now + START_DELAY_S
+            self.cold = True
         if abs(t) < FLOW_W:
             self.flow_at = 0.0
+            self.cold = False
         if self.flow_at and now < self.flow_at:
             now = min(until, self.flow_at)
         moving = until - now
         if moving > 0:
-            rate = RAMP_UP_W_S if abs(t) > abs(self.power) else RAMP_DOWN_W_S
+            if abs(t) > abs(self.power):
+                rate = RAMP_UP_COLD_W_S if self.cold else RAMP_UP_W_S
+            else:
+                rate = RAMP_DOWN_W_S
             delta = rate * moving
             self.power = min(t, self.power + delta) if self.power < t else max(t, self.power - delta)
+            # A start from standstill ends once it has reached what was asked;
+            # a later rise is a running battery's.
+            if self.cold and abs(self.power) >= abs(t) - 1:
+                self.cold = False
         if abs(t) < 1 and abs(self.power) < 30:
             self.power = 0.0
         self._last = until

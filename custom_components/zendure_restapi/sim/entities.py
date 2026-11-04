@@ -30,9 +30,13 @@ from ..const import (
     DOMAIN,
     OPT_CLONES,
     OPT_LOAD_FACTOR,
+    OPT_MAX_SHARE_CLONES,
+    MAX_SHARE_LIMIT,
     OPT_OPERATION_MODE,
+    OPT_SOC_OFFSET_1,
     OPT_SOC_OFFSET_2,
     OPT_SOC_OFFSET_3,
+    OPT_RESPONSE_OFFSET_1,
     OPT_RESPONSE_OFFSET_2,
     OPT_RESPONSE_OFFSET_3,
     VIRTUAL_MODEL,
@@ -68,6 +72,11 @@ TEST_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         mode=NumberMode.BOX, icon="mdi:multiplication",
     ), OPT_LOAD_FACTOR),
     (NumberEntityDescription(
+        key="soc_offset_1", name="SoC offset clone 1", native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-50, native_max_value=50, native_step=1, mode=NumberMode.BOX,
+        icon="mdi:battery-arrow-up-outline",
+    ), OPT_SOC_OFFSET_1),
+    (NumberEntityDescription(
         key="soc_offset_2", name="SoC offset clone 2", native_unit_of_measurement=PERCENTAGE,
         native_min_value=-50, native_max_value=50, native_step=1, mode=NumberMode.BOX,
         icon="mdi:battery-arrow-up-outline",
@@ -78,6 +87,11 @@ TEST_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         icon="mdi:battery-arrow-down-outline",
     ), OPT_SOC_OFFSET_3),
     (NumberEntityDescription(
+        key="response_offset_1", name="Response offset clone 1", native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
+        icon="mdi:timer-sand",
+    ), OPT_RESPONSE_OFFSET_1),
+    (NumberEntityDescription(
         key="response_offset_2", name="Response offset clone 2", native_unit_of_measurement=UnitOfTime.SECONDS,
         native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
         icon="mdi:timer-sand",
@@ -87,6 +101,17 @@ TEST_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
         icon="mdi:timer-sand-complete",
     ), OPT_RESPONSE_OFFSET_3),
+)
+
+# Max share per clone (v1.7.2): 0 = its own maximum. A low Max share on the
+# primary leaves the rest of the demand to the others, also at a low load.
+MAX_SHARE_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = tuple(
+    (NumberEntityDescription(
+        key=key, name=f"Max share clone {index}", native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0, native_max_value=MAX_SHARE_LIMIT, native_step=50, mode=NumberMode.BOX,
+        icon="mdi:arrow-collapse-vertical",
+    ), key)
+    for index, key in enumerate(OPT_MAX_SHARE_CLONES, start=1)
 )
 
 # The virtual P1 meter, a device of its own like the real P1 (v1.7.1).
@@ -139,8 +164,12 @@ def virtual_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
     elif platform == Platform.NUMBER:
         entities = [ClusterNumber(entry, vc, d, vc.settings, key) for d, key in CLUSTER_NUMBERS]
         for description, key in TEST_NUMBERS:
-            cls = FloatNumber if key in (OPT_LOAD_FACTOR, OPT_RESPONSE_OFFSET_2, OPT_RESPONSE_OFFSET_3) else ClusterNumber
+            cls = FloatNumber if key in (OPT_LOAD_FACTOR, OPT_RESPONSE_OFFSET_1, OPT_RESPONSE_OFFSET_2,
+                                         OPT_RESPONSE_OFFSET_3) else ClusterNumber
             entities.append(cls(entry, vc, description, vc.settings, key))
+        for index, (description, key) in enumerate(MAX_SHARE_NUMBERS, start=1):
+            if index <= len(vc.clones):
+                entities.append(MaxShareNumber(entry, vc, description, vc.settings, key, index))
     elif platform == Platform.BUTTON:
         entities = [ResetButton(entry, vc, RESET_DESCRIPTION), RebuildButton(entry, vc, REBUILD_DESCRIPTION)]
     elif platform == Platform.SENSOR:
@@ -186,13 +215,24 @@ def _clone_sensors(vc: VirtualCluster) -> list[Any]:
             except (TypeError, ValueError):
                 return None
 
+    class CloneSocSensor(ZendureSensor):
+        """State of charge of a copy, with where it started against the real battery (v1.7.2)."""
+
+        def __init__(self, clone: Any, *args: Any) -> None:
+            super().__init__(*args)
+            self._clone = clone
+
+        @property
+        def extra_state_attributes(self) -> dict[str, Any]:
+            return {"start_offset_vs_real": self._clone.start_offset}
+
     soc = next(d for d in DEVICE_SENSORS if d.key == "electricLevel")
     response = tuple(d for d in MEASURE_SENSORS if d.key == "response_time")
     entities: list[Any] = []
     for clone in vc.clones:
         coordinator, device_id, model = clone.coordinator, clone.device_id, clone.model
         made: list[Any] = [
-            ZendureSensor(coordinator, soc, device_id, model),
+            CloneSocSensor(clone, coordinator, soc, device_id, model),
             ZendureBatteryPowerSensor(coordinator, BATTERY_POWER_DESCRIPTION, device_id, model),
             ZendureControllerSensor(coordinator, CONTROLLER_DESCRIPTION, device_id, model, clone.controller),
             *(CloneLimitSensor(coordinator, d, device_id, model) for d in LIMIT_DESCRIPTIONS),
@@ -202,6 +242,20 @@ def _clone_sensors(vc: VirtualCluster) -> list[Any]:
             _clone_device(entity, clone)
         entities += made
     return entities
+
+
+class MaxShareNumber(ClusterNumber):
+    """Max share of one clone; counts at once, without a Reset (v1.7.2)."""
+
+    def __init__(self, entry: ConfigEntry, cluster: VirtualCluster, description: NumberEntityDescription,
+                 settings: Any, key: str, index: int) -> None:
+        super().__init__(entry, cluster, description, settings, key)
+        self._index = index
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._settings.set(self._key, int(value))
+        self._cluster.apply_max_share(self._index)
+        self.async_write_ha_state()
 
 
 class FloatNumber(ClusterNumber):

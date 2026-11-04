@@ -82,6 +82,44 @@ def test_a_drop_from_high_after_time_unreachable_is_a_restart():
     assert co.restart_seq == 1
 
 
+# ── messageId starting again without a restart (v1.7.2) ───────────
+# Measured on the 3000 Mix AC+: 154 -> 1, no failed poll, every key equal.
+RUNNING = {"messageId": 154, "acMode": 1, "inputLimit": 0, "outputLimit": 0, "smartMode": 0,
+           "electricLevel": 62, "socLimit": 0, "socStatus": 0, "faultLevel": 0, "remainOutTime": 58470}
+
+
+def test_messageid_starting_again_on_a_running_battery_is_no_restart():
+    co = make_coordinator()
+    report(co, RUNNING, T0)
+    report(co, {**RUNNING, "messageId": 1}, T0 + timedelta(seconds=10))
+    assert co.restart_seq == 0 and not co.restarts
+    record = co.message_id_resets[0]
+    assert record["from"] == 154 and record["to"] == 1 and record["state"]["electricLevel"] == 62
+
+
+def test_messageid_starting_again_with_another_state_is_a_restart():
+    co = make_coordinator()
+    report(co, RUNNING, T0)
+    report(co, {**RUNNING, "messageId": 1, "inputLimit": 3000}, T0 + timedelta(seconds=10))
+    assert co.restart_seq == 1 and not co.message_id_resets
+
+
+def test_messageid_starting_again_after_a_failed_poll_is_a_restart():
+    co = make_coordinator()
+    report(co, RUNNING, T0)
+    co._failing_since = T0 + timedelta(seconds=10)
+    report(co, {**RUNNING, "messageId": 1}, T0 + timedelta(seconds=20))
+    assert co.restart_seq == 1 and not co.message_id_resets
+
+
+def test_a_meter_starting_its_messageid_again_is_a_restart():
+    meter = {"messageId": 3519, "acMode": None, "inputLimit": None, "outputLimit": None, "smartMode": None}
+    co = make_coordinator()
+    report(co, meter, T0)
+    report(co, {**meter, "messageId": 2}, T0 + timedelta(seconds=10))
+    assert co.restart_seq == 1 and not co.message_id_resets
+
+
 def test_standby_restart_writes_nothing_and_raises_one_repair(issues):
     created, deleted = issues
     co = make_coordinator()

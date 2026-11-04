@@ -57,6 +57,16 @@ WRAP_TO = 55
 WRAP_SECONDS_PER_STEP = 5
 WRAP_STEP_MARGIN = 5
 
+# A battery also starts its messageId again without a restart, about once a
+# day (v1.7.2): no poll failed, and the next report holds the same
+# control state as the one before (measured: 154 -> 1, every key equal).
+# That is recorded as a reset, not as a restart. A restart still shows as a
+# gap in the reports, a changed state, or smartMode dropping by itself. A
+# meter has no control state and keeps the old rule.
+SOFT_RESET_KEYS = ("acMode", "inputLimit", "outputLimit", "smartMode", "socLimit", "socStatus", "faultLevel")
+CONTROL_KEYS = ("acMode", "inputLimit", "outputLimit", "smartMode")
+SOFT_RESET_SOC_STEP = 1
+
 # First sightings of keys without an entity, per entry, kept across restarts
 # of Home Assistant (v1.6.8). A key in this store has been reported once.
 SEEN_STORE_KEY = f"{DOMAIN}.unknown_keys"
@@ -116,6 +126,8 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # from the report. A restart is recorded, counted and shown.
         self.restarts: deque[dict[str, Any]] = deque(maxlen=RESTART_HISTORY)
         self.restart_seq = 0
+        # messageId starting again without a restart (v1.7.2).
+        self.message_id_resets: deque[dict[str, Any]] = deque(maxlen=RESTART_HISTORY)
         self._failing_since: datetime | None = None
         self._last_good_at: datetime | None = None
         self._last_good: dict[str, Any] = {}
@@ -196,7 +208,10 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             previous is not None and current is not None and current < previous
             and not self._is_wrap(previous, current, now, unreachable)
         ):
-            self.note_restart("messageId", self._last_good, flat, unreachable, now)
+            if self._is_soft_reset(self._last_good, flat, unreachable):
+                self.note_message_id_reset(self._last_good, flat, now)
+            else:
+                self.note_restart("messageId", self._last_good, flat, unreachable, now)
         self._last_good = {key: flat.get(key) for key in RESTART_KEYS}
         self._last_good_at = now
 
@@ -211,6 +226,39 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         steps = (current - previous) % MESSAGE_ID_MODULO
         elapsed = (now - self._last_good_at).total_seconds()
         return steps <= elapsed / WRAP_SECONDS_PER_STEP + WRAP_STEP_MARGIN
+
+    @staticmethod
+    def _is_soft_reset(before: dict[str, Any], after: dict[str, Any], unreachable: int | None) -> bool:
+        """Whether a drop in messageId left a battery as it was (v1.7.2).
+
+        No poll failed, the device is a battery (it reports a control state),
+        and that state is the same: mode, both limits, smartMode, the SoC
+        limit and status, the fault level; the state of charge moved at most
+        one step.
+        """
+        if unreachable is not None:
+            return False
+        if all(after.get(key) is None for key in CONTROL_KEYS):
+            return False
+        if any(before.get(key) != after.get(key) for key in SOFT_RESET_KEYS):
+            return False
+        soc_before, soc_after = _as_int(before.get("electricLevel")), _as_int(after.get("electricLevel"))
+        if soc_before is None or soc_after is None:
+            return soc_before == soc_after
+        return abs(soc_after - soc_before) <= SOFT_RESET_SOC_STEP
+
+    def note_message_id_reset(self, before: dict[str, Any], after: dict[str, Any], now: datetime) -> None:
+        """Record a messageId that started again on a device that kept running."""
+        self.message_id_resets.appendleft({
+            "at": now.isoformat(timespec="seconds"),
+            "from": before.get("messageId"),
+            "to": after.get("messageId"),
+            "state": {key: after.get(key) for key in RESTART_KEYS},
+        })
+        _LOGGER.info(
+            "Zendure device %s started its messageId again (%s -> %s) without a restart; its state is unchanged",
+            self.title or self.device_id, before.get("messageId"), after.get("messageId"),
+        )
 
     def note_restart(
         self,

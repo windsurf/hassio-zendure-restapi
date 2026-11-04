@@ -9,7 +9,7 @@
           "external_meter": "Externí elektroměr přes IP — nejrychlejší (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externí elektroměr z Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Řízení podle ceny — nabíjet, když je elektřina levná, vybíjet, když je drahá (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Bateriový cluster — až tři baterie, jedna na fázi, jako jeden systém",
+          "battery_cluster": "Bateriový cluster — až čtyři baterie, na libovolné fázi, jako jeden systém",
           "virtual_cluster": "Virtual cluster (test) — copies of a battery under a cluster, writing nothing real"
         }
       },
@@ -96,7 +96,7 @@
       },
       "battery_cluster": {
         "title": "Bateriový cluster",
-        "description": "U každé zapojené baterie zadejte fázi, ke které je připojena: jedna baterie na fázi. Zvolte *neúčastní se*, chcete-li baterii vynechat. Buffery, prahy spuštění a měřič se převezmou z první baterie; skupina začíná v pohotovosti. Baterie lze později pod clusterem přidávat, měnit nebo odebírat."
+        "description": "U každé zapojené baterie zadejte fázi, ke které je připojena: více baterií smí sdílet jednu fázi, celkem až {max} baterie. Zvolte *neúčastní se*, chcete-li baterii vynechat. Buffery, prahy spuštění a měřič se převezmou z první baterie; skupina začíná v pohotovosti. Baterie lze později pod clusterem přidávat, měnit nebo odebírat."
       },
       "virtual_cluster": {
         "title": "Virtual cluster (test)",
@@ -118,7 +118,7 @@
       "same_entity": "Senzor dodávky musí být jiný než senzor výkonu.",
       "no_power_total": "Žádný senzor výkonu tohoto zařízení nedává součet sítě. Zvolte pak senzory ručně.",
       "no_member": "Zvolte fázi alespoň pro jednu baterii.",
-      "phase_taken": "Dvě baterie na jedné fázi: tato verze bere jednu baterii na fázi."
+      "too_many_batteries": "Více než {max} baterie: cluster bere nejvýše {max}."
     },
     "abort": {
       "already_configured": "Toto zařízení je již nastaveno.",
@@ -846,17 +846,32 @@
       "load_factor": {
         "name": "Load factor"
       },
+      "soc_offset_1": {
+        "name": "SoC offset clone 1"
+      },
       "soc_offset_2": {
         "name": "SoC offset clone 2"
       },
       "soc_offset_3": {
         "name": "SoC offset clone 3"
       },
+      "response_offset_1": {
+        "name": "Response offset clone 1"
+      },
       "response_offset_2": {
         "name": "Response offset clone 2"
       },
       "response_offset_3": {
         "name": "Response offset clone 3"
+      },
+      "max_share_clone_1": {
+        "name": "Max share clone 1"
+      },
+      "max_share_clone_2": {
+        "name": "Max share clone 2"
+      },
+      "max_share_clone_3": {
+        "name": "Max share clone 3"
       }
     },
     "switch": {
@@ -936,7 +951,7 @@
       "step": {
         "user": {
           "title": "Přidat baterii",
-          "description": "Baterie této integrace, která ještě nepatří ke clusteru, na fázi, která je ještě volná.",
+          "description": "Baterie této integrace, která ještě nepatří ke clusteru. Více baterií smí sdílet jednu fázi.",
           "data": {
             "battery_entry": "Baterie",
             "phase": "Fáze",
@@ -964,7 +979,7 @@
       },
       "abort": {
         "no_free_battery": "Všechny baterie už patří ke clusteru.",
-        "no_free_phase": "Každá fáze už má baterii.",
+        "cluster_full": "Cluster už má {max} baterie, nejvíce, kolik bere.",
         "reconfigure_successful": "Uloženo."
       }
     }
