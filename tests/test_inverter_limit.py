@@ -1,70 +1,107 @@
-"""The Inverter power limit is lowered from Home Assistant, never raised (v1.6.10).
+"""The Inverter power limit and the settings the device keeps (v1.7.3).
 
-`inverseMaxPower` is the battery's ceiling for feeding into the grid. Its
-slider reaches as far as the value the battery reports; a higher value is
-refused and nothing is written. Without a reported value nothing is written
-either. The other ceiling, `chargeMaxLimit`, keeps its range.
+inverseMaxPower is the battery's ceiling for feeding into the grid. From Home
+Assistant it can be lowered, never raised: that is for the Zendure app. A write of it,
+of chargeMaxLimit, socSet or minSoc is read back from the reports, and the
+outcome goes to the logbook.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.zendure_restapi.const import POWER_CEILING
-from custom_components.zendure_restapi.number import NUMBERS, ZendureNumber
+from custom_components.zendure_restapi import number as N
 
 
-def make_number(key: str, data: dict) -> ZendureNumber:
-    """A number entity without Home Assistant: description, data and a writer."""
-    number = ZendureNumber.__new__(ZendureNumber)
-    number.entity_description = next(d for d in NUMBERS if d.key == key)
+def entity(key: str, value: int, holds: bool = True):
+    description = next(d for d in N.NUMBERS if d.key == key)
+    data = {key: value}
+    events: list = []
+    tasks: list = []
+    written: list = []
+
+    async def write(k, v):
+        written.append((k, v))
+        if holds:
+            data[k] = v
+
+    coordinator = SimpleNamespace(data=data, entry_id="B", update_interval=timedelta(seconds=0),
+                                  async_write=write)
+    hass = SimpleNamespace(
+        bus=SimpleNamespace(async_fire=lambda event, payload, context=None: events.append((event, payload, context))),
+        states=SimpleNamespace(get=lambda _e: SimpleNamespace(name="Zendure Inverter power limit")),
+        async_create_task=lambda coro: tasks.append(coro),
+    )
+    number = N.ZendureNumber.__new__(N.ZendureNumber)
+    number.entity_description = description
+    number.coordinator = coordinator
     number._data_key = key
-    number.coordinator = MagicMock()
-    number.coordinator.data = data
-    number.coordinator.async_write = AsyncMock()
-    return number
+    number.hass = hass
+    number.entity_id = f"number.zendure_{key.lower()}"
+    number._context = SimpleNamespace(user_id="tester")
+    return number, events, tasks, written
 
 
-def test_the_slider_reaches_the_reported_value():
-    number = make_number("inverseMaxPower", {"inverseMaxPower": 800})
-    assert number.native_max_value == 800
+def run(number, value, tasks):
+    asyncio.run(number.async_set_native_value(value))
+    for coro in tasks:
+        asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def fast(monkeypatch):
+    monkeypatch.setattr(N, "CONFIRM_MIN_S", 0.0)
+    monkeypatch.setattr(N, "CONFIRM_STEP_S", 0.0)
 
 
 def test_raising_is_refused():
-    number = make_number("inverseMaxPower", {"inverseMaxPower": 800})
+    number, events, tasks, written = entity("inverseMaxPower", 2400)
     with pytest.raises(HomeAssistantError):
+        asyncio.run(number.async_set_native_value(3000))
+    assert written == [] and events == []
+    # Its maximum is what the device reports, so the frontend offers no more.
+    assert number.native_max_value == 2400
+
+
+def test_nothing_is_written_before_the_battery_reports_it():
+    number, events, tasks, written = entity("inverseMaxPower", 3000)
+    number.coordinator.data["inverseMaxPower"] = None
+    with pytest.raises(HomeAssistantError, match="not reported it yet"):
         asyncio.run(number.async_set_native_value(2400))
-    number.coordinator.async_write.assert_not_called()
+    assert written == [] and events == []
 
 
-def test_lowering_is_written():
-    number = make_number("inverseMaxPower", {"inverseMaxPower": 2400})
-    asyncio.run(number.async_set_native_value(800))
-    number.coordinator.async_write.assert_awaited_once_with("inverseMaxPower", 800)
-
-
-def test_without_a_reported_value_nothing_is_written():
-    number = make_number("inverseMaxPower", {})
-    with pytest.raises(HomeAssistantError) as error:
-        asyncio.run(number.async_set_native_value(800))
-    number.coordinator.async_write.assert_not_called()
-    # The same text as v1.7.3: it says the battery has not reported the value yet.
-    assert "has not reported it yet" in str(error.value)
-    assert "Safe power setting" in str(error.value)
-
-
-def test_a_raise_names_the_reported_value_in_the_message():
-    number = make_number("inverseMaxPower", {"inverseMaxPower": 800})
-    with pytest.raises(HomeAssistantError) as error:
-        asyncio.run(number.async_set_native_value(2400))
-    assert "not raised above 800 W" in str(error.value)
-    assert "has not reported it yet" not in str(error.value)
+def test_lowering_is_allowed_and_confirmed_in_the_logbook():
+    number, events, tasks, written = entity("inverseMaxPower", 3000)
+    run(number, 2400, tasks)
+    assert written == [("inverseMaxPower", 2400)]
+    (event, payload, context), = events
+    assert event == "logbook_entry" and payload["entity_id"] == "number.zendure_inversemaxpower"
+    assert payload["message"] == "changed from 3000 to 2400 W, confirmed by the battery"
+    assert context.user_id == "tester"
 
 
 def test_the_other_ceiling_keeps_its_range():
-    number = make_number("chargeMaxLimit", {"chargeMaxLimit": 800})
-    assert number.native_max_value == POWER_CEILING
-    asyncio.run(number.async_set_native_value(2400))
-    number.coordinator.async_write.assert_awaited_once_with("chargeMaxLimit", 2400)
+    number, *_ = entity("chargeMaxLimit", 1000)
+    assert number.native_max_value == N.POWER_CEILING
+
+
+def test_a_value_the_device_does_not_take_is_not_confirmed():
+    number, events, tasks, _ = entity("chargeMaxLimit", 3000, holds=False)
+    run(number, 2000, tasks)
+    assert events[0][1]["message"] == "set to 2000 W but not confirmed: the battery reports 3000 W"
+
+
+def test_the_same_value_again_logs_nothing():
+    number, events, tasks, written = entity("socSet", 1000)
+    run(number, 100, tasks)
+    assert written == [("socSet", 1000)] and events == []
+
+
+def test_other_numbers_are_not_read_back():
+    number, events, tasks, _ = entity("inputLimit", 0)
+    run(number, 500, tasks)
+    assert tasks == [] and events == []

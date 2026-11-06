@@ -174,7 +174,7 @@ class Distributor:
             self.primary = None
             self.last_split = None
             status = "standby" if s.mode == STANDBY else "idle"
-            reason = "group in standby" if s.mode == STANDBY else "no battery available"
+            reason = "cluster in standby" if s.mode == STANDBY else "no battery available"
             return self._finish(roles, status, reason, readings, grid)
 
         if s.mode in (QUICK_CHARGE, QUICK_DISCHARGE):

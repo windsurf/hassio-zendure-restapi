@@ -338,6 +338,9 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _link_cluster(hass)
     _link_meters(hass)
+    from .cluster_entities import migrate_group_ids
+
+    migrate_group_ids(hass, entry)  # names of v1.7.3, before the entities come up
     await hass.config_entries.async_forward_entry_setups(entry, CLUSTER_PLATFORMS)
 
     async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -368,6 +371,12 @@ async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady("The battery the Virtual cluster copies is not set up yet")
     await vc.async_start()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = vc
+    # The names of v1.7.3, before the entities come up under them.
+    from .cluster_entities import migrate_group_ids
+    from .sim.entities import migrate_entity_ids
+
+    migrate_entity_ids(hass, entry, vc.clones)
+    migrate_group_ids(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, VIRTUAL_PLATFORMS)
     clones = vc.clone_count()
 
@@ -385,13 +394,39 @@ async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+# How often, and how far apart, the cluster dashboard is tried again while a
+# battery of the cluster is still being set up (v1.7.3).
+DASHBOARD_TRIES = 6
+DASHBOARD_RETRY_S = 10
+
+
 @callback
 def _offer_cluster_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """The cluster dashboard, once Home Assistant runs, unless one exists (v1.7.1)."""
+    """The cluster dashboard, once Home Assistant runs, unless one exists (v1.7.1).
 
-    async def _create(_hass: HomeAssistant) -> None:
-        if not cluster_dashboard_exists(hass):
-            await async_cluster_dashboard(hass, entry, replace=False)
+    One per kind since v1.7.3; a Virtual cluster that still has its old
+    dashboard at /zendure-cluster gets a notification pointing to it.
+    """
+    from homeassistant.helpers.event import async_call_later
+
+    from .cluster_dashboard import NOT_READY, notify_old_virtual_dashboard, old_virtual_dashboard
+
+    virtual = entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL
+    tries = {"left": DASHBOARD_TRIES}
+
+    async def _create(_hass: Any) -> None:
+        if virtual and old_virtual_dashboard(hass):
+            notify_old_virtual_dashboard(hass)
+        if cluster_dashboard_exists(hass, virtual):
+            return
+        # A battery that just joined is reloaded at the same moment: try again (v1.7.3).
+        if await async_cluster_dashboard(hass, entry, replace=False) == NOT_READY and tries["left"] > 0:
+            tries["left"] -= 1
+            entry.async_on_unload(async_call_later(hass, DASHBOARD_RETRY_S, _retry))
+
+    @callback
+    def _retry(_now: Any) -> None:
+        hass.async_create_task(_create(hass))
 
     entry.async_on_unload(async_at_started(hass, _create))
 
@@ -401,6 +436,7 @@ def _remove_extra_clones(hass: HomeAssistant, entry: ConfigEntry, vc: Any) -> No
     """Fewer clones than before: their entities and devices go from the registries."""
     from .compat import device_by_identifier
     from .const import MAX_CLONES
+    from .sim.entities import copy_setting_unique_ids
 
     tail = entry.entry_id[-6:].upper()
     registry = er.async_get(hass)
@@ -410,6 +446,11 @@ def _remove_extra_clones(hass: HomeAssistant, entry: ConfigEntry, vc: Any) -> No
         for item in list(registry.entities.values()):
             if item.platform == DOMAIN and str(item.unique_id).startswith(f"{serial}_"):
                 registry.async_remove(item.entity_id)
+        # Its settings carry the entry's id, not the serial (v1.7.3: on the copy's device).
+        for unique_id in copy_setting_unique_ids(entry, index):
+            entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
+            if entity_id is not None:
+                registry.async_remove(entity_id)
         device = device_by_identifier(devices, (DOMAIN, serial), entry.entry_id)
         if device is not None:
             devices.async_remove_device(device.id)
@@ -781,20 +822,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """A removed cluster: reload its batteries, so their Take part switch goes.
 
-    The last cluster or Virtual cluster to go takes the Cluster dashboard with
-    it (v1.7.1), so Home Assistant is as it was before one was added.
+    The last cluster of a kind to go takes its dashboard with it (v1.7.1; one
+    dashboard per kind since v1.7.3), so Home Assistant is as it was before
+    one was added.
     """
     kind = entry.data.get(CONF_DEVICE_TYPE)
     if kind not in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
         return
     others = [
         e for e in hass.config_entries.async_entries(DOMAIN)
-        if e.entry_id != entry.entry_id and e.data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL)
+        if e.entry_id != entry.entry_id and e.data.get(CONF_DEVICE_TYPE) == kind
     ]
     if not others:
         from .cluster_dashboard import async_remove_cluster_dashboard
 
-        await async_remove_cluster_dashboard(hass)
+        await async_remove_cluster_dashboard(hass, virtual=kind == DEVICE_TYPE_VIRTUAL)
     if kind == DEVICE_TYPE_CLUSTER:
         _reload_mismatched(hass, set())
 

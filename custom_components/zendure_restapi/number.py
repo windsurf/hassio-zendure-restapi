@@ -36,19 +36,34 @@ other setting.
 the charge side and ``inverseMaxPower`` the discharge side. Their values differ
 per device and per configuration — on one installation they were observed at
 800 W and later at 3000 and 2400 W — which is exactly why a fixed figure would
-be wrong.
+be wrong. The integration never sets them by itself.
 
-**The Inverter power limit is not raised from here (v1.6.10).**
-``inverseMaxPower`` is the battery's ceiling for feeding into the grid. It
-follows the grid code and what is registered with the grid operator, and it
-holds when Home Assistant is not running. It can be lowered from Home Assistant;
-raising it goes through the Zendure app (Safe power setting). Without a reported
-value nothing is written, since a raise could not be ruled out.
+**The Inverter power limit is never raised from here (v1.6.10).**
+``inverseMaxPower`` is the device's ceiling for feeding into the grid. It
+follows the grid code (``gridStandard``) and what was registered with the grid
+operator, and it is the last guard rail while Home Assistant is not running.
+Zendure's own library keeps it read-only. From Home Assistant it can be
+lowered; raising it is for the Zendure app (*Safe power setting*). The
+entity's maximum is the value the device reports, so the slider offers
+nothing higher, and a higher value from a service call is refused. While the
+device has not reported a value, no write goes out at all: without it a raise
+cannot be told from a lowering.
+
+**A setting the device keeps is read back (v1.7.3).** After a write of
+``inverseMaxPower``, ``chargeMaxLimit``, ``socSet`` or ``minSoc`` the reports
+are watched until the device holds the new value, and the outcome goes to the
+logbook — old value, new value, confirmed or not, with the user or automation
+that asked — and to the log (WARNING for the Inverter power limit, INFO for the
+others; ERROR when it is not confirmed). It runs in the background, so a
+service call or an automation does not wait for it. A write that timed out is
+not written again: its outcome is unknown.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from dataclasses import dataclass
 
 from homeassistant.components.number import (
@@ -59,7 +74,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -91,6 +106,17 @@ from .const import CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_PRICE, DEV
 from .cluster_entities import cluster_entities
 from .price_entities import price_entities
 _LOGGER = logging.getLogger(__name__)
+
+# The device's ceiling for feeding into the grid (v1.6.10).
+INVERTER_LIMIT_KEY = "inverseMaxPower"
+# Settings the device keeps across a restart: a write is read back and logged.
+PERSISTENT_KEYS = (INVERTER_LIMIT_KEY, "chargeMaxLimit", "socSet", "minSoc")
+# How long to watch the reports for the new value: at least this, and at least
+# three polls, since a report can lag a write.
+CONFIRM_MIN_S = 10.0
+CONFIRM_POLLS = 3
+CONFIRM_STEP_S = 1.0
+EVENT_LOGBOOK_ENTRY = "logbook_entry"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -231,10 +257,6 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-# The battery's ceiling for feeding into the grid: lowered here, never raised.
-INVERTER_LIMIT_KEY = "inverseMaxPower"
-
-
 class ZendureNumber(ZendureEntity, NumberEntity):
     """Writable numeric property."""
 
@@ -242,9 +264,12 @@ class ZendureNumber(ZendureEntity, NumberEntity):
 
     @property
     def native_max_value(self) -> float:
-        """Ceiling published by the device, falling back to the static value."""
+        """Ceiling published by the device, falling back to the static value.
+
+        The Inverter power limit is its own ceiling: never raised from here
+        (v1.6.10).
+        """
         if self.entity_description.key == INVERTER_LIMIT_KEY:
-            # The Inverter power limit is its own ceiling: never raised from here.
             current = self.native_value
             if current is not None and current > 0:
                 return current
@@ -272,27 +297,75 @@ class ZendureNumber(ZendureEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         key = self.entity_description.key
-        if key == INVERTER_LIMIT_KEY:
-            before = self.native_value
-            # Without a reported value it cannot be told whether this raises
-            # it: nothing is written then. Same text as v1.7.3.
-            if before is None or value > before:
-                raise HomeAssistantError(
-                    "The Inverter power limit is the battery's ceiling for feeding into the grid, set by the "
-                    "grid code and your registration with the grid operator. "
-                    + ("The battery has not reported it yet, so a change cannot be checked; try again once it has. "
-                       if before is None else f"It can be lowered here, not raised above {before:g} W: ")
-                    + "Raise it in the Zendure app (Safe power setting)."
-                )
         raw = int(round(value / self.entity_description.scale))
-        try:
-            await self.coordinator.async_write(self.entity_description.key, raw)
-        except ZendureApiError as err:
-            _LOGGER.error(
-                "Failed to write %s=%s (raw %s): %s",
-                self.entity_description.key, value, raw, err
+        before = self.native_value
+        # Without a reported value it cannot be checked whether this raises it:
+        # nothing is written then (v1.6.10).
+        if key == INVERTER_LIMIT_KEY and (before is None or value > before):
+            raise HomeAssistantError(
+                "The Inverter power limit is the battery's ceiling for feeding into the grid, set by the "
+                "grid code and your registration with the grid operator. "
+                + ("The battery has not reported it yet, so a change cannot be checked; try again once it has. "
+                   if before is None else f"It can be lowered here, not raised above {before:g} W: ")
+                + "Raise it in the Zendure app (Safe power setting)."
             )
+        try:
+            await self.coordinator.async_write(key, raw)
+        except ZendureApiError as err:
+            _LOGGER.error("Failed to write %s=%s (raw %s): %s", key, value, raw, err)
+            if key in PERSISTENT_KEYS:
+                self._logbook(f"not set to {value:g}{self._unit()}: the write failed ({err})", self._context)
             raise
+        if key in PERSISTENT_KEYS:
+            self.hass.async_create_task(self._async_confirm(before, value, raw, self._context))
+
+    def _unit(self) -> str:
+        unit = self.entity_description.native_unit_of_measurement
+        return f" {unit}" if unit else ""
+
+    def _logbook(self, message: str, context: Context | None) -> None:
+        """A line in the logbook of this entity; logbook shows who asked from the context."""
+        state = self.hass.states.get(self.entity_id) if self.entity_id else None
+        name = state.name if state is not None else str(self.name or self.entity_description.name)
+        self.hass.bus.async_fire(
+            EVENT_LOGBOOK_ENTRY,
+            {"name": name, "message": message, "domain": DOMAIN, "entity_id": self.entity_id},
+            context=context,
+        )
+
+    async def _async_confirm(self, before: float | None, value: float, raw: int, context: Context | None) -> None:
+        """Watch the reports until the device holds `raw`; log the outcome (v1.7.3)."""
+        key = self.entity_description.key
+        interval = self.coordinator.update_interval
+        seconds = interval.total_seconds() if interval else 0.0
+        deadline = time.monotonic() + max(CONFIRM_MIN_S, CONFIRM_POLLS * seconds)
+        while True:
+            confirmed = _same((self.coordinator.data or {}).get(key), raw)
+            if confirmed or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(CONFIRM_STEP_S)
+        old = "unknown" if before is None else f"{before:g}"
+        user = getattr(context, "user_id", None) if context is not None else None
+        if confirmed and before is not None and float(before) == float(value):
+            return  # Written again as it was: nothing changed, nothing to log.
+        if confirmed:
+            self._logbook(f"changed from {old} to {value:g}{self._unit()}, confirmed by the battery", context)
+            level = logging.WARNING if key == INVERTER_LIMIT_KEY else logging.INFO
+            _LOGGER.log(level, "%s changed from %s to %s%s, confirmed by the battery (user %s)",
+                        key, old, f"{value:g}", self._unit(), user or "none")
+            return
+        shown = self.native_value
+        now = "nothing" if shown is None else f"{shown:g}{self._unit()}"
+        self._logbook(f"set to {value:g}{self._unit()} but not confirmed: the battery reports {now}", context)
+        _LOGGER.error("%s written as %s%s but not confirmed: the battery reports %s (user %s)",
+                      key, f"{value:g}", self._unit(), now, user or "none")
+
+
+def _same(reported: object, raw: int) -> bool:
+    try:
+        return float(reported) == float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
 
 
 # ── Controller settings ──────────────────────────────────────────────────

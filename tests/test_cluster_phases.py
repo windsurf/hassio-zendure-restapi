@@ -1,4 +1,4 @@
-"""Several batteries on one phase, up to four in a cluster (v1.7.2).
+"""Several batteries on one phase, up to six in a cluster (v1.7.2: four; v1.7.3: six).
 
 The phase is a label: the distribution works on the total of the connection
 and never looks at it. Until v1.7.1 the config flow took one battery per
@@ -35,8 +35,8 @@ def reading(key: str, *, priority: int = 5, power: float = 0.0, discharge_limit:
 
 # ── Distribution ─────────────────────────────────────────────────────────
 
-def test_max_members_is_four():
-    assert MAX_MEMBERS == 4
+def test_max_members_is_six():
+    assert MAX_MEMBERS == 6
 
 
 def test_split_over_four():
@@ -74,6 +74,17 @@ def test_phase_does_not_change_the_decision():
     same = run([1, 1, 1, 1])
     spread = run([1, 2, 3, 1])
     assert same.roles == spread.roles and same.primary == spread.primary
+
+
+def test_six_on_one_phase_one_primary_five_secondaries():
+    d = Distributor()
+    readings = [reading("a", priority=6, power=800, discharge_limit=800)] + [reading(k) for k in "bcdef"]
+    decision = d.decide(readings, SETTINGS, grid=3000.0, now=0.0)
+    secondaries = [decision.roles[k] for k in "bcdef"]
+    assert all(r.role == ROLE_SECONDARY and r.direction == DISCHARGE for r in secondaries)
+    # Demand 3800 W, the primary keeps 60 % of its cap (480 W): 3320 W over five,
+    # 664 W each, rounded to 650 W.
+    assert [r.limit for r in secondaries] == [650] * 5
 
 
 def test_four_hand_back_on_a_load_drop():
@@ -120,18 +131,18 @@ def test_cluster_takes_two_batteries_on_one_phase():
     assert phases == ["l1", "l1"]
 
 
-def test_cluster_takes_four_and_refuses_five():
-    four = [battery(str(i), "Mix") for i in range(1, 5)]
-    flow, seen = cluster_flow(four)
-    asyncio.run(flow.async_step_battery_cluster({CF.battery_label(e): "l2" for e in four}))
-    assert len(seen["entry"]["subentries"]) == 4
+def test_cluster_takes_six_and_refuses_seven():
+    six = [battery(str(i), "Mix") for i in range(1, 7)]
+    flow, seen = cluster_flow(six)
+    asyncio.run(flow.async_step_battery_cluster({CF.battery_label(e): "l2" for e in six}))
+    assert len(seen["entry"]["subentries"]) == 6
 
-    five = [battery(str(i), "Mix") for i in range(1, 6)]
-    flow, seen = cluster_flow(five)
-    asyncio.run(flow.async_step_battery_cluster({CF.battery_label(e): "l1" for e in five}))
+    seven = [battery(str(i), "Mix") for i in range(1, 8)]
+    flow, seen = cluster_flow(seven)
+    asyncio.run(flow.async_step_battery_cluster({CF.battery_label(e): "l1" for e in seven}))
     assert "entry" not in seen
     assert seen["form"]["errors"] == {"base": "too_many_batteries"}
-    assert seen["form"]["description_placeholders"] == {"max": "4"}
+    assert seen["form"]["description_placeholders"] == {"max": "6"}
 
 
 def subentry_flow(members: list[tuple[str, str]], batteries: list) -> tuple[CF.BatterySubentryFlow, dict]:
@@ -159,13 +170,81 @@ def test_add_battery_offers_every_phase():
     assert list(phase.config["options"]) == ["l1", "l2", "l3"]
 
 
-def test_add_battery_stops_at_four():
-    batteries = [battery(str(i), "Mix") for i in range(1, 6)]
-    flow, seen = subentry_flow([(str(i), "l1") for i in range(1, 5)], batteries)
+def test_add_battery_stops_at_six():
+    batteries = [battery(str(i), "Mix") for i in range(1, 8)]
+    flow, seen = subentry_flow([(str(i), "l1") for i in range(1, 7)], batteries)
     asyncio.run(flow.async_step_user())
-    assert seen["abort"] == {"reason": "cluster_full", "description_placeholders": {"max": "4"}}
+    assert seen["abort"] == {"reason": "cluster_full", "description_placeholders": {"max": "6"}}
 
 
 def test_reading_direction_helpers_unchanged():
     r = reading("a", power=-300)
     assert r.flow(CHARGE) == 300 and r.direction == NONE
+
+
+def test_a_battery_cluster_and_a_virtual_cluster_exclude_each_other():
+    from custom_components.zendure_restapi.const import (
+        CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL,
+    )
+
+    for existing, step in ((DEVICE_TYPE_VIRTUAL, "async_step_battery_cluster"),
+                           (DEVICE_TYPE_CLUSTER, "async_step_virtual_cluster")):
+        flow, seen = cluster_flow([battery("1", "Mix")])
+        flow.hass = MagicMock()
+        flow._async_current_entries = lambda include_ignore=False, kind=existing: [
+            SimpleNamespace(data={CONF_DEVICE_TYPE: kind})]
+        flow.async_abort = lambda **kw: seen.setdefault("abort", kw)
+        asyncio.run(getattr(flow, step)())
+        assert seen["abort"] == {"reason": "cluster_exclusive"}
+
+
+def test_rebuild_from_the_options_is_not_stored():
+    from custom_components.zendure_restapi.const import (
+        CONF_DEVICE_TYPE, DEVICE_TYPE_VIRTUAL, OPT_REBUILD_DASHBOARD,
+    )
+
+    entry = SimpleNamespace(data={CONF_DEVICE_TYPE: DEVICE_TYPE_VIRTUAL}, options={"clones": 3}, entry_id="E")
+
+    class Flow(CF.ZendureOptionsFlow):
+        config_entry = property(lambda self: entry)
+
+    flow = Flow()
+    flow.hass = MagicMock()
+    flow.hass.async_create_task.side_effect = lambda coro: coro.close()
+    seen: dict = {}
+    flow.async_create_entry = lambda **kw: seen.setdefault("entry", kw)
+    flow.async_show_form = lambda **kw: seen.setdefault("form", kw)
+    asyncio.run(flow.async_step_init())
+    assert seen["form"]["step_id"] == "virtual"
+    asyncio.run(flow.async_step_init({OPT_REBUILD_DASHBOARD: True}))
+    assert seen["entry"]["data"] == {"clones": 3}
+    assert flow.hass.async_create_task.called
+    assert CF.ZendureConfigFlow.async_supports_options_flow(entry)
+
+
+def test_reset_from_the_options_resets_the_copies_and_is_not_stored():
+    from custom_components.zendure_restapi.const import (
+        CONF_DEVICE_TYPE, DEVICE_TYPE_VIRTUAL, DOMAIN, OPT_RESET_COPIES,
+    )
+
+    entry = SimpleNamespace(data={CONF_DEVICE_TYPE: DEVICE_TYPE_VIRTUAL}, options={"clones": 3}, entry_id="E")
+
+    class Flow(CF.ZendureOptionsFlow):
+        config_entry = property(lambda self: entry)
+
+    resets = []
+
+    async def reset():
+        resets.append(True)
+
+    flow = Flow()
+    flow.hass = MagicMock()
+    flow.hass.data = {DOMAIN: {"E": SimpleNamespace(async_reset=reset)}}
+    tasks: list = []
+    flow.hass.async_create_task.side_effect = tasks.append
+    seen: dict = {}
+    flow.async_create_entry = lambda **kw: seen.setdefault("entry", kw)
+    asyncio.run(flow.async_step_init({OPT_RESET_COPIES: True}))
+    for coro in tasks:
+        asyncio.run(coro)
+    assert resets == [True] and seen["entry"]["data"] == {"clones": 3}

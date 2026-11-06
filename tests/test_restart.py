@@ -112,11 +112,23 @@ def test_messageid_starting_again_after_a_failed_poll_is_a_restart():
     assert co.restart_seq == 1 and not co.message_id_resets
 
 
-def test_a_meter_starting_its_messageid_again_is_a_restart():
-    meter = {"messageId": 3519, "acMode": None, "inputLimit": None, "outputLimit": None, "smartMode": None}
+METER = {"messageId": 3519, "acMode": None, "inputLimit": None, "outputLimit": None, "smartMode": None}
+
+
+def test_a_meter_starting_its_messageid_again_without_a_failed_poll_is_no_restart():
+    # v1.7.3: the P1 meter does this every 15 to 19 hours while it keeps reporting.
     co = make_coordinator()
-    report(co, meter, T0)
-    report(co, {**meter, "messageId": 2}, T0 + timedelta(seconds=10))
+    report(co, METER, T0)
+    report(co, {**METER, "messageId": 2}, T0 + timedelta(seconds=1))
+    assert co.restart_seq == 0 and not co.restarts
+    assert co.message_id_resets[0]["from"] == 3519 and co.message_id_resets[0]["to"] == 2
+
+
+def test_a_meter_starting_its_messageid_again_after_a_failed_poll_is_a_restart():
+    co = make_coordinator()
+    report(co, METER, T0)
+    co._failing_since = T0 + timedelta(seconds=1)
+    report(co, {**METER, "messageId": 2}, T0 + timedelta(seconds=30))
     assert co.restart_seq == 1 and not co.message_id_resets
 
 

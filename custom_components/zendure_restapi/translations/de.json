@@ -9,8 +9,8 @@
           "external_meter": "Externer Netzzähler über IP — am schnellsten (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externer Netzzähler aus Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Preissteuerung — laden, wenn Strom günstig ist, entladen, wenn er teuer ist (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Akku-Cluster — bis zu vier Akkus, an beliebiger Phase, als ein System",
-          "virtual_cluster": "Virtueller Cluster (Test) — Kopien eines Akkus unter einem Cluster, schreibt nichts Echtes"
+          "battery_cluster": "Batterie-Cluster — bis zu sechs Batterien, an beliebiger Phase, als ein System",
+          "virtual_cluster": "Virtueller Cluster (simuliert) — Kopien einer Batterie unter einem Cluster, schreibt nichts Echtes"
         }
       },
       "zendure": {
@@ -95,14 +95,14 @@
         }
       },
       "battery_cluster": {
-        "title": "Akku-Cluster",
-        "description": "Gib jedem Akku, der mitmacht, die Phase, an der er angeschlossen ist: mehrere Akkus dürfen sich eine Phase teilen, insgesamt bis zu {max} Akkus. Wähle *macht nicht mit*, um einen Akku draußen zu lassen. Puffer, Startschwellen und Zähler werden vom ersten Akku übernommen; die Gruppe startet im Standby. Akkus lassen sich später unter dem Cluster hinzufügen, ändern oder entfernen."
+        "title": "Batterie-Cluster",
+        "description": "Gib jeder Batterie, die mitmacht, die Phase, an der sie angeschlossen ist: mehrere Batterien dürfen sich eine Phase teilen, insgesamt bis zu {max} Batterien. Wähle *macht nicht mit*, um eine Batterie draußen zu lassen. Puffer, Startschwellen und Zähler werden von der ersten Batterie übernommen; die Gruppe startet im Standby. Batterien lassen sich später unter dem Cluster hinzufügen, ändern oder entfernen."
       },
       "virtual_cluster": {
-        "title": "Virtueller Cluster (Test)",
-        "description": "Bis zu drei Kopien eines deiner Akkus unter einem eigenen Cluster, mit einem virtuellen P1: Hauslast mal Lastfaktor, minus was die Kopien liefern. An den echten Akku wird nichts geschrieben und das Netz wird nicht beansprucht; der Test kostet nur Rechenleistung. Klone, Lastfaktor, die SoC-Abweichungen und Reset sind Entitäten des virtuellen Clusters.",
+        "title": "Virtueller Cluster (simuliert)",
+        "description": "Bis zu drei Kopien einer deiner Batterien unter einem eigenen Cluster, mit einem virtuellen P1: Hauslast mal Lastfaktor, minus was die Kopien liefern. In die echte Batterie wird nichts geschrieben und das Netz wird nicht beansprucht; der Test kostet nur Rechenleistung. Kopien, Lastfaktor und Reset sind Entitäten des virtuellen Clusters; Max. Anteil, SoC-Abweichung und zusätzliche Reaktionszeit sind Entitäten jeder Kopie.",
         "data": {
-          "source_battery": "Zu kopierender Akku"
+          "source_battery": "Zu kopierende Batterie"
         },
         "data_description": {
           "source_battery": "Die Kopien übernehmen Modell, Maxima, SOC-Grenzen und Einstellungen; die erste Kopie startet mit seinem Ladezustand."
@@ -117,8 +117,8 @@
       "not_a_power_sensor": "Dieser Sensor hat gerade keinen Leistungswert (Einheit W oder kW, numerischer Zustand).",
       "same_entity": "Der Einspeisesensor muss sich vom Leistungssensor unterscheiden.",
       "no_power_total": "Kein Leistungssensor dieses Geräts ergibt eine Netzsumme. Wähle die Sensoren dann selbst.",
-      "no_member": "Wähle für mindestens einen Akku eine Phase.",
-      "too_many_batteries": "Mehr als {max} Akkus: ein Cluster nimmt höchstens {max}."
+      "no_member": "Wähle für mindestens eine Batterie eine Phase.",
+      "too_many_batteries": "Mehr als {max} Batterien: ein Cluster nimmt höchstens {max}."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
@@ -126,7 +126,8 @@
       "no_identity": "Das Gerät antwortete, meldete aber weder Seriennummer noch Geräte-ID.",
       "wrong_meter_type": "Die Adresse antwortet, aber nicht wie dieser Zählertyp. Prüfe den Zählertyp.",
       "not_a_p1_meter": "Dieses HomeWizard-Gerät ist kein P1-Zähler.",
-      "no_battery": "Füge zuerst eine Zendure-Batterie hinzu."
+      "no_battery": "Füge zuerst eine Zendure-Batterie hinzu.",
+      "cluster_exclusive": "Ein Batterie-Cluster und ein virtueller Cluster schließen sich aus. Entferne zuerst den anderen."
     }
   },
   "options": {
@@ -179,10 +180,24 @@
         }
       },
       "cluster": {
-        "title": "Akku-Cluster",
-        "description": "Betriebsmodus, Puffer, Schwellen und die Zählerquelle sind Entitäten des Clusters. Die Akkus sind seine Untereinträge.",
+        "title": "Batterie-Cluster",
+        "description": "Betriebsmodus, Puffer, Schwellen und die Zählerquelle sind Entitäten des Clusters. Die Batterien sind seine Untereinträge.",
         "data": {
-          "external_meter": "Externer Zähler"
+          "external_meter": "Externer Zähler",
+          "rebuild_dashboard": "Cluster-Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
+        }
+      },
+      "virtual": {
+        "title": "Virtueller Cluster",
+        "description": "Kopien, Abweichungen, Max. Anteil und die Gruppeneinstellungen sind Entitäten des virtuellen Clusters und seiner Kopien.",
+        "data": {
+          "reset_copies": "Zurücksetzen: jede Kopie anhalten und um den Ladezustand deiner Batterie neu starten",
+          "reset_settings": "Einstellungen zurücksetzen: alle Einstellungen des virtuellen Clusters und seiner Kopien auf den Standardwert",
+          "rebuild_dashboard": "Cluster-Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
+        },
+        "data_description": {
+          "reset_copies": "Die Kopien halten an, beide Limits gehen auf 0, und jede beginnt neu beim Ladezustand deiner Batterie plus ihrer SoC-Abweichung.",
+          "reset_settings": "Kopien 3, Load factor 1, SoC-Abweichungen 0 / -20 / 15 %, zusätzliche Reaktionszeit 0 / 1 / 3 s, Max. Anteil 0, Operation mode Follow source, und die Puffer, Startschwellen, Concentrate below und Redistribute every wie in einem neuen Cluster. Die Kopien laufen weiter; hake auch Zurücksetzen an, um sie mit den neuen Abweichungen zu starten. Deine eigene Batterie und Price Control bleiben unberührt."
         }
       }
     },
@@ -489,7 +504,7 @@
         "name": "Leistung Notstromausgang 2"
       },
       "hv_bat_volt": {
-        "name": "HV-Batteriespannung (roh)"
+        "name": "HV-Akkuspannung (roh)"
       },
       "hyper_tmp": {
         "name": "Gehäusetemperatur"
@@ -522,13 +537,13 @@
         "name": "Leistung ans Haus"
       },
       "output_pack_power": {
-        "name": "Ladeleistung Batterie"
+        "name": "Ladeleistung Akku"
       },
       "pack_batcur": {
         "name": "Pack {index} Strom"
       },
       "pack_input_power": {
-        "name": "Entladeleistung Batterie"
+        "name": "Entladeleistung Akku"
       },
       "pack_max_temp": {
         "name": "Pack {index} Temperatur"
@@ -657,25 +672,22 @@
         "name": "Verlorene Schreibbefehle"
       },
       "group_power": {
-        "name": "Leistung Gruppe"
+        "name": "Batterieleistung"
       },
       "group_state_of_charge": {
-        "name": "Ladezustand Gruppe"
+        "name": "Ladezustand"
       },
       "members": {
-        "name": "Akkus, die mitmachen"
+        "name": "Batterien, die mitmachen"
       },
       "virtual_p1_power": {
-        "name": "Leistung"
+        "name": "Netzleistung"
       },
       "virtual_p1_house_load": {
         "name": "Hauslast"
       },
       "virtual_p1_real_grid": {
-        "name": "Echtes Netz"
-      },
-      "virtual_p1_load_factor": {
-        "name": "Lastfaktor"
+        "name": "Echte Netzleistung"
       },
       "input_limit": {
         "name": "Ladelimit"
@@ -689,7 +701,7 @@
           "standby": "Standby",
           "idle": "Untätig",
           "regulating": "Regelt",
-          "concentrated": "Ein Akku",
+          "concentrated": "Eine Batterie",
           "reversing": "Richtungswechsel",
           "quick": "Volle Leistung",
           "meter_stale": "Kein Zählerwert"
@@ -713,7 +725,7 @@
         "name": "Heizung"
       },
       "hv_bat_ctrl_switch": {
-        "name": "HV-Batteriesteuerung"
+        "name": "HV-Akkusteuerung"
       },
       "is_error": {
         "name": "Fehler"
@@ -841,37 +853,19 @@
         "name": "Neu verteilen alle"
       },
       "clones": {
-        "name": "Klone"
+        "name": "Kopien"
       },
       "load_factor": {
         "name": "Lastfaktor"
       },
-      "soc_offset_1": {
-        "name": "SoC-Abweichung Klon 1"
+      "copy_max_share": {
+        "name": "Max. Anteil"
       },
-      "soc_offset_2": {
-        "name": "SoC-Abweichung Klon 2"
+      "copy_soc_offset": {
+        "name": "SoC-Abweichung"
       },
-      "soc_offset_3": {
-        "name": "SoC-Abweichung Klon 3"
-      },
-      "response_offset_1": {
-        "name": "Zusätzliche Reaktionszeit Klon 1"
-      },
-      "response_offset_2": {
-        "name": "Zusätzliche Reaktionszeit Klon 2"
-      },
-      "response_offset_3": {
-        "name": "Zusätzliche Reaktionszeit Klon 3"
-      },
-      "max_share_clone_1": {
-        "name": "Max. Anteil Klon 1"
-      },
-      "max_share_clone_2": {
-        "name": "Max. Anteil Klon 2"
-      },
-      "max_share_clone_3": {
-        "name": "Max. Anteil Klon 3"
+      "copy_response_offset": {
+        "name": "Zusätzliche Reaktionszeit"
       }
     },
     "switch": {
@@ -944,42 +938,42 @@
   },
   "config_subentries": {
     "battery": {
-      "entry_type": "Akku",
+      "entry_type": "Batterie",
       "initiate_flow": {
-        "user": "Akku hinzufügen"
+        "user": "Batterie hinzufügen"
       },
       "step": {
         "user": {
-          "title": "Akku hinzufügen",
-          "description": "Ein Akku dieser Integration, der noch nicht zum Cluster gehört. Mehrere Akkus dürfen sich eine Phase teilen.",
+          "title": "Batterie hinzufügen",
+          "description": "Eine Batterie dieser Integration, die noch nicht zum Cluster gehört. Mehrere Batterien dürfen sich eine Phase teilen.",
           "data": {
-            "battery_entry": "Akku",
+            "battery_entry": "Batterie",
             "phase": "Phase",
             "priority": "Priorität",
             "max_share": "Maximaler Anteil"
           },
           "data_description": {
-            "priority": "1 bis 9. Der höchste ist Primary; bei Gleichstand der am schnellsten gemessene Akku.",
-            "max_share": "Höchste Leistung in Watt, die dieser Akku in der Gruppe übernimmt, in beide Richtungen. 0 = sein eigenes Maximum."
+            "priority": "1 bis 9. Die höchste ist Primary; bei Gleichstand die am schnellsten gemessene Batterie.",
+            "max_share": "Höchste Leistung in Watt, die diese Batterie in der Gruppe übernimmt, in beide Richtungen. 0 = ihr eigenes Maximum."
           }
         },
         "reconfigure": {
-          "title": "Akku unter dem Cluster",
-          "description": "Phase, Priorität und das Meiste, was dieser Akku in der Gruppe liefern oder aufnehmen darf.",
+          "title": "Batterie unter dem Cluster",
+          "description": "Phase, Priorität und das Meiste, was diese Batterie in der Gruppe liefern oder aufnehmen darf.",
           "data": {
             "phase": "Phase",
             "priority": "Priorität",
             "max_share": "Maximaler Anteil"
           },
           "data_description": {
-            "priority": "1 bis 9. Der höchste ist Primary; bei Gleichstand der am schnellsten gemessene Akku.",
-            "max_share": "Höchste Leistung in Watt, die dieser Akku in der Gruppe übernimmt, in beide Richtungen. 0 = sein eigenes Maximum."
+            "priority": "1 bis 9. Die höchste ist Primary; bei Gleichstand die am schnellsten gemessene Batterie.",
+            "max_share": "Höchste Leistung in Watt, die diese Batterie in der Gruppe übernimmt, in beide Richtungen. 0 = ihr eigenes Maximum."
           }
         }
       },
       "abort": {
-        "no_free_battery": "Jeder Akku gehört schon zum Cluster.",
-        "cluster_full": "Der Cluster hat schon {max} Akkus, das Maximum.",
+        "no_free_battery": "Jede Batterie gehört schon zum Cluster.",
+        "cluster_full": "Der Cluster hat schon {max} Batterien, das Maximum.",
         "reconfigure_successful": "Gespeichert."
       }
     }

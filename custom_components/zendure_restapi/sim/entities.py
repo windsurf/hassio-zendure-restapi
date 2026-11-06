@@ -1,11 +1,19 @@
 """Entities of a Virtual cluster entry (v1.7.1).
 
 The cluster device carries the group's settings and figures, as the battery
-cluster does, plus the settings of the test: Clones, Load factor, the SoC
-offsets of clones 2 and 3, and Reset. Each clone is a device of its own with
-only what the dashboard shows: state of charge, battery power, controller
-status, the two limits and its response time. No energy counters, so the
-Energy dashboard never sees a battery that does not exist.
+cluster does, plus the settings of the test: Copies, Load factor and Reset.
+Each copy is a device of its own (Virtual copy n, since v1.7.3 whatever the
+model; until v1.7.2 Virtual Mix n) with what the dashboard
+shows: state of charge, battery power, controller status, the two limits and
+its response time, and since v1.7.3 its own settings: Max share, SoC
+offset and Extra response time. No energy counters, so the Energy dashboard
+never sees a battery that does not exist.
+
+Names since v1.7.3: *Copies* (was Clones), the settings of a copy on the
+copy's device without "clone n" in the name, *Grid power* and *Real grid
+power* on the Virtual P1 meter (were Power and Real grid), and the Load factor
+of the meter as an attribute of Grid power instead of a sensor of its own.
+migrate_entity_ids() moves the entity ids of an existing installation along.
 """
 
 from __future__ import annotations
@@ -64,65 +72,57 @@ MODE_DESCRIPTION = SelectEntityDescription(
 
 TEST_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
     (NumberEntityDescription(
-        key="clones", name="Clones", native_min_value=1, native_max_value=3, native_step=1,
+        key="clones", name="Copies", native_min_value=1, native_max_value=3, native_step=1,
         mode=NumberMode.BOX, icon="mdi:content-copy",
     ), OPT_CLONES),
     (NumberEntityDescription(
         key="load_factor", name="Load factor", native_min_value=1, native_max_value=3, native_step=0.5,
         mode=NumberMode.BOX, icon="mdi:multiplication",
     ), OPT_LOAD_FACTOR),
-    (NumberEntityDescription(
-        key="soc_offset_1", name="SoC offset clone 1", native_unit_of_measurement=PERCENTAGE,
-        native_min_value=-50, native_max_value=50, native_step=1, mode=NumberMode.BOX,
-        icon="mdi:battery-arrow-up-outline",
-    ), OPT_SOC_OFFSET_1),
-    (NumberEntityDescription(
-        key="soc_offset_2", name="SoC offset clone 2", native_unit_of_measurement=PERCENTAGE,
-        native_min_value=-50, native_max_value=50, native_step=1, mode=NumberMode.BOX,
-        icon="mdi:battery-arrow-up-outline",
-    ), OPT_SOC_OFFSET_2),
-    (NumberEntityDescription(
-        key="soc_offset_3", name="SoC offset clone 3", native_unit_of_measurement=PERCENTAGE,
-        native_min_value=-50, native_max_value=50, native_step=1, mode=NumberMode.BOX,
-        icon="mdi:battery-arrow-down-outline",
-    ), OPT_SOC_OFFSET_3),
-    (NumberEntityDescription(
-        key="response_offset_1", name="Response offset clone 1", native_unit_of_measurement=UnitOfTime.SECONDS,
-        native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
-        icon="mdi:timer-sand",
-    ), OPT_RESPONSE_OFFSET_1),
-    (NumberEntityDescription(
-        key="response_offset_2", name="Response offset clone 2", native_unit_of_measurement=UnitOfTime.SECONDS,
-        native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
-        icon="mdi:timer-sand",
-    ), OPT_RESPONSE_OFFSET_2),
-    (NumberEntityDescription(
-        key="response_offset_3", name="Response offset clone 3", native_unit_of_measurement=UnitOfTime.SECONDS,
-        native_min_value=0, native_max_value=10, native_step=0.5, mode=NumberMode.BOX,
-        icon="mdi:timer-sand-complete",
-    ), OPT_RESPONSE_OFFSET_3),
 )
 
-# Max share per clone (v1.7.2): 0 = its own maximum. A low Max share on the
-# primary leaves the rest of the demand to the others, also at a low load.
-MAX_SHARE_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = tuple(
-    (NumberEntityDescription(
-        key=key, name=f"Max share clone {index}", native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=0, native_max_value=MAX_SHARE_LIMIT, native_step=50, mode=NumberMode.BOX,
-        icon="mdi:arrow-collapse-vertical",
-    ), key)
-    for index, key in enumerate(OPT_MAX_SHARE_CLONES, start=1)
-)
+SOC_OFFSET_KEYS = (OPT_SOC_OFFSET_1, OPT_SOC_OFFSET_2, OPT_SOC_OFFSET_3)
+RESPONSE_OFFSET_KEYS = (OPT_RESPONSE_OFFSET_1, OPT_RESPONSE_OFFSET_2, OPT_RESPONSE_OFFSET_3)
+
+
+def copy_numbers(index: int) -> tuple[tuple[NumberEntityDescription, str, str], ...]:
+    """The settings of copy `index`, on the copy's own device (v1.7.3).
+
+    The keys, and so the unique ids, stay those of v1.7.2; the name drops
+    "clone n", because the device says which copy it is. One translation per
+    setting, for every copy. The third field tells how it is applied: Max
+    share at once, the offsets at the next Reset.
+    """
+    return (
+        # Max share (v1.7.2): 0 = its own maximum. A low Max share on the
+        # primary leaves the rest of the demand to the others, also at a low load.
+        (NumberEntityDescription(
+            key=OPT_MAX_SHARE_CLONES[index - 1], translation_key="copy_max_share", name="Max share",
+            native_unit_of_measurement=UnitOfPower.WATT, native_min_value=0, native_max_value=MAX_SHARE_LIMIT,
+            native_step=50, mode=NumberMode.BOX, icon="mdi:arrow-collapse-vertical",
+        ), OPT_MAX_SHARE_CLONES[index - 1], "share"),
+        (NumberEntityDescription(
+            key=SOC_OFFSET_KEYS[index - 1], translation_key="copy_soc_offset", name="SoC offset",
+            native_unit_of_measurement=PERCENTAGE, native_min_value=-50, native_max_value=50, native_step=1,
+            mode=NumberMode.BOX, icon="mdi:battery-arrow-up-outline",
+        ), SOC_OFFSET_KEYS[index - 1], "int"),
+        (NumberEntityDescription(
+            key=RESPONSE_OFFSET_KEYS[index - 1], translation_key="copy_response_offset", name="Extra response time",
+            native_unit_of_measurement=UnitOfTime.SECONDS, native_min_value=0, native_max_value=10,
+            native_step=0.5, mode=NumberMode.BOX, icon="mdi:timer-sand",
+        ), RESPONSE_OFFSET_KEYS[index - 1], "float"),
+    )
 
 # The virtual P1 meter, a device of its own like the real P1 (v1.7.1).
 VIRTUAL_P1_NAME = "Virtual P1 meter"
 _W = dict(native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER,
           state_class=SensorStateClass.MEASUREMENT)
 VIRTUAL_P1_DESCRIPTIONS = (
-    (SensorEntityDescription(key="virtual_p1_power", name="Power", icon="mdi:transmission-tower", **_W), "power"),
+    (SensorEntityDescription(key="virtual_p1_power", name="Grid power", icon="mdi:transmission-tower", **_W), "power"),
     (SensorEntityDescription(key="virtual_p1_house_load", name="House load", icon="mdi:home-lightning-bolt", **_W), "house"),
-    (SensorEntityDescription(key="virtual_p1_real_grid", name="Real grid", icon="mdi:transmission-tower-import", **_W), "real_grid"),
-    (SensorEntityDescription(key="virtual_p1_load_factor", name="Load factor", icon="mdi:multiplication"), "load_factor"),
+    (SensorEntityDescription(
+        key="virtual_p1_real_grid", name="Real grid power", icon="mdi:transmission-tower-import", **_W,
+    ), "real_grid"),
 )
 RESET_DESCRIPTION = ButtonEntityDescription(key="reset", name="Reset", icon="mdi:restart")
 
@@ -151,7 +151,7 @@ def _clone_device(entity: Any, clone: Clone) -> None:
     info = entity._attr_device_info
     if info is not None:
         info["name"] = clone.name
-        info["model"] = f"{clone.model} (SIMULATED)"
+        info["model"] = f"{clone.model} (simulated)"
         info["configuration_url"] = None
 
 
@@ -164,12 +164,17 @@ def virtual_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
     elif platform == Platform.NUMBER:
         entities = [ClusterNumber(entry, vc, d, vc.settings, key) for d, key in CLUSTER_NUMBERS]
         for description, key in TEST_NUMBERS:
-            cls = FloatNumber if key in (OPT_LOAD_FACTOR, OPT_RESPONSE_OFFSET_1, OPT_RESPONSE_OFFSET_2,
-                                         OPT_RESPONSE_OFFSET_3) else ClusterNumber
+            cls = FloatNumber if key == OPT_LOAD_FACTOR else ClusterNumber
             entities.append(cls(entry, vc, description, vc.settings, key))
-        for index, (description, key) in enumerate(MAX_SHARE_NUMBERS, start=1):
-            if index <= len(vc.clones):
-                entities.append(MaxShareNumber(entry, vc, description, vc.settings, key, index))
+        copies: list[Any] = []
+        for clone in vc.clones:
+            for description, key, kind in copy_numbers(clone.index):
+                if kind == "share":
+                    copies.append(MaxShareNumber(entry, vc, description, vc.settings, key, clone.index))
+                else:
+                    cls = FloatNumber if kind == "float" else ClusterNumber
+                    copies.append(cls(entry, vc, description, vc.settings, key))
+                _on_copy(copies[-1], clone)
     elif platform == Platform.BUTTON:
         entities = [ResetButton(entry, vc, RESET_DESCRIPTION), RebuildButton(entry, vc, REBUILD_DESCRIPTION)]
     elif platform == Platform.SENSOR:
@@ -189,7 +194,18 @@ def virtual_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
             _virtual_device(entity)
     if platform == Platform.SENSOR:
         entities += p1
+    if platform == Platform.NUMBER:
+        entities += copies
     return entities
+
+
+def _on_copy(entity: Any, clone: Clone) -> None:
+    """A setting of a copy goes on the copy's device, the one its sensors are on (v1.7.3)."""
+    entity._attr_device_info = DeviceInfo(
+        identifiers={(DOMAIN, clone.device_id)},
+        name=clone.name,
+        model=f"{clone.model} (simulated)",
+    )
 
 
 def _clone_sensors(vc: VirtualCluster) -> list[Any]:
@@ -285,7 +301,7 @@ class VirtualP1Sensor(ClusterEntity, SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"virtual_p1_{entry.entry_id}")},
             name=VIRTUAL_P1_NAME,
-            model=f"{VIRTUAL_P1_NAME} (SIMULATED)",
+            model=f"{VIRTUAL_P1_NAME} (simulated)",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -305,8 +321,6 @@ class VirtualP1Sensor(ClusterEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        if self._field == "load_factor":
-            return self._cluster.load_factor()
         meter = self._cluster.meter
         value = (meter.data or {}).get(self._field) if meter is not None else None
         return None if value is None else round(float(value))
@@ -315,7 +329,13 @@ class VirtualP1Sensor(ClusterEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         if self._field != "power":
             return None
-        return {"source": self._cluster.source_name, "telegrams": getattr(self._cluster.meter, "telegrams", 0)}
+        # The Load factor is an attribute here since v1.7.3: the
+        # setting is number.…_load_factor, a sensor of the same was a copy.
+        return {
+            "source": self._cluster.source_name,
+            "telegrams": getattr(self._cluster.meter, "telegrams", 0),
+            "load_factor": self._cluster.load_factor(),
+        }
 
     def _due(self) -> bool:
         return True
@@ -328,3 +348,109 @@ class ResetButton(ClusterEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self._cluster.async_reset()
+
+
+# ── Entity ids of v1.7.1/v1.7.2 ─────────────────────────────────────
+# The renamed entities keep their unique id, so Home Assistant would keep the
+# old entity id. They are moved once to the id a new installation gets, so the
+# dashboard, the docs and every example match; the recorder carries the
+# history to the new id. Only an id still in its old default form is moved;
+# one renamed by hand, or a target that is taken, stays.
+
+
+def _renames(entry: ConfigEntry, clones: list[Clone]) -> list[tuple[str, str, str, str]]:
+    """(platform, unique id, old object id, new object id) for each moved entity."""
+    from homeassistant.util import slugify
+
+    from ..const import CONF_DEVICE_NAME, VIRTUAL_DEVICE_NAME
+
+    eid = entry.entry_id
+    group = slugify(entry.data.get(CONF_DEVICE_NAME, VIRTUAL_DEVICE_NAME))
+    p1 = slugify(VIRTUAL_P1_NAME)
+    moves = [
+        ("number", f"{eid}_clones", f"{group}_clones", f"{group}_copies"),
+        ("sensor", f"{eid}_virtual_p1_power", f"{p1}_power", f"{p1}_grid_power"),
+        ("sensor", f"{eid}_virtual_p1_real_grid", f"{p1}_real_grid", f"{p1}_real_grid_power"),
+    ]
+    for clone in clones:
+        n, copy = clone.index, slugify(clone.name)
+        moves += [
+            ("number", f"{eid}_{OPT_MAX_SHARE_CLONES[n - 1]}", f"{group}_max_share_clone_{n}", f"{copy}_max_share"),
+            ("number", f"{eid}_{SOC_OFFSET_KEYS[n - 1]}", f"{group}_soc_offset_clone_{n}", f"{copy}_soc_offset"),
+            ("number", f"{eid}_{RESPONSE_OFFSET_KEYS[n - 1]}", f"{group}_response_offset_clone_{n}",
+             f"{copy}_extra_response_time"),
+        ]
+    return moves
+
+
+def migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry, clones: list[Clone]) -> int:
+    """Move the entity ids of v1.7.2 to the names of v1.7.3; drop the Load factor sensor."""
+    import logging
+
+    from homeassistant.helpers import entity_registry as er
+
+    log = logging.getLogger(__name__)
+    registry = er.async_get(hass)
+    old_factor = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_virtual_p1_load_factor")
+    if old_factor is not None:
+        registry.async_remove(old_factor)
+        log.info("Removed %s: the Load factor is an attribute of the Virtual P1 Grid power (v1.7.3)", old_factor)
+    moved = 0
+    for platform, unique_id, old, new in _renames(entry, clones):
+        current = registry.async_get_entity_id(platform, DOMAIN, unique_id)
+        wanted = f"{platform}.{new}"
+        if current is None or current == wanted or current != f"{platform}.{old}":
+            continue
+        if registry.async_is_registered(wanted) or hass.states.get(wanted) is not None:
+            log.warning("Not renaming %s: %s is already in use", current, wanted)
+            continue
+        registry.async_update_entity(current, new_entity_id=wanted)
+        moved += 1
+    moved += _move_copy_prefix(hass, entry, clones, registry, log)
+    if moved:
+        log.info(
+            "Virtual cluster: moved %d entity ids to the names of v1.7.3; history is kept, "
+            "dashboards that name the old ids need a Rebuild dashboard", moved,
+        )
+    return moved
+
+
+def _move_copy_prefix(hass: HomeAssistant, entry: ConfigEntry, clones: list[Clone], registry: Any, log: Any) -> int:
+    """virtual_mix_n_… / virtual_battery_n_… → virtual_copy_n_… for every entity of a copy (v1.7.3).
+
+    The entities of copy n are those whose unique id starts with its serial,
+    and its three settings. Only an id that still starts with the old device
+    name is moved; one renamed by hand, or a target that is taken, stays.
+    """
+    from homeassistant.util import slugify
+
+    from .cluster import OLD_COPY_PREFIXES
+
+    moved = 0
+    tail = entry.entry_id[-6:].upper()
+    for clone in clones:
+        n = clone.index
+        new = f"{slugify(clone.name)}_"
+        old = tuple(f"{p}{n}_" for p in OLD_COPY_PREFIXES)
+        serial = f"SIMULATED{n}{tail}_"
+        settings = set(copy_setting_unique_ids(entry, n))
+        for item in list(registry.entities.values()):
+            unique_id = str(item.unique_id)
+            if item.platform != DOMAIN or not (unique_id.startswith(serial) or unique_id in settings):
+                continue
+            domain, object_id = item.entity_id.split(".", 1)
+            prefix = next((p for p in old if object_id.startswith(p)), None)
+            if prefix is None or prefix == new:
+                continue
+            wanted = f"{domain}.{new}{object_id[len(prefix):]}"
+            if registry.async_is_registered(wanted) or hass.states.get(wanted) is not None:
+                log.warning("Not renaming %s: %s is already in use", item.entity_id, wanted)
+                continue
+            registry.async_update_entity(item.entity_id, new_entity_id=wanted)
+            moved += 1
+    return moved
+
+
+def copy_setting_unique_ids(entry: ConfigEntry, index: int) -> tuple[str, ...]:
+    """Unique ids of the settings of copy `index`, to remove with the copy (v1.7.3)."""
+    return tuple(f"{entry.entry_id}_{key}" for _d, key, _k in copy_numbers(index))

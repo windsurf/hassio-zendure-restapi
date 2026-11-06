@@ -107,6 +107,20 @@ class VirtualSettings(ZendureSettings):
         return super().get(key)
 
 
+# The settings a Virtual cluster has entities for, on the cluster and on its copies
+# (v1.7.3): what *Reset settings* under Configure takes back to the defaults. A key
+# that is removed from the options falls back to its default, so the Operation mode
+# returns to Follow source and not to the standby of a real battery.
+VIRTUAL_RESET_KEYS = (
+    OPT_OPERATION_MODE, OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER,
+    OPT_START_DISCHARGE_AT, OPT_START_CHARGE_AT, OPT_CONCENTRATE_BELOW, OPT_REDISTRIBUTE,
+    OPT_CLONES, OPT_LOAD_FACTOR,
+    OPT_SOC_OFFSET_1, OPT_SOC_OFFSET_2, OPT_SOC_OFFSET_3,
+    OPT_RESPONSE_OFFSET_1, OPT_RESPONSE_OFFSET_2, OPT_RESPONSE_OFFSET_3,
+    *OPT_MAX_SHARE_CLONES,
+)
+
+
 class GroupView:
     """What a clone reads as its group: the cluster's settings, the mode resolved,
     and always the virtual P1 as its meter."""
@@ -145,6 +159,12 @@ class SimCoordinator(ZendureCoordinator):
     def __init__(self, hass: HomeAssistant, api: SimApi, scan_interval: int) -> None:
         super().__init__(hass, api, scan_interval)
         self.config_entry = None
+
+
+# The device name of a copy, followed by its number (v1.7.3).
+COPY_NAME = "Virtual copy"
+# The device names of v1.7.1/v1.7.2, slugified: Virtual Mix n, Virtual battery n.
+OLD_COPY_PREFIXES = ("virtual_mix_", "virtual_battery_")
 
 
 class Clone:
@@ -352,7 +372,6 @@ class VirtualCluster:
         self.source_name = source_entry.title if source_entry is not None else "battery"
         source_coord: ZendureCoordinator = self.source.coordinator
         model = model_name(source_coord.product) if source_coord.product else "SolarFlow"
-        short = "Mix" if "Mix" in model else "battery"
         capacity = self._capacity()
         self.energy = self.energy_per_percent()
         scan = int((source_entry.options if source_entry else {}).get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
@@ -379,7 +398,10 @@ class VirtualCluster:
             view = SettingsView(settings)
             controller = ZendureController(coordinator, view)
             controller.virtual = True
-            name = f"Virtual {short} {index}"
+            # A fixed name, whatever the model (v1.7.3): the entity ids stay the
+            # same when another battery is copied. Until v1.7.2 Virtual Mix n,
+            # or Virtual battery n for a model without "Mix".
+            name = f"{COPY_NAME} {index}"
             data = {CONF_PHASE: f"l{index}", CONF_PRIORITY: 6 if index == 1 else 5,
                     CONF_MAX_SHARE: self.max_share(index)}
             member = ZendureMember(f"clone{index}", name, data, controller, view, settings)
@@ -438,6 +460,20 @@ class VirtualCluster:
     @callback
     def _on_decision(self) -> None:
         async_dispatcher_send(self.hass, self.signal)
+
+    def reset_settings(self) -> bool:
+        """Every setting of the Virtual cluster and its copies back to its default (v1.7.3).
+
+        The copies keep running: their offsets and response times count from the next
+        start or *Reset*. Returns True when the number of copies changes, because the
+        entry then sets up again and the copies start afresh anyway.
+        """
+        before = self.clone_count()
+        options = {k: v for k, v in self.entry.options.items() if k not in VIRTUAL_RESET_KEYS}
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+        async_dispatcher_send(self.hass, self.signal)
+        _LOGGER.info("Virtual cluster settings reset to their defaults")
+        return self.clone_count() != before
 
     async def async_reset(self) -> None:
         """Every clone back to the start: still, limits 0, the twin on the real SoC."""

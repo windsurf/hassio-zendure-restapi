@@ -9,8 +9,8 @@
           "external_meter": "Compteur réseau externe via IP — le plus rapide (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Compteur réseau externe depuis Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
           "price_control": "Pilotage par le prix — charger quand l'électricité est bon marché, décharger quand elle est chère (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
-          "battery_cluster": "Cluster de batteries — jusqu'à quatre batteries, sur n'importe quelle phase, en un seul système",
-          "virtual_cluster": "Virtual cluster (test) — copies of a battery under a cluster, writing nothing real"
+          "battery_cluster": "Cluster de batteries — jusqu'à six batteries, sur n'importe quelle phase, en un seul système",
+          "virtual_cluster": "Virtual cluster (simulated) — copies of a battery under a cluster, writing nothing real"
         }
       },
       "zendure": {
@@ -99,8 +99,8 @@
         "description": "Indiquez pour chaque batterie qui participe la phase sur laquelle elle est raccordée : plusieurs batteries peuvent partager une phase, jusqu'à {max} batteries au total. Choisissez *ne participe pas* pour laisser une batterie de côté. Tampons, seuils de démarrage et compteur sont repris de la première batterie ; le groupe démarre en veille. Les batteries peuvent être ajoutées, modifiées ou retirées plus tard sous le cluster."
       },
       "virtual_cluster": {
-        "title": "Virtual cluster (test)",
-        "description": "Up to three copies of one of your batteries under a cluster of their own, with a virtual P1: the house load times the Load factor, minus what the copies deliver. Nothing is written to the real battery and the grid is not claimed; the test costs only computing power. Clones, Load factor, the SoC offsets and Reset are entities of the Virtual cluster.",
+        "title": "Virtual cluster (simulated)",
+        "description": "Up to three copies of one of your batteries under a cluster of their own, with a virtual P1: the house load times the Load factor, minus what the copies deliver. Nothing is written to the real battery and the grid is not claimed; the test costs only computing power. Copies, Load factor and Reset are entities of the Virtual cluster; Max share, SoC offset and Extra response time are entities of each copy.",
         "data": {
           "source_battery": "Battery to copy"
         },
@@ -126,7 +126,8 @@
       "no_identity": "L'appareil a répondu mais n'a indiqué ni numéro de série ni identifiant.",
       "wrong_meter_type": "L'adresse répond, mais pas comme ce type de compteur. Vérifiez le type de compteur.",
       "not_a_p1_meter": "Cet appareil HomeWizard n'est pas un compteur P1.",
-      "no_battery": "Ajoutez d'abord une batterie Zendure."
+      "no_battery": "Ajoutez d'abord une batterie Zendure.",
+      "cluster_exclusive": "A battery cluster and a Virtual cluster exclude each other. Delete the other one first."
     }
   },
   "options": {
@@ -182,7 +183,21 @@
         "title": "Cluster de batteries",
         "description": "Le mode de fonctionnement, les tampons, les seuils et la source du compteur sont des entités du cluster. Les batteries sont ses sous-entrées.",
         "data": {
-          "external_meter": "Compteur externe"
+          "external_meter": "Compteur externe",
+          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+        }
+      },
+      "virtual": {
+        "title": "Virtual cluster",
+        "description": "Copies, offsets, Max share and the group settings are entities of the Virtual cluster and its copies.",
+        "data": {
+          "reset_copies": "Reset: every copy still and started again around your battery's state of charge",
+          "reset_settings": "Reset settings: every setting of the Virtual cluster and its copies back to its default",
+          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+        },
+        "data_description": {
+          "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
+          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, and the buffers, start thresholds, Concentrate below and Redistribute every as in a new cluster. The copies keep running; tick Reset as well to start them with the new offsets. Your own battery and Price Control are not touched."
         }
       }
     },
@@ -657,25 +672,22 @@
         "name": "Écritures perdues"
       },
       "group_power": {
-        "name": "Puissance du groupe"
+        "name": "Puissance de la batterie"
       },
       "group_state_of_charge": {
-        "name": "État de charge du groupe"
+        "name": "État de charge"
       },
       "members": {
         "name": "Batteries participantes"
       },
       "virtual_p1_power": {
-        "name": "Power"
+        "name": "Grid power"
       },
       "virtual_p1_house_load": {
         "name": "House load"
       },
       "virtual_p1_real_grid": {
-        "name": "Real grid"
-      },
-      "virtual_p1_load_factor": {
-        "name": "Load factor"
+        "name": "Real grid power"
       },
       "input_limit": {
         "name": "Charge limit"
@@ -841,37 +853,19 @@
         "name": "Redistribuer toutes les"
       },
       "clones": {
-        "name": "Clones"
+        "name": "Copies"
       },
       "load_factor": {
         "name": "Load factor"
       },
-      "soc_offset_1": {
-        "name": "SoC offset clone 1"
+      "copy_max_share": {
+        "name": "Max share"
       },
-      "soc_offset_2": {
-        "name": "SoC offset clone 2"
+      "copy_soc_offset": {
+        "name": "SoC offset"
       },
-      "soc_offset_3": {
-        "name": "SoC offset clone 3"
-      },
-      "response_offset_1": {
-        "name": "Response offset clone 1"
-      },
-      "response_offset_2": {
-        "name": "Response offset clone 2"
-      },
-      "response_offset_3": {
-        "name": "Response offset clone 3"
-      },
-      "max_share_clone_1": {
-        "name": "Max share clone 1"
-      },
-      "max_share_clone_2": {
-        "name": "Max share clone 2"
-      },
-      "max_share_clone_3": {
-        "name": "Max share clone 3"
+      "copy_response_offset": {
+        "name": "Extra response time"
       }
     },
     "switch": {

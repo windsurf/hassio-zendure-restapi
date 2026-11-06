@@ -83,7 +83,7 @@ def test_without_max_share_the_primary_keeps_it_alone():
 
 
 def test_distribution_table_shows_the_primary_and_the_power():
-    powers = {"Virtual Mix 1": "sensor.virtual_mix_1_battery_power"}
+    powers = {"Virtual copy 1": "sensor.virtual_copy_1_battery_power"}
     table = CD.distribution_table("sensor.virtual_cluster_status", powers)
     assert "| Battery | Role | Direction | Limit | Power |" in table
     assert "own loop" in table and json.dumps(powers) in table
@@ -91,9 +91,9 @@ def test_distribution_table_shows_the_primary_and_the_power():
 
 
 def test_copy_tab_offers_its_max_share():
-    group = {f"max_share_clone_{n}": f"number.virtual_cluster_max_share_clone_{n}" for n in (1, 2, 3)}
+    group = {f"max_share_clone_{n}": f"number.virtual_copy_{n}_max_share" for n in (1, 2, 3)}
     for n in (1, 2, 3):
-        view = CD.clone_view(f"virtual_mix_{n}_", n, f"Virtual Mix {n}", group, set())
+        view = CD.clone_view(f"virtual_copy_{n}_", n, f"Virtual copy {n}", group, set())
         settings = next(s for s in view["sections"] if s["cards"][0].get("heading") == "Copy settings")
-        assert settings["cards"][1]["entity"] == f"number.virtual_cluster_max_share_clone_{n}"
+        assert settings["cards"][1]["entity"] == f"number.virtual_copy_{n}_max_share"
         assert settings["cards"][1]["features"] == [{"type": "numeric-input", "style": "slider"}]

@@ -1,7 +1,12 @@
 """The cluster dashboard: a Cluster tab and a tab per battery (v1.7.1).
 
-One dashboard, `/zendure-cluster`, for the battery cluster or the Virtual
-cluster (the one it is made from names it): *Cluster* or *Virtual Cluster*.
+A dashboard of its own per kind (v1.7.3): `/zendure-cluster/zendure-cluster`
+for the battery cluster, *Cluster*, and `/virtual-cluster/virtual-cluster` for
+the Virtual cluster, *Virtual Cluster*. Dashboard and first tab share the name,
+like the battery dashboard `/zendure-restapi/zendure-restapi`. Each kind
+creates, rebuilds and removes only its own. Until v1.7.2 both used
+`/zendure-cluster`; one a Virtual cluster made there stays until the user
+removes it, and a notification says so.
 
 * Cluster — since v1.7.2 in the layout of the battery dashboard: tiles under
   the title, the operation mode with one status text, gauges, a row per battery
@@ -13,13 +18,17 @@ cluster (the one it is made from names it): *Cluster* or *Virtual Cluster*.
 * a battery cluster: one tab per member, built from the first page of the
   battery dashboard (dashboard.py, the same template and the same rules for
   missing entities), headed with the member's name;
-* a Virtual cluster: one tab per virtual battery (Virtual Mix 1, 2, 3), with
+* a Virtual cluster: one tab per virtual battery (Virtual copy 1, 2, 3), with
   its own settings as sliders (Max share, SoC offset, extra response time). The real battery is no member and keeps its own
   dashboard; it gets no tab here and shows on the Cluster tab only, for
   comparison.
 
-Tabs carry their title, not an icon, so they can be told apart. Every virtual
-battery is called by its device name (Virtual Mix n) throughout.
+Every tab carries an icon and its title (v1.7.3): the Cluster tab the
+house with a battery of its heading (mdi:home-battery-outline), the batteries
+and copies a numbered one,
+mdi:numeric-1-box-outline to mdi:numeric-4-box-outline, so tabs that show
+only their icon can still be told apart; the title is the tooltip. Every
+virtual battery is called by its device name (Virtual copy n) throughout.
 
 Made once, when the group is set up and no cluster dashboard exists yet. After
 that only on request, with the Rebuild dashboard button: a change in the group
@@ -39,7 +48,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import CONF_BATTERY_ENTRY, CONF_DEVICE_TYPE, DEVICE_TYPE_VIRTUAL, DOMAIN, SUBENTRY_BATTERY
+from .const import (
+    CONF_BATTERY_ENTRY, CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL, DOMAIN, SUBENTRY_BATTERY,
+)
 from .dashboard import (
     CARD_NAMING,
     CREATED,
@@ -56,17 +67,41 @@ from .dashboard import (
 _LOGGER = logging.getLogger(__name__)
 
 CLUSTER_URL = "zendure-cluster"
+VIRTUAL_URL = "virtual-cluster"
 CLUSTER_TITLE = "Cluster"
 VIRTUAL_TITLE = "Virtual Cluster"
-# The path keeps the prefix: Home Assistant wants a hyphen in it, and it stays
-# clear of dashboards of other integrations.
+# Home Assistant wants a hyphen in the path of a dashboard; both stay clear of
+# dashboards of other integrations.
 CLUSTER_ICON = "mdi:battery-sync"
 CLUSTER_NOTIFICATION = "zendure_restapi_cluster_dashboard"
+VIRTUAL_NOTIFICATION = "zendure_restapi_virtual_cluster_dashboard"
+OLD_VIRTUAL_NOTIFICATION = "zendure_restapi_old_virtual_dashboard"
 # The real battery next to a Virtual cluster, on the Cluster tab.
 REAL = "Real"
 # The template heading of a battery tab; replaced by the battery's own name.
 TEMPLATE_HEADING = "Zendure Home Battery"
 CLONE_ICON = "mdi:home-battery-outline"
+# A battery of the cluster is still being set up (reloaded when it joins):
+# its dashboard tab cannot be built yet (v1.7.3).
+NOT_READY = "not_ready"
+
+
+class MembersNotReady(Exception):
+    """A battery of the cluster has no coordinator yet."""
+
+
+def cluster_url(virtual: bool) -> str:
+    """The path of the dashboard, and of its first tab (v1.7.3)."""
+    return VIRTUAL_URL if virtual else CLUSTER_URL
+
+
+def _notification(virtual: bool) -> str:
+    return VIRTUAL_NOTIFICATION if virtual else CLUSTER_NOTIFICATION
+
+
+def tab_icon(index: int) -> str:
+    """The numbered icon of the tab of battery or copy `index` (v1.7.3)."""
+    return f"mdi:numeric-{max(1, min(9, index))}-box-outline"
 
 
 def cluster_title(virtual: bool) -> str:
@@ -152,8 +187,10 @@ def _gauge(entity_id: str | None, lo: int, hi: int, severity: dict[str, int] | N
 def _control(entity_id: str | None, style: str = "slider", wide: bool = False, **extra: Any) -> dict[str, Any] | None:
     """A setting as on the battery dashboard: a tile with a slider (or buttons)."""
     card = _tile(entity_id, features_position="bottom", features=[{"type": "numeric-input", "style": style}], **extra)
-    if card and wide:
-        card["grid_options"] = {"columns": 12, "rows": 2}
+    if card:
+        # Six columns stated, not left to Home Assistant: once a copy's
+        # sliders came out 8 wide (v1.7.3). Wide ones take the full row.
+        card["grid_options"] = {"columns": 12 if wide else 6, "rows": 2}
     return card
 
 
@@ -198,8 +235,8 @@ def _series(entity_id: str, name: str, color: str, kind: str = "line", axis: str
 def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | None] | None,
               plan: str | None, count: int) -> dict[str, Any]:
     """The chart of today and tomorrow, as the day plan chart of the battery
-    dashboard: the grid, the group discharging and charging, the group's state
-    of charge; for a Virtual cluster also the real battery and its plan. One grid
+    dashboard: the grid, the cluster discharging and charging, its state of
+    charge; for a Virtual cluster also the real battery and its plan. One grid
     line per 500 W per battery, a label every second line (v1.7.2)."""
     step = STEP_W * max(1, count)
     series: list[dict[str, Any]] = []
@@ -225,7 +262,7 @@ def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | Non
             ),
         })
     if group.get("soc"):
-        series.append(_series(group["soc"], "SoC group", "#9575CD", axis="soc", stroke_width=2, stroke_dash=4))
+        series.append(_series(group["soc"], "SoC cluster", "#9575CD", axis="soc", stroke_width=2, stroke_dash=4))
     if real and real.get("soc"):
         series.append(_series(real["soc"], "SoC real", "#757575", axis="soc", stroke_dash=2))
     return {
@@ -283,20 +320,24 @@ def cluster_view(
                  "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries)) if e]}
 
     sections = [
-        _section(cluster_title(virtual), CLONE_ICON, [
+        # A Virtual cluster says it is simulated, as its copies do (v1.7.3).
+        _section(f"{VIRTUAL_TITLE} (simulated)" if virtual else cluster_title(virtual), CLONE_ICON, [
             _tile(group.get("soc"), icon="mdi:battery-charging"),
             _tile(group.get("power"), icon="mdi:flash"),
             _tile(group.get("members"), icon="mdi:battery-sync-outline"),
             _tile(grid, icon="mdi:transmission-tower"),
             _tile(group.get("house_load"), icon="mdi:home-lightning-bolt") if virtual else None,
             _tile(group.get("real_grid"), icon="mdi:transmission-tower-import") if virtual else None,
+            # v1.7.3: which version runs, as on the battery dashboard.
+            _tile(group.get("status"), name="Integration", icon="mdi:tag-outline",
+                  state_content="integration_version"),
         ], span=4, badges=[e for e in (group.get("soc"), group.get("status"), group.get("mode")) if e]),
         _section("Operation mode", "mdi:state-machine", [
             _markdown(status_text(group, virtual)) if group.get("status") else None,
             _tile(group.get("mode"), icon="mdi:state-machine", features_position="bottom",
                   features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
-            _tile(group.get("reset"), icon="mdi:restart"),
-            _tile(group.get("rebuild")),
+            # Reset and Rebuild dashboard are under Configure since v1.7.3: a
+            # deliberate step rather than a tile one tap away.
         ], badges=[e for e in (group.get("mode"), group.get("status")) if e]),
         _section("Overview", "mdi:gauge", [
             _gauge(grid, -3000, 3000, POWER_SEV),
@@ -308,6 +349,9 @@ def cluster_view(
             _markdown(distribution_table(str(group.get("status")), powers)) if group.get("status") else None,
         ]),
         _section("Cluster settings", "mdi:tune", [
+            # v1.7.3: the meter source of a battery cluster, as on a battery.
+            _tile(group.get("meter_source"), icon="mdi:meter-electric-outline", features_position="bottom",
+                  features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
             _control(group.get("clones"), icon="mdi:content-copy"),
             _control(group.get("load_factor"), icon="mdi:multiplication"),
             *(_control(group.get(k)) for k in (
@@ -319,7 +363,8 @@ def cluster_view(
     ]
     return {
         "title": "Cluster",
-        "path": "cluster",
+        "path": cluster_url(virtual),
+        "icon": CLONE_ICON,
         "type": "sections",
         "max_columns": 4,
         "sections": [s for s in sections if s],
@@ -327,9 +372,9 @@ def cluster_view(
 
 
 def battery_view(template: dict[str, Any], args: dict[str, Any], title: str, path: str,
-                 custom_cards: set[str] | None) -> dict[str, Any] | None:
+                 custom_cards: set[str] | None, index: int = 1) -> dict[str, Any] | None:
     """The first page of the battery dashboard for one member of a battery
-    cluster, headed with its name; the tab shows the title, not an icon."""
+    cluster, headed with its name; the tab carries a numbered icon (v1.7.3)."""
     config = build_config(copy.deepcopy(template), custom_cards=custom_cards, card_naming=CARD_NAMING, **args)
     views = config.get("views") or []
     if not views:
@@ -343,6 +388,7 @@ def battery_view(template: dict[str, Any], args: dict[str, Any], title: str, pat
                 break
     view["title"] = title
     view["path"] = path
+    view["icon"] = tab_icon(index)
     return view
 
 
@@ -379,9 +425,10 @@ def clone_view(prefix: str, index: int, name: str, group: dict[str, Any], known:
             _gauge(own("discharge_limit"), 0, 3000),
         ]),
         _section("Copy settings", "mdi:tune-variant", [
-            _control(group.get(f"max_share_clone_{index}"), wide=True, icon="mdi:arrow-collapse-vertical"),
-            _control(group.get(f"soc_offset_{index}"), wide=True, icon="mdi:battery-arrow-up-outline"),
-            _control(group.get(f"response_offset_{index}"), wide=True, icon="mdi:timer-sand"),
+            # Six columns, as every slider elsewhere (v1.7.3).
+            _control(group.get(f"max_share_clone_{index}"), icon="mdi:arrow-collapse-vertical"),
+            _control(group.get(f"soc_offset_{index}"), icon="mdi:battery-arrow-up-outline"),
+            _control(group.get(f"response_offset_{index}"), icon="mdi:timer-sand"),
         ]),
         _section("Measured", "mdi:stethoscope", [
             _tile(response, icon="mdi:timer-outline", features_position="bottom",
@@ -391,6 +438,7 @@ def clone_view(prefix: str, index: int, name: str, group: dict[str, Any], known:
     return {
         "title": name,
         "path": slugify(name) or f"virtual_{index}",
+        "icon": tab_icon(index),
         "type": "sections",
         "max_columns": 4,
         "sections": [s for s in sections if s],
@@ -417,6 +465,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         "real_grid": _entity(registry, "sensor", f"{eid}_virtual_p1_real_grid"),
         "reset": _entity(registry, "button", f"{eid}_reset"),
         "rebuild": _entity(registry, "button", f"{eid}_rebuild_dashboard"),
+        # v1.7.3: the meter the group steers on; a battery cluster only.
+        "meter_source": _entity(registry, "select", f"{eid}_meter_source"),
     }
     for key in ("clones", "load_factor", "soc_offset_1", "soc_offset_2", "soc_offset_3",
                 "response_offset_1", "response_offset_2", "response_offset_3",
@@ -433,6 +483,9 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
 
     def add_battery(battery_entry: ConfigEntry, name: str, grid_name: str | None) -> dict[str, Any]:
         """Power and SoC of a real battery for the Cluster tab, and its grid sensor for the chart."""
+        if store.get(battery_entry.entry_id) is None:
+            # Joining a cluster reloads the battery (v1.7.3).
+            raise MembersNotReady(battery_entry.title)
         args = dashboard_args(hass, battery_entry)
         prefix = args["battery"]
         batteries.append({
@@ -481,7 +534,7 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
                 continue
             args = add_battery(battery_entry, battery_entry.title, None)
             view = battery_view(template, args, battery_entry.title, slugify(battery_entry.title) or "battery",
-                                custom_cards)
+                                custom_cards, index=len(views) + 1)
             if view:
                 views.append(view)
 
@@ -489,11 +542,11 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
     return {"title": cluster_title(virtual), "views": [cluster, *views]}
 
 
-async def _sync_title(collection: Any, title: str) -> None:
+async def _sync_title(collection: Any, title: str, url: str = CLUSTER_URL) -> None:
     """Give the sidebar the title of this kind of cluster on a rebuild. A title
     the user chose stays: only one of the two standard titles is replaced."""
     for item_id, item in list(collection.data.items()):
-        if item.get("url_path") != CLUSTER_URL:
+        if item.get("url_path") != url:
             continue
         if item.get("title") != title and item.get("title") in (CLUSTER_TITLE, VIRTUAL_TITLE):
             await collection.async_update_item(item_id, {"title": title})
@@ -506,27 +559,33 @@ async def async_cluster_dashboard(hass: HomeAssistant, entry: ConfigEntry, repla
         dashboards = _dashboards(hass)
         if dashboards is None:
             return FAILED
-        existing = dashboards.get(CLUSTER_URL)
+        virtual = _is_virtual(entry)
+        url = cluster_url(virtual)
+        existing = dashboards.get(url)
         if existing is not None and not replace:
             return EXISTS
         collection = None if existing is not None else _collection(hass)
         if existing is None and collection is None:
             return FAILED
-        title = cluster_title(_is_virtual(entry))
+        title = cluster_title(virtual)
         template = await hass.async_add_executor_job(_load_template)
-        config = cluster_config(hass, entry, template, await _custom_cards(hass))
+        try:
+            config = cluster_config(hass, entry, template, await _custom_cards(hass))
+        except MembersNotReady as err:
+            _LOGGER.info("Cluster dashboard waits for %s, which is still being set up", err)
+            return NOT_READY
         if existing is not None:
             await existing.async_save(config)
             items = _collection(hass)
             if items is not None:
-                await _sync_title(items, title)
+                await _sync_title(items, title, url)
             result = REPLACED
         else:
             await collection.async_create_item({
-                "url_path": CLUSTER_URL, "title": title, "icon": CLUSTER_ICON,
+                "url_path": url, "title": title, "icon": CLUSTER_ICON,
                 "show_in_sidebar": True, "require_admin": False, "mode": "storage",
             })
-            store = dashboards.get(CLUSTER_URL)
+            store = dashboards.get(url)
             if store is None:
                 return FAILED
             await store.async_save(config)
@@ -534,28 +593,69 @@ async def async_cluster_dashboard(hass: HomeAssistant, entry: ConfigEntry, repla
     except Exception:  # noqa: BLE001 - never let the dashboard break the setup
         _LOGGER.warning("Could not create the Cluster dashboard", exc_info=True)
         return FAILED
-    _notify(hass, result, entry.title, title)
+    _notify(hass, result, entry.title, title, virtual)
     return result
 
 
-def cluster_dashboard_exists(hass: HomeAssistant) -> bool:
-    dashboards = _dashboards(hass)
-    return dashboards is not None and dashboards.get(CLUSTER_URL) is not None
+async def async_rebuild(hass: HomeAssistant, entry: ConfigEntry) -> str:
+    """Rebuild on request — the button or the options of the entry (v1.7.3).
 
-
-async def async_remove_cluster_dashboard(hass: HomeAssistant) -> bool:
-    """Remove the Cluster dashboard and its notification (v1.7.1).
-
-    Called when the last cluster or Virtual cluster goes, so Home Assistant is
-    left as it was before one was added. Edits made to the dashboard go with it.
+    Says so when a battery of the cluster is still being set up.
     """
-    persistent_notification.async_dismiss(hass, CLUSTER_NOTIFICATION)
+    result = await async_cluster_dashboard(hass, entry, replace=True)
+    if result == NOT_READY:
+        virtual = _is_virtual(entry)
+        _notify(hass, result, entry.title, cluster_title(virtual), virtual)
+    return result
+
+
+def cluster_dashboard_exists(hass: HomeAssistant, virtual: bool = False) -> bool:
+    dashboards = _dashboards(hass)
+    return dashboards is not None and dashboards.get(cluster_url(virtual)) is not None
+
+
+def old_virtual_dashboard(hass: HomeAssistant) -> bool:
+    """Whether `/zendure-cluster` is still the Virtual cluster's of v1.7.1/v1.7.2.
+
+    It is when it carries the Virtual title and no battery cluster exists to
+    own it. It is left alone: edits in it are the user's.
+    """
+    has_cluster = any(
+        e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER for e in hass.config_entries.async_entries(DOMAIN)
+    )
+    if has_cluster or not cluster_dashboard_exists(hass, virtual=False):
+        return False
+    collection = _collection(hass)
+    items = collection.data.values() if collection is not None else ()
+    return any(i.get("url_path") == CLUSTER_URL and i.get("title") == VIRTUAL_TITLE for i in items)
+
+
+def notify_old_virtual_dashboard(hass: HomeAssistant) -> None:
+    """Point to the dashboard a Virtual cluster made under v1.7.2."""
+    persistent_notification.async_create(
+        hass,
+        f"The Virtual cluster has a dashboard of its own since v1.7.3: **{VIRTUAL_TITLE}** at "
+        f"`/{VIRTUAL_URL}/{VIRTUAL_URL}`. The one it made before, at `/{CLUSTER_URL}`, is left as it is, "
+        "edits included. Remove it under Settings > Dashboards once you no longer need it.",
+        title=VIRTUAL_TITLE,
+        notification_id=OLD_VIRTUAL_NOTIFICATION,
+    )
+
+
+async def async_remove_cluster_dashboard(hass: HomeAssistant, virtual: bool = False) -> bool:
+    """Remove the dashboard of one kind of cluster and its notification (v1.7.1, per kind v1.7.3).
+
+    Called when the last cluster of that kind goes, so Home Assistant is left
+    as it was before one was added. Edits made to the dashboard go with it.
+    """
+    persistent_notification.async_dismiss(hass, _notification(virtual))
+    url = cluster_url(virtual)
     try:
         collection = _collection(hass)
         if collection is None:
             return False
         for item_id, item in list(collection.data.items()):
-            if item.get("url_path") == CLUSTER_URL:
+            if item.get("url_path") == url:
                 await collection.async_delete_item(item_id)
                 return True
     except Exception:  # noqa: BLE001 - removing an entry must never fail on its dashboard
@@ -565,23 +665,27 @@ async def async_remove_cluster_dashboard(hass: HomeAssistant) -> bool:
 
 def notify_changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """The group changed: offer the rebuild, never do it silently."""
-    if not cluster_dashboard_exists(hass):
+    virtual = _is_virtual(entry)
+    if not cluster_dashboard_exists(hass, virtual):
         return
-    title = cluster_title(_is_virtual(entry))
+    title = cluster_title(virtual)
     persistent_notification.async_create(
         hass,
         f"The batteries of **{entry.title}** changed. To bring the dashboard **{title}** up to date, "
         f"press *Rebuild dashboard* on {entry.title}; it replaces that dashboard, edits included.",
         title=title,
-        notification_id=CLUSTER_NOTIFICATION,
+        notification_id=_notification(virtual),
     )
 
 
-def _notify(hass: HomeAssistant, result: str, name: str, title: str = CLUSTER_TITLE) -> None:
-    if result == CREATED:
+def _notify(hass: HomeAssistant, result: str, name: str, title: str = CLUSTER_TITLE, virtual: bool = False) -> None:
+    if result == NOT_READY:
+        message = (f"A battery of {name} is still being set up, so the dashboard **{title}** was not built. "
+                   "Press *Rebuild dashboard* again in a moment.")
+    elif result == CREATED:
         message = f"The dashboard **{title}** for {name} is in the sidebar: a Cluster tab and a tab per battery."
     elif result == REPLACED:
         message = f"The dashboard **{title}** was rebuilt for {name}. Refresh the browser to see it."
     else:
         return
-    persistent_notification.async_create(hass, message, title=title, notification_id=CLUSTER_NOTIFICATION)
+    persistent_notification.async_create(hass, message, title=title, notification_id=_notification(virtual))

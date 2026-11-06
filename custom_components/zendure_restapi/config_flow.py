@@ -59,6 +59,8 @@ from .const import (
     MIN_SCAN_INTERVAL,
     OPT_CREATE_DASHBOARD,
     OPT_REBUILD_DASHBOARD,
+    OPT_RESET_COPIES,
+    OPT_RESET_SETTINGS,
     OPT_SOLAR_ENERGY,
     OPT_SOLAR_POWER,
     OPT_DASHBOARD_OFFERED,
@@ -329,6 +331,18 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # ── Virtual cluster (v1.7.1) ───────────────────────────────────────────
 
+    def _has_kind(self, kind: str) -> bool:
+        """Whether an entry of this kind exists (v1.7.3).
+
+        A battery cluster and a Virtual cluster exclude each other: the
+        Virtual cluster is a test before buying, and with both a battery
+        could be a member of one and the source of the other, the copies
+        then following a mode the battery does not run.
+        """
+        if self.hass is None:
+            return False
+        return any(e.data.get(CONF_DEVICE_TYPE) == kind for e in self._async_current_entries(include_ignore=False))
+
     async def async_step_virtual_cluster(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -340,6 +354,8 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         await self.async_set_unique_id(VIRTUAL_UNIQUE_ID)
         self._abort_if_unique_id_configured()
+        if self._has_kind(DEVICE_TYPE_CLUSTER):
+            return self.async_abort(reason="cluster_exclusive")
         batteries = self._batteries()
         if not batteries:
             return self.async_abort(reason="no_battery")
@@ -383,7 +399,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_battery_cluster(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Up to four batteries as one system, on any phase (v1.7.2).
+        """Up to six batteries as one system, on any phase (v1.7.2: four; v1.7.3: six).
 
         One field per battery, named after it, with its phase or `none`. The
         phase is a label: several batteries may share one. The
@@ -393,6 +409,8 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         await self.async_set_unique_id(CLUSTER_UNIQUE_ID)
         self._abort_if_unique_id_configured()
+        if self._has_kind(DEVICE_TYPE_VIRTUAL):
+            return self.async_abort(reason="cluster_exclusive")
         batteries = self._batteries()
         if not batteries:
             return self.async_abort(reason="no_battery")
@@ -883,8 +901,8 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @classmethod
     @callback
     def async_supports_options_flow(cls, config_entry: config_entries.ConfigEntry) -> bool:
-        """A Virtual cluster has its settings as entities; nothing to configure."""
-        return config_entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_VIRTUAL
+        """Every entry; a Virtual cluster only to rebuild its dashboard (v1.7.3)."""
+        return True
 
     @staticmethod
     def async_get_options_flow(
@@ -914,6 +932,8 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_price(user_input)
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_CLUSTER:
             return await self.async_step_cluster(user_input)
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
+            return await self.async_step_virtual(user_input)
         if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL:
             if entry.data.get(CONF_METER_PLAN):
                 return await self.async_step_device(user_input)
@@ -969,6 +989,7 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
             if e.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_EXTERNAL
         ]
         if user_input is not None:
+            self._rebuild(user_input)
             return self.async_create_entry(title="", data={**entry.options, **user_input})
         current = entry.options.get(OPT_EXTERNAL_METER) or (
             externals[0].entry_id if len(externals) == 1 else EXTERNAL_NONE
@@ -984,9 +1005,47 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                vol.Optional(OPT_REBUILD_DASHBOARD, default=False): bool,
             }
         )
         return self.async_show_form(step_id="cluster", data_schema=schema)
+
+    def _rebuild(self, user_input: dict[str, Any]) -> None:
+        """Rebuild the cluster dashboard when asked; the tick is not stored (v1.7.3)."""
+        if user_input.pop(OPT_REBUILD_DASHBOARD, False):
+            from .cluster_dashboard import async_rebuild
+
+            self.hass.async_create_task(async_rebuild(self.hass, self.config_entry))
+
+    async def async_step_virtual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Virtual cluster: its settings are entities; here Reset and the dashboard (v1.7.3).
+
+        These are deliberate steps, so they live here and not as tiles on the
+        dashboard. None of the ticks is stored. *Reset settings* (v1.7.3) goes
+        first and at once, so the options this step saves are the reset ones;
+        when it changes the number of copies the entry sets up again and the
+        copies start afresh, so *Reset* then has nothing left to do.
+        """
+        entry = self.config_entry
+        if user_input is not None:
+            vc = self.hass.data.get(DOMAIN, {}).get(entry.entry_id)
+            reset_copies = user_input.pop(OPT_RESET_COPIES, False)
+            reset_settings = user_input.pop(OPT_RESET_SETTINGS, False)
+            starts_again = False
+            if reset_settings and vc is not None and hasattr(vc, "reset_settings"):
+                starts_again = vc.reset_settings()
+            if reset_copies and not starts_again and vc is not None and hasattr(vc, "async_reset"):
+                self.hass.async_create_task(vc.async_reset())
+            self._rebuild(user_input)
+            return self.async_create_entry(title="", data=dict(entry.options))
+        schema = vol.Schema({
+            vol.Optional(OPT_RESET_COPIES, default=False): bool,
+            vol.Optional(OPT_RESET_SETTINGS, default=False): bool,
+            vol.Optional(OPT_REBUILD_DASHBOARD, default=False): bool,
+        })
+        return self.async_show_form(step_id="virtual", data_schema=schema)
 
     async def async_step_price(
         self, user_input: dict[str, Any] | None = None

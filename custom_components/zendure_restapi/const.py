@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.2"
+INTEGRATION_VERSION = "1.7.3"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -232,6 +232,10 @@ OPT_DASHBOARD_OFFERED = "dashboard_offered"
 # A one-off request to replace the existing dashboard with a fresh one (v1.6.6).
 # The user's own edits to it are lost; the options say so.
 OPT_REBUILD_DASHBOARD = "rebuild_dashboard"
+# Reset the copies of a Virtual cluster from its options (v1.7.3); not stored.
+OPT_RESET_COPIES = "reset_copies"
+# Every setting of a Virtual cluster back to its default, from its options (v1.7.3); not stored.
+OPT_RESET_SETTINGS = "reset_settings"
 # Solar from outside the device, for the dashboard only (v1.6.6): a smart plug
 # on a micro inverter, a second inverter. Control needs none of it, the grid
 # meter already sees that power. The dashboard's PV series point at these.
@@ -297,7 +301,7 @@ RETIRED_PRICE_ENTITIES: tuple[tuple[str, str], ...] = (
 )
 
 # ── Battery cluster (v1.7.0) ─────────────────────────────────────────
-# Up to four batteries, on any phase, holding the grid of the whole
+# Up to six batteries, on any phase, holding the grid of the whole
 # connection at zero together (v1.7.2: the phase is a label, several batteries
 # may share one; the group regulates the total, not a phase): one is primary with the loop of a single battery,
 # the others are secondary with fixed limits. An entry of its own with a subentry per
@@ -313,9 +317,11 @@ CONF_MAX_SHARE = "max_share"
 # Option values are lower case (a translation key); shown as L1, L2, L3.
 # A label only: no decision uses it, and several batteries may share one.
 PHASES = ("l1", "l2", "l3")
-# The most batteries one cluster takes (v1.7.2). Until v1.7.1 one per phase,
-# so three; the distribution itself works for any number.
-MAX_MEMBERS = 4
+# The most batteries one cluster takes (v1.7.2: four; v1.7.3: six). Until
+# v1.7.1 one per phase, so three; the distribution itself works for any number.
+# Six at 3 kW is 18 kW, more than a 3 x 25 A connection carries: the load per
+# phase and group is the installation's to keep, not the cluster's.
+MAX_MEMBERS = 6
 DEFAULT_PRIORITY = 5
 OPT_CONCENTRATE_BELOW = "concentrate_below"
 OPT_REDISTRIBUTE = "redistribute_every"
@@ -355,7 +361,7 @@ COORDINATED_KEYS = frozenset({
 # The model lives in sim/.
 DEVICE_TYPE_VIRTUAL = "virtual_cluster"
 VIRTUAL_DEVICE_NAME = "Virtual cluster"
-VIRTUAL_MODEL = "Virtual cluster (test)"
+VIRTUAL_MODEL = "Virtual cluster (simulated)"
 VIRTUAL_UNIQUE_ID = "virtual_cluster"
 CONF_SOURCE_BATTERY = "source_battery"
 OPT_CLONES = "clones"

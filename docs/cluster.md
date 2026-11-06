@@ -1,11 +1,11 @@
 # Battery cluster
 
-The battery cluster lets **up to four Zendure batteries, on any phase**, hold the grid of the whole connection at zero together. Without a cluster nothing changes: one battery steers in a smart mode and a second one reports `blocked`, as before. The same holds while the cluster steers nothing — no battery taking part, or the group in standby or a quick mode.
+The battery cluster lets **up to six Zendure batteries, on any phase**, hold the grid of the whole connection at zero together. Without a cluster nothing changes: one battery steers in a smart mode and a second one reports `blocked`, as before. The same holds while the cluster steers nothing — no battery taking part, or the cluster in standby or a quick mode.
 
 This first version is deliberately simple:
 
 - **One group, on the total of the meter.** Meters in the Netherlands, Belgium and most of Germany add up the three phases; that total is what the cluster holds at zero.
-- **Up to four batteries, on any phase** (v1.7.2). Several batteries may share a phase: the meter measures the total, and the total is what the cluster regulates. The phase is a label for later; no decision uses it. Until v1.7.1 one battery per phase, so three at most.
+- **Up to six batteries, on any phase** (v1.7.3; v1.7.2 four). Several batteries may share a phase: the meter measures the total, and the total is what the cluster regulates. The phase is a label for later; no decision uses it. Until v1.7.1 one battery per phase, so three at most.
 - **Zendure batteries of this integration only.**
 
 Control per phase, limits per phase (fuse protection) and other brands are not in this version (see [Limits of this version](#limits-of-this-version)).
@@ -47,9 +47,9 @@ Zendure SolarFlow 2400 AC+ (…9B12)   [ L2 ▾ ]
 Zendure SolarFlow 800 Plus (…C044)   [ L3 ▾ ]
 ```
 
-Give each battery that takes part the phase it is connected to, or *not taking part*. Several batteries may share a phase; more than four are refused. The serial number tail tells two of the same model apart.
+Give each battery that takes part the phase it is connected to, or *not taking part*. Several batteries may share a phase; more than six are refused. The serial number tail tells two of the same model apart.
 
-**The load per phase is yours to check.** The cluster holds the total at zero and knows nothing of the groups and fuses behind it: four 800 W batteries on one phase put 3.2 kW on that phase, in both directions. Whether a group or the phase can carry that is a matter of the installation, not of this integration.
+**The load per phase is yours to check.** The cluster holds the total at zero and knows nothing of the groups and fuses behind it: four 800 W batteries on one phase put 3.2 kW on that phase, in both directions. Whether a group or the phase can carry that is a matter of the installation, not of this integration. Six batteries at 3 kW are 18 kW together, more than a 3 × 25 A connection carries (about 17 kW): the cluster does not watch that.
 
 After *Submit*:
 
@@ -61,7 +61,7 @@ Later, under the cluster in *Devices & services*:
 
 | Action | What it does |
 |---|---|
-| **Add battery** | a battery that is not in the group yet, on any phase, with Priority and Max share; not when the group has four |
+| **Add battery** | a battery that is not in the group yet, on any phase, with Priority and Max share; not when the group has six |
 | **Reconfigure** (on a battery) | phase, Priority, Max share |
 | **Delete** (on a battery) | the battery leaves the group and stays in standby until you choose a mode |
 | **Configure** (on the cluster) | which external meter the group uses |
@@ -105,22 +105,22 @@ Removing the cluster returns every battery to its own settings, in standby.
 | Redistribute every | number | 10–120 s, default 30 |
 | Meter source | select | as on a battery |
 | Status | sensor | see below; attributes: primary, demand, `grid` (the reading the group steers on), role, direction and limit per battery |
-| Group power | sensor | the AC power of the batteries together, positive while discharging |
-| Group state of charge | sensor | weighted by capacity; attribute `spread` (highest minus lowest) |
-| Batteries taking part | sensor | how many are available; attributes per battery |
-| Rebuild dashboard | button | builds the dashboard *Cluster* again (v1.7.1) |
+| Battery power | sensor | the AC power of the batteries together, positive while discharging; *Group power* until v1.7.2 |
+| State of charge | sensor | weighted by capacity; attribute `spread` (highest minus lowest); *Group state of charge* until v1.7.2 |
 
-The grid reading itself has no sensor of its own here, as on a battery since v1.6.6: use the sensor of the meter, which keeps its history. Like the energy counters since v1.6.7, the cluster's figures are written only when they move: *Status* when the status, the primary or a battery's role or limit changes, *Group power* per 50 W, *Group state of charge* per 0.5 %, and each at most once a minute otherwise. The decision itself is taken every 2 seconds.
+Since v1.7.3 these two are named as on a battery; the device says it is the cluster. On an existing installation their ids move once, history included: `sensor.battery_cluster_group_power` → `sensor.battery_cluster_battery_power`, `sensor.battery_cluster_group_state_of_charge` → `sensor.battery_cluster_state_of_charge`; an id you renamed yourself stays. | Batteries taking part | sensor | how many are available; attributes per battery | | Rebuild dashboard | button | builds the dashboard *Cluster* again (v1.7.1) |
+
+The grid reading itself has no sensor of its own here, as on a battery since v1.6.6: use the sensor of the meter, which keeps its history. Like the energy counters since v1.6.7, the cluster's figures are written only when they move: *Status* when the status, the primary or a battery's role or limit changes, *Battery power* per 50 W, *State of charge* per 0.5 %, and each at most once a minute otherwise. The decision itself is taken every 2 seconds.
 
 **On each battery in the group:**
 
-- *Operation mode* shows `coordinated` and refuses a choice: set the mode on the cluster.
+- *Operation mode* shows `coordinated` and refuses a choice: set the mode on the cluster. **An automation that sets the battery's Operation mode** — a planner, a schedule, Price Control's own — fails while the battery takes part (*Option … is not valid … valid options are: coordinated*) and the battery follows the cluster's mode instead. Point such an automation at the cluster's *Operation mode* (`select.battery_cluster_operation_mode`), or switch *Take part* off: the battery then returns to its own settings in standby and the automation steers it again.
 - *Controller status* shows `secondary` on a secondary; its attributes carry `coordinated_by`, `role` and, for a secondary, `follow_limit`.
 - **Take part** (switch): off takes the battery out of the group for a while, in standby, without deleting its sub-entry — for testing one battery on its own.
 - Meter source, External meter, buffers and start thresholds of the battery are not used while it takes part; their values are kept.
 - A Price Control entry of a battery in the group writes nothing and shows `paused`.
 
-**Dashboard.** Since v1.7.1 the cluster gets the dashboard **Cluster** (`/zendure-cluster`): a *Cluster* tab with the distribution over primary and secondaries (since v1.7.2 in the layout of the battery dashboard: tiles, one status text, gauges, the group's settings as sliders, a chart of today and tomorrow; the distribution with each battery's power, and for the primary *own loop* with the direction it runs), power and state of charge per battery and a 24-hour chart, and a tab per battery, named and headed after the battery, like the first page of the battery dashboard. *Grid at last distribution* on the status card is the reading the last distribution was decided on, once per *Redistribute every*. It is made once, when the cluster is set up and no such dashboard exists; after a battery is added or removed a notification offers *Rebuild dashboard*, which replaces it, edits included. Deleting the last cluster or Virtual cluster removes it. A Virtual cluster gets the dashboard *Virtual Cluster* instead: see [virtual_cluster.md](virtual_cluster.md#dashboard). For a dashboard of your own, a card to paste:
+**Dashboard.** Since v1.7.1 the cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster` since v1.7.3: dashboard and first tab share the name): a *Cluster* tab with the distribution over primary and secondaries (since v1.7.2 in the layout of the battery dashboard: tiles, one status text, gauges, the group's settings as sliders, a chart of today and tomorrow; the distribution with each battery's power, and for the primary *own loop* with the direction it runs), power and state of charge per battery and a 24-hour chart, and a tab per battery, named and headed after the battery, like the first page of the battery dashboard. *Grid at last distribution* on the status card is the reading the last distribution was decided on, once per *Redistribute every*. It is made once, when the cluster is set up and no such dashboard exists (a battery that is reloaded as it joins is waited for, up to a minute, v1.7.3); after a battery is added or removed a notification offers *Rebuild dashboard*, which replaces it, edits included. The button is one of the cluster's configuration entities; since v1.7.3 the same is a tick under *Configure* on the cluster's entry. The Cluster tab shows the version that runs (*Integration*) and, under *Cluster settings*, the *Meter source*. The tabs carry an icon: the Cluster tab the house with a battery of its heading (`mdi:home-battery-outline`), each battery a numbered one (`mdi:numeric-1-box-outline` …), the name as tooltip (v1.7.3). Deleting the last cluster removes it. A Virtual cluster has a dashboard of its own, *Virtual Cluster* at `/virtual-cluster/virtual-cluster` (v1.7.3; until v1.7.2 both shared `/zendure-cluster`): see [virtual_cluster.md](virtual_cluster.md#dashboard). **A battery cluster and a Virtual cluster exclude each other** (v1.7.3): setting up the one is refused while the other exists. For a dashboard of your own, a card to paste:
 
 ```yaml
 type: entities
@@ -129,8 +129,8 @@ entities:
   - select.battery_cluster_operation_mode
   - sensor.battery_cluster_status
   - sensor.zendure_p1_meter_3_phase_grid_power_total   # or the Power sensor of your external meter
-  - sensor.battery_cluster_group_power
-  - sensor.battery_cluster_group_state_of_charge
+  - sensor.battery_cluster_battery_power
+  - sensor.battery_cluster_state_of_charge
   - sensor.battery_cluster_batteries_taking_part
   - number.battery_cluster_concentrate_below
 ```
@@ -164,7 +164,7 @@ entities:
 | In 1.7.x | Later, in a separate product |
 |---|---|
 | the total of the connection | control per phase, and the total and single phases side by side |
-| up to four batteries, on any phase (v1.7.2; until v1.7.1 one per phase) | more than four |
+| up to six batteries, on any phase (v1.7.3; v1.7.2 four; until v1.7.1 one per phase) | more than six |
 | phase entered by hand | phase detection, phase values from the meters |
 | one set of settings for the group | settings per phase group |
 | split by room | split by SOC or by priority |

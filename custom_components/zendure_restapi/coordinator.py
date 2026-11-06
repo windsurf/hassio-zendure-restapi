@@ -61,8 +61,12 @@ WRAP_STEP_MARGIN = 5
 # day (v1.7.2): no poll failed, and the next report holds the same
 # control state as the one before (measured: 154 -> 1, every key equal).
 # That is recorded as a reset, not as a restart. A restart still shows as a
-# gap in the reports, a changed state, or smartMode dropping by itself. A
-# meter has no control state and keeps the old rule.
+# gap in the reports, a changed state, or smartMode dropping by itself.
+# A meter has no control state; for a meter no failed poll is enough (v1.7.3).
+# The Zendure P1 meter starts its messageId again every 15 to 19 hours
+# while its reports keep coming every second, after 54 000 and 68 400 counts,
+# so not a counter of fixed width: it has been seen past 65 535 without turning
+# over. A real restart of a meter polled every second leaves failed polls.
 SOFT_RESET_KEYS = ("acMode", "inputLimit", "outputLimit", "smartMode", "socLimit", "socStatus", "faultLevel")
 CONTROL_KEYS = ("acMode", "inputLimit", "outputLimit", "smartMode")
 SOFT_RESET_SOC_STEP = 1
@@ -231,15 +235,15 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _is_soft_reset(before: dict[str, Any], after: dict[str, Any], unreachable: int | None) -> bool:
         """Whether a drop in messageId left a battery as it was (v1.7.2).
 
-        No poll failed, the device is a battery (it reports a control state),
-        and that state is the same: mode, both limits, smartMode, the SoC
-        limit and status, the fault level; the state of charge moved at most
-        one step.
+        No poll failed, and for a battery (it reports a control state) that
+        state is the same: mode, both limits, smartMode, the SoC limit and
+        status, the fault level; the state of charge moved at most one step.
+        A meter has no control state: no failed poll is enough (v1.7.3).
         """
         if unreachable is not None:
             return False
         if all(after.get(key) is None for key in CONTROL_KEYS):
-            return False
+            return True
         if any(before.get(key) != after.get(key) for key in SOFT_RESET_KEYS):
             return False
         soc_before, soc_after = _as_int(before.get("electricLevel")), _as_int(after.get("electricLevel"))
@@ -256,7 +260,7 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "state": {key: after.get(key) for key in RESTART_KEYS},
         })
         _LOGGER.info(
-            "Zendure device %s started its messageId again (%s -> %s) without a restart; its state is unchanged",
+            "Zendure device %s started its messageId again (%s -> %s) without a restart; no poll failed",
             self.title or self.device_id, before.get("messageId"), after.get("messageId"),
         )
 

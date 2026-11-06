@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.7.2
+# ZENDURE RESTAPI DASHBOARD - v1.7.3
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -32,12 +32,12 @@
 #   three-dot menu -> Raw configuration editor, and replace its
 #   content with everything below this comment block.
 #
-# INVERTER POWER LIMIT (v1.6.10):
+# INVERTER POWER LIMIT (v1.6.10; read-back v1.7.3):
 #   The battery's ceiling for feeding into the grid. Its slider
 #   under Configuration goes up to the value the battery
 #   reports: Home Assistant can lower it, raising it is done in
-#   the Zendure app (Safe power setting). The limit follows the
-#   grid code and the registration with the grid operator.
+#   the Zendure app (Safe power setting). Every change is read
+#   back and noted in the logbook.
 #
 # ENTITY IDS:
 #   Battery  - sensor./number./select./switch./binary_sensor.
@@ -845,6 +845,8 @@ views:
       badges:
       - type: entity
         entity: sensor.external_p1_meter_status
+      - type: entity
+        entity: sensor.external_p1_meter_power
     - type: tile
       entity: select.zendure_solarflow_3000_mix_ac_external_meter
       name:

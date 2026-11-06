@@ -4,7 +4,7 @@
 
 🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
-**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.** Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je accu toe, kies een modus — de accu houdt je netaansluiting op nul, elke seconde: nul op de meter.
+**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.** Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je batterij toe, kies een modus — de batterij houdt je netaansluiting op nul, elke seconde: nul op de meter.
 
 **⚖️ Nul op de meter, elke seconde.** De batterij houdt je netaansluiting op nul (*nul op de meter*, NOM; Engels: *zero export*). Een snelle lus leest je meter elke seconde en corrigeert gelijkmatig aan beide kanten van nul: wat je zonnepanelen aan het net zouden geven gaat de batterij in, en wat het huis uit het net zou halen komt eruit, zonder heen en weer te slingeren. Waarom het loont: een kWh die je teruglevert brengt minder op dan een kWh die je afneemt kost — en zodra salderen stopt, kan terugleveren je zelfs geld kosten. Elke kWh die thuis blijft is de volle inkoopprijs waard.
 
@@ -16,7 +16,7 @@
 
 ![\<afbeelding van het dashboard\>](images/dashboard.png)
 
-*`smart_matching` zet het zonne-overschot in de accu: die laadt met 902 W en de regeling houdt het net binnen 10 W van nul, met de externe meter als stuurmeter. De integratie maakt dit dashboard voor je aan, met nog twee tabbladen: Price Control en History.*
+*`smart_matching` zet het zonne-overschot in de batterij: die laadt met 902 W en de regeling houdt het net binnen 10 W van nul, met de externe meter als stuurmeter. De integratie maakt dit dashboard voor je aan, met nog twee tabbladen: Price Control en History.*
 
 **Snel aan de slag hieronder** · alle details in de [Technische referentie](#-technische-referentie) (Engels)
 
@@ -27,7 +27,7 @@
 | Apparaat | Status |
 |---|---|
 | **SolarFlow 3000 Mix AC+** | ✅ Dagelijks getest door de maker |
-| **SolarFlow 4000 Mix AC+** | ✅ Ondersteund — zelfde platform en accu als de 3000 Mix |
+| **SolarFlow 4000 Mix AC+** | ✅ Ondersteund — zelfde platform en accupack als de 3000 Mix |
 | **SolarFlow 2400 AC** | ✅ Getest door een gebruiker — uitlezen en `smart_matching` bevestigd |
 | **SolarFlow 2400 AC+** | ✅ Getest door een gebruiker — uitlezen met een Zendure Smart Meter 3CT |
 | **SolarFlow 1600 AC+** | ✅ Ondersteund — zelfde AC-gekoppelde opbouw als de 2400 AC |
@@ -41,7 +41,7 @@
 
 ## 🔌 Ondersteunde meters
 
-De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de meter die je al hebt.
+De batterij moet weten wat je huis van het net haalt of terug levert. Gebruik de meter die je al hebt.
 
 | Meter | Status |
 |---|---|
@@ -53,7 +53,7 @@ De accu moet weten wat je huis van het net haalt of terug levert. Gebruik de met
 | **Shelly Pro 3EM** (klemmen op de netaansluiting) | ✅ Getest door een gebruiker als netmeter voor de regeling, één meting per seconde |
 | **Elke meter in Home Assistant** (Shelly, DSMR, SMA, Huawei, Zonneplan, …) | 🧪 Kies het apparaat, de sensoren worden herkend (v1.6.5); regelt alleen als hij elke seconde of twee ververst |
 
-In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de accu hem meteen. HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
+In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies je meter en vul het IP-adres in. Een HomeWizard P1-meter verschijnt vanzelf onder *Ontdekt*. Hij wordt een eigen apparaat met sensoren voor vermogen, status en energie, en omdat de select **Meter source** op `auto` staat, gebruikt de batterij hem meteen. HomeWizard: zet eerst *Lokale API* aan in de HomeWizard Energy-app.
 
 *Niet gelieerd aan HomeWizard, YouLess, everHome of Shelly; dit zijn compatibiliteitsnotities.*
 
@@ -63,18 +63,18 @@ In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe 
 
 ## 💡 Waarom deze integratie
 
-- **100% lokaal.** Praat rechtstreeks met de eigen HTTP-server van de accu op je netwerk. Blijft werken als internet of de Zendure-cloud dat niet doet.
+- **100% lokaal.** Praat rechtstreeks met de eigen HTTP-server van de batterij op je netwerk. Blijft werken als internet of de Zendure-cloud dat niet doet.
 - **Nul-teruglevering, elke seconde.** Een snelle lus volgt je meter elke seconde; een tragere regelt de richting en de veiligheid. Gebouwd en afgesteld op metingen, niet op aannames.
 - **Zeven werkmodi** — van rustig `standby` tot `smart_matching`, alleen laden, alleen ontladen, snel laden/ontladen en handmatig. Stuur ze met de hand, met Price Control of met je eigen automation.
-- **Dynamische tarieven, ingebouwd.** Price Control stuurt de accu op twee vaste prijzen of op een dagplan over de prijzen van vandaag en morgen — zie [Prijssturing](#-prijssturing).
+- **Dynamische tarieven, ingebouwd.** Price Control stuurt de batterij op twee vaste prijzen of op een dagplan over de prijzen van vandaag en morgen — zie [Prijssturing](#-prijssturing).
 - **Ook voor vaste contracten.** Met zonnepanelen en een vaste prijs slaat `smart_matching` alleen al het overschot op voor de avond; prijzen zijn niet nodig.
 - **Blijft werken als het web het laat afweten.** De sturing draait lokaal in je netwerk, zonder cloud. Prijzen kunnen uit EPEX Spot of Nord Pool komen, die doorwerkten terwijl webdiensten offline gingen voor de noodpatches van PHP2Shell, en Price Control houdt bij een storing de laatste prijzen vast (v1.6.9).
 - **Instellingen zijn entiteiten.** Elke instelling overleeft een herstart en is live aan te passen vanaf het dashboard of vanuit een automation. Updates via HACS laten je eigen configuratie met rust.
 - **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — gevonden op je netwerk of toegevoegd op IP-adres, rechtstreeks gelezen, elke seconde, niet via een tragere Home Assistant-sensor. Of elke vermogenssensor die Home Assistant al heeft.
-- **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de accu stopt. Twee accu's vechten nooit om dezelfde meter; elke accu heeft zijn eigen regelaar, meterkeuze en prijssturing.
-- **Laag sluimerverbruik, gemeten.** Geeft de accu terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W (Backup mode `closed`), elk uur dat hij stilstaat.
+- **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de batterij stopt. Twee batterijen vechten nooit om dezelfde meter; elke batterij heeft zijn eigen regelaar, meterkeuze en prijssturing.
+- **Laag sluimerverbruik, gemeten.** Geeft de batterij terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W (Backup mode `closed`), elk uur dat hij stilstaat.
 - **Spaart het flashgeheugen.** De slimme modi schrijven hun limieten naar het werkgeheugen, niet naar flash — tienduizenden schrijfacties per jaar die het apparaat niet slijten.
-- **Laat een volle accu met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
+- **Laat een volle batterij met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
 - **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, laad- en ontlaadrendement als sensoren, en een optionele CSV-trace per seconde voor wie het precies wil weten.
 - **Elke wijziging gemeten vóór de release.** Wijzigingen aan de regellus worden eerst nagespeeld op opgenomen meetreeksen per seconde; de metingen en de correcties op Zendures documentatie staan openbaar in de technische referentie.
 - **Spreekt je taal.** Instelschermen, entiteitsnamen en statussen in het Nederlands, Engels, Duits, Frans, Italiaans, Spaans, Portugees, Pools, Tsjechisch, Zweeds en Deens.
@@ -87,7 +87,7 @@ In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe 
 - voeg **HEMS** toe — dat zet de lokale API aan;
 - zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-Sluit de app daarna af. Controleer het vanuit een browser: `http://<ip-accu>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
+Sluit de app daarna af. Controleer het vanuit een browser: `http://<ip-batterij>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
 
 **2. Installeer via HACS**
 
@@ -97,7 +97,7 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 
 [![Integratie toevoegen](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=zendure_restapi)
 
-**3. Voeg je apparaten toe** Home Assistant vindt de accu en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-accu** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
+**3. Voeg je apparaten toe** Home Assistant vindt de batterij en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-batterij** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
 **Eén regelaar.** Zet uit wat de batterij verder nog stuurt: de eigen sturing van Zendure in de app (ZENKI — *Add to HEMS* uit, of *Custom Mode* zonder regels), een andere integratie, of een Home Assistant-automation die de modus of de limieten van de batterij zet. Twee regelaars op één batterij maken elkaars werk ongedaan; de integratie waarschuwt met de sensor *Tweede regelaar*. Zie [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start) (Engels).
 
@@ -111,7 +111,7 @@ Of: HACS → menu met drie puntjes → Aangepaste repositories → `https://gith
 
 De namen van de modi blijven in elke taal gelijk, zodat automations en documentatie ernaar kunnen verwijzen.
 
-| Modus | Wat de accu doet |
+| Modus | Wat de batterij doet |
 |---|---|
 | `standby` | Niets — stopt één keer en laat het apparaat daarna met rust |
 | `smart_matching` | Laadt bij overschot en ontlaadt bij vraag, en houdt het net op nul |
@@ -130,10 +130,10 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 
 *Het tabblad Price Control: het dagplan voor vandaag en morgen, gemeten tot nu en gepland daarna, welke kwartieren laden en welke ontladen, en de verwachte marge. Met salderen aan volgt de terugleverprijs de afnameprijs.*
 
-Twee manieren om de accu te sturen op een dynamisch tarief, in een eigen apparaat:
+Twee manieren om de batterij te sturen op een dynamisch tarief, in een eigen apparaat:
 
-- **Vaste prijzen** — op of onder een **goedkope prijs** laadt de accu (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen.
-- **Dagplan** (nieuw in v1.6.0) — over de prijzen van vandaag en morgen van [EPEX Spot](https://github.com/mampfes/ha_epex_spot), Nord Pool of de eigen integratie van je leverancier bepaalt het per kwartier of de accu laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de accu; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
+- **Vaste prijzen** — op of onder een **goedkope prijs** laadt de batterij (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie of je eigen.
+- **Dagplan** (nieuw in v1.6.0) — over de prijzen van vandaag en morgen van [EPEX Spot](https://github.com/mampfes/ha_epex_spot), Nord Pool of de eigen integratie van je leverancier bepaalt het per kwartier of de batterij laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de batterij; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
 
 Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,58 per dag** op — evenveel als een volledige energieplanner op dezelfde dagen; de vaste prijzen € 0,21.
 
@@ -148,7 +148,7 @@ Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,
 
 Volledige uitleg, tariefinstellingen voor andere contracten en landen: [Setting up spot prices](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-spot-prices-for-the-day-plan) (Engels).
 
-**Toevoegen:** **Integratie toevoegen → Zendure RestAPI → Prijssturing**, kies de accu en je prijssensor. Het apparaat **Price Control** verschijnt naast je accu; zet het daar aan. Elke instelling is live aan te passen, op dat apparaat of op het tabblad *Price Control* van het dashboard.
+**Toevoegen:** **Integratie toevoegen → Zendure RestAPI → Prijssturing**, kies de batterij en je prijssensor. Het apparaat **Price Control** verschijnt naast je batterij; zet het daar aan. Elke instelling is live aan te passen, op dat apparaat of op het tabblad *Price Control* van het dashboard.
 
 Standaard uit, en hij schrijft de werkmodus alleen als de beslissing verandert, dus een modus die je met de hand zet blijft staan. Stuurt een eigen automation of planner de werkmodus al, laat hem dan uit. Details in de [technische referentie](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Engels).
 
@@ -180,10 +180,10 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 - [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) en [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
 - [Debug logging en de voorbeeldtrace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
 - [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
-- [Accucluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — tot vier accu's, op elke fase, als één systeem (Engels)
+- [Batterijcluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — tot zes batterijen, op elke fase, als één systeem (Engels)
 - [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
 
-**Laatste release – v1.7.2:** een accucluster neemt tot vier accu's, ook meerdere op één fase; een virtueel cluster krijgt een Max share per kopie en kopieën die gelijk oplopen met je accu, en het clusterdashboard krijgt de opbouw van het accudashboard, met sliders en een grafiek van vandaag en morgen; geen valse herstartmelding meer als de accu zijn `messageId` opnieuw begint terwijl hij gewoon doorwerkt; de kopieën van een virtueel cluster starten rond de SoC van je accu en houden hun offsets. **v1.7.1:** een **virtueel cluster** — tot drie kopieën van je accu onder een eigen cluster, met een virtuele P1, om te zien hoe een cluster in jouw huis zou regelen zonder een tweede accu te kopen; er wordt niets naar de echte accu geschreven. Een **clusterdashboard** met een tabblad Cluster en een tabblad per accu; voor het virtuele cluster *Virtual Cluster*, met een tabblad per kopie. **v1.7.0:** een **accucluster**: tot drie accu's, één per fase, houden samen het net op nul — één is primary, de andere secondary; één accu werkt als voorheen.
+**Laatste release – v1.7.3:** een batterijcluster neemt tot zes batterijen; wijzigingen van instellingen die de batterij bewaart, zoals de Inverter power limit, worden teruggelezen en in het logboek gezet; een batterijcluster en een virtueel cluster krijgen elk een eigen dashboard, met genummerde tabs; de entiteiten van een virtueel cluster krijgen duidelijkere namen, de instellingen van een kopie op het eigen apparaat. **v1.7.2:** een batterijcluster neemt tot vier batterijen, ook meerdere op één fase; een virtueel cluster krijgt een Max share per kopie en kopieën die gelijk oplopen met je batterij, en het clusterdashboard krijgt de opbouw van het batterijdashboard, met sliders en een grafiek van vandaag en morgen; geen valse herstartmelding meer als de batterij zijn `messageId` opnieuw begint terwijl hij gewoon doorwerkt; de kopieën van een virtueel cluster starten rond de SoC van je batterij en houden hun offsets. **v1.7.1:** een **virtueel cluster** — tot drie kopieën van je batterij onder een eigen cluster, met een virtuele P1, om te zien hoe een cluster in jouw huis zou regelen zonder een tweede batterij te kopen; er wordt niets naar de echte batterij geschreven. Een **clusterdashboard** met een tabblad Cluster en een tabblad per batterij; voor het virtuele cluster *Virtual Cluster*, met een tabblad per kopie. **v1.7.0:** een **batterijcluster**: tot drie batterijen, één per fase, houden samen het net op nul — één is primary, de andere secondary; één batterij werkt als voorheen.
 
 <a id="meer"></a>
 

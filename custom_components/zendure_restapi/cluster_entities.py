@@ -35,6 +35,7 @@ from .const import (
     CLUSTER_MODES,
     CLUSTER_STATUSES,
     DOMAIN,
+    INTEGRATION_VERSION,
     METER_SOURCES,
     OPT_CHARGE_BUFFER,
     OPT_CONCENTRATE_BELOW,
@@ -97,17 +98,23 @@ STATUS_DESCRIPTION = SensorEntityDescription(
     device_class=SensorDeviceClass.ENUM, options=list(CLUSTER_STATUSES), icon="mdi:battery-sync",
 )
 POWER_DESCRIPTION = SensorEntityDescription(
-    key="group_power", name="Group power", native_unit_of_measurement=UnitOfPower.WATT,
+    key="group_power", name="Battery power", native_unit_of_measurement=UnitOfPower.WATT,
     device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT, icon="mdi:home-battery",
 )
 SOC_DESCRIPTION = SensorEntityDescription(
-    key="group_state_of_charge", name="Group state of charge", native_unit_of_measurement=PERCENTAGE,
+    key="group_state_of_charge", name="State of charge", native_unit_of_measurement=PERCENTAGE,
     device_class=SensorDeviceClass.BATTERY, state_class=SensorStateClass.MEASUREMENT,
 )
 REBUILD_DESCRIPTION = ButtonEntityDescription(
     key="rebuild_dashboard", name="Rebuild dashboard", icon="mdi:view-dashboard-edit-outline",
     entity_category=EntityCategory.CONFIG,
 )
+# Since v1.7.3 the power and state of charge of the cluster are named as on a
+# battery, Battery power and State of charge; the device says it is the
+# cluster. Until v1.7.2 Group power and Group state of charge: the keys, and so
+# the unique ids, stay; migrate_group_ids() moves the entity ids once.
+GROUP_ID_TAILS = {"_group_power": "_battery_power", "_group_state_of_charge": "_state_of_charge"}
+
 MEMBERS_DESCRIPTION = SensorEntityDescription(
     key="members", name="Batteries taking part", state_class=SensorStateClass.MEASUREMENT,
     icon="mdi:battery-sync-outline",
@@ -223,6 +230,8 @@ class ClusterStatus(ClusterEntity, SensorEntity):
 
     _signature: Any = None
     _written_at = 0.0
+    # The version is for the dashboard tile, not for the history (v1.7.3).
+    _unrecorded_attributes = frozenset({"integration_version"})
 
     def _due(self) -> bool:
         attributes = self._cluster.attributes
@@ -239,7 +248,7 @@ class ClusterStatus(ClusterEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return self._cluster.attributes
+        return {**self._cluster.attributes, "integration_version": INTEGRATION_VERSION}
 
 
 class ClusterValue(ClusterEntity, SensorEntity):
@@ -284,6 +293,34 @@ class RebuildButton(ClusterEntity, ButtonEntity):
         self._entry = entry
 
     async def async_press(self) -> None:
-        from .cluster_dashboard import async_cluster_dashboard
 
-        await async_cluster_dashboard(self.hass, self._entry, replace=True)
+        from .cluster_dashboard import async_rebuild
+
+        await async_rebuild(self.hass, self._entry)
+
+
+def migrate_group_ids(hass: HomeAssistant, entry: ConfigEntry) -> int:
+    """sensor.…_group_power → …_battery_power, …_group_state_of_charge → …_state_of_charge (v1.7.3).
+
+    For a battery cluster and a Virtual cluster alike, once: only an id that
+    still ends in the old name and whose new id is free. The recorder carries
+    the history to the new id.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    moved = 0
+    for key, tail in (("group_power", "_group_power"), ("group_state_of_charge", "_group_state_of_charge")):
+        current = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{key}")
+        if current is None or not current.endswith(tail):
+            continue
+        wanted = current[: -len(tail)] + GROUP_ID_TAILS[tail]
+        if registry.async_is_registered(wanted) or hass.states.get(wanted) is not None:
+            _LOGGER.warning("Not renaming %s: %s is already in use", current, wanted)
+            continue
+        registry.async_update_entity(current, new_entity_id=wanted)
+        moved += 1
+    if moved:
+        _LOGGER.info("%s: renamed %d entity ids to Battery power / State of charge (v1.7.3); history is kept",
+                     entry.title, moved)
+    return moved
