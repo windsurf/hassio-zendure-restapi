@@ -488,7 +488,7 @@ def notify(hass: HomeAssistant, result: str, battery: str) -> None:
     elif result == EXISTS:
         message = (
             f"A dashboard at `/{DASHBOARD_URL}` already exists and was left as it is. "
-            "To rebuild it, tick *Replace the existing dashboard* in the battery's options."
+            "To rebuild it, tick *Rebuild dashboard* in the battery's options."
         )
     else:
         message = (

@@ -138,12 +138,13 @@
           "scan_interval": "Sekundy między odpytaniami (1-60)",
           "solar_power_entity": "Moc solarna spoza magazynu (opcjonalnie, dla pulpitu)",
           "solar_energy_entity": "Energia solarna spoza magazynu (opcjonalnie, dla pulpitu)",
-          "create_dashboard": "Utwórz pulpit Zendure RestAPI (istniejący pozostaje bez zmian)",
-          "rebuild_dashboard": "Zastąp istniejący pulpit nowym (twoje zmiany zostaną utracone)"
+          "reset_settings": "Przywróć ustawienia: ustawienia regulacji do wartości domyślnych",
+          "rebuild_dashboard": "Odbuduj pulpit (twoje zmiany zostaną utracone)"
         },
         "data_description": {
           "solar_power_entity": "Inteligentne gniazdko przy mikrofalowniku lub drugi falownik. Serie PV pulpitu pokazują je: zamiast własnego PV magazynu, gdy nie jest używane, w przeciwnym razie obok. Sterowanie go nie potrzebuje, licznik sieciowy już widzi tę moc.",
-          "solar_energy_entity": "Jego licznik kWh, dla sum dziennych na karcie History."
+          "solar_energy_entity": "Jego licznik kWh, dla sum dziennych na karcie History.",
+          "reset_settings": "Bufory i progi startu 5 W, Zatrzymaj ładowanie poniżej 50 W, Zatrzymaj rozładowanie poniżej 50 W, Zatrzymaj po 30 s, Uruchom po 30 s, min. moc ładowania i rozładowania 0 W, Próg trybu 10 W, Próg korekty 40 W, siła korekty 80 %, Opóźnienie zmiany kierunku 10 s. Operation mode, maks. moc ładowania i rozładowania, ochrona SOC, licznik i Price Control pozostają bez zmian. W klastrze obowiązują ustawienia grupy."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "Tryb pracy, bufory, progi i źródło licznika są encjami klastra. Akumulatory są jego podwpisami.",
         "data": {
           "external_meter": "Licznik zewnętrzny",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Odbuduj pulpit (twoje zmiany zostaną utracone)"
         }
       },
       "virtual": {
         "title": "Virtual cluster",
         "description": "Copies, offsets, Max share and the group settings are entities of the Virtual cluster and its copies.",
         "data": {
-          "reset_copies": "Reset: every copy still and started again around your battery's state of charge",
+          "reset_copies": "Resetuj kopie: każda kopia zatrzymuje się i startuje ponownie wokół stanu naładowania twojej baterii",
           "reset_settings": "Reset settings: every setting of the Virtual cluster and its copies back to its default",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Odbuduj pulpit (twoje zmiany zostaną utracone)"
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, and the buffers, start thresholds, Concentrate below and Redistribute every as in a new cluster. The copies keep running; tick Reset as well to start them with the new offsets. Your own battery and Price Control are not touched."
+          "reset_settings": "Kopie 3, Load factor 1, przesunięcia SoC 0 / -20 / 15 %, dodatkowy czas reakcji 0 / 1 / 3 s, Max share 0, Operation mode Follow source, bufory i progi startu 5 W, Zatrzymaj ładowanie poniżej 50 W, Zatrzymaj rozładowanie poniżej 50 W, Zatrzymaj po 30 s, Uruchom po 30 s, Concentrate below 300 W, Redistribute every 30 s. Kopie działają dalej; zaznacz też Resetuj kopie, aby uruchomić je z nowymi przesunięciami. Twoja własna bateria i Price Control pozostają bez zmian."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Utracone zapisy"
       },
+      "skipped_peaks": {
+        "name": "Pominięte szczyty"
+      },
+      "relay_switches": {
+        "name": "Przełączenia przekaźnika"
+      },
       "group_power": {
         "name": "Moc baterii"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Rozładowuj od poboru"
       },
+      "stop_charge_below": {
+        "name": "Zatrzymaj ładowanie poniżej"
+      },
+      "stop_discharge_below": {
+        "name": "Zatrzymaj rozładowanie poniżej"
+      },
+      "stop_after": {
+        "name": "Zatrzymaj po"
+      },
+      "start_after": {
+        "name": "Uruchom po"
+      },
       "trim_factor": {
         "name": "Siła korekty"
       },
@@ -893,7 +912,7 @@
         "name": "Reset"
       },
       "rebuild_dashboard": {
-        "name": "Rebuild dashboard"
+        "name": "Odbuduj pulpit"
       }
     }
   },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} uruchomił się ponownie z limitem",
-      "description": "Po ponownym uruchomieniu (aktualizacja firmware lub zanik zasilania) {device} wrócił z limitami, które sam ostatnio zapisał: ładowanie {input} W, rozładowanie {output} W, podczas gdy Operation mode jest ustawiony na standby. Integracja nic nie zapisuje po ponownym uruchomieniu, bo aktualizacja może jeszcze trwać. Gdy się zakończy, wybierz ponownie standby: polecenie standby zostanie wysłane ponownie i bateria się zatrzyma. Ten komunikat zniknie sam, gdy oba limity będą równe 0 lub zostanie wybrany inny tryb."
+      "description": "Po ponownym uruchomieniu (aktualizacja firmware lub zanik zasilania) {device} wrócił z limitami, które sam ostatnio zapisał: ładowanie {input} W, rozładowanie {output} W, podczas gdy Operation mode jest ustawiony na standby. To nie są limity zapisane przez tę integrację od uruchomienia Home Assistant, może ustawiono je ręcznie, więc ich nie zmienia; własne limity przywróciłaby sama. Aby zatrzymać baterię, wybierz ponownie standby: polecenie standby zostanie wysłane ponownie i bateria się zatrzyma. Ten komunikat zniknie sam, gdy oba limity będą równe 0 lub zostanie wybrany inny tryb."
     },
     "new_property": {
       "title": "{device} zgłasza nowe właściwości",

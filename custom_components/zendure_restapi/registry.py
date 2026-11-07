@@ -120,8 +120,8 @@ def is_known_model(token: str | None) -> bool:
 # letter of the serial identifies the family, and in two cases a second
 # character or packType is needed to tell packs apart that share a prefix.
 #
-# The table follows Zendure's own integration (MIT licence),
-# devices/device.py ZendureBattery.get_battery_type, as of
+# The table follows Zendure's own integration Zendure-HA (MIT licence,
+# Copyright (c) 2024 peteS-UK; see NOTICE), device.py get_battery_type, as of
 # October 2026. Verified here on one point only: a 3000 Mix AC+ reports a
 # serial starting with B and packType 70 for its internal 8 kWh pack.
 # Everything else is taken on Zendure's word.

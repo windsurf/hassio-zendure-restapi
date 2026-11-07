@@ -115,7 +115,7 @@ async def async_setup_entry(
         async_add_entities(cluster_entities(Platform.SELECT, hass, entry))
         return
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
-        from .sim.entities import virtual_entities
+        from .virtual.entities import virtual_entities
 
         async_add_entities(virtual_entities(Platform.SELECT, hass, entry))
         return

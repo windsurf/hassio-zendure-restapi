@@ -356,6 +356,7 @@ def cluster_view(
             _control(group.get("load_factor"), icon="mdi:multiplication"),
             *(_control(group.get(k)) for k in (
                 "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
+                "stop_charge_below", "stop_discharge_below", "stop_after", "start_after",
                 "concentrate_below", "redistribute_every",
             )),
         ]),
@@ -471,7 +472,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
     for key in ("clones", "load_factor", "soc_offset_1", "soc_offset_2", "soc_offset_3",
                 "response_offset_1", "response_offset_2", "response_offset_3",
                 "max_share_clone_1", "max_share_clone_2", "max_share_clone_3", "charge_buffer", "discharge_buffer",
-                "start_charge_at", "start_discharge_at", "concentrate_below", "redistribute_every"):
+                "start_charge_at", "start_discharge_at", "stop_charge_below", "stop_discharge_below",
+                "stop_after", "start_after", "concentrate_below", "redistribute_every"):
         group[key] = _entity(registry, "number", f"{eid}_{key}")
 
     views: list[dict[str, Any]] = []

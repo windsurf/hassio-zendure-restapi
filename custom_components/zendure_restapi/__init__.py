@@ -107,6 +107,7 @@ from .const import (
     OPT_DISCHARGE_BUFFER,
     OPT_OPERATION_MODE,
     OPT_REDISTRIBUTE,
+    OPT_START_AFTER,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     SIGNAL_CLUSTER,
@@ -311,6 +312,7 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             start_discharge_at=settings.get_int(OPT_START_DISCHARGE_AT),
             concentrate_below=settings.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=settings.get_int(OPT_REDISTRIBUTE),
+            start_after=settings.get_int(OPT_START_AFTER),
         )
 
     signal = f"{SIGNAL_CLUSTER}_{entry.entry_id}"
@@ -364,7 +366,7 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """A Virtual cluster: copies of a real battery, writing nothing real (v1.7.1)."""
     # Imported here: the model is loaded only when a Virtual cluster exists.
-    from .sim.cluster import VirtualCluster
+    from .virtual.cluster import VirtualCluster
 
     vc = VirtualCluster(hass, entry)
     if not vc.source_ready():
@@ -373,7 +375,7 @@ async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = vc
     # The names of v1.7.3, before the entities come up under them.
     from .cluster_entities import migrate_group_ids
-    from .sim.entities import migrate_entity_ids
+    from .virtual.entities import migrate_entity_ids
 
     migrate_entity_ids(hass, entry, vc.clones)
     migrate_group_ids(hass, entry)
@@ -436,7 +438,7 @@ def _remove_extra_clones(hass: HomeAssistant, entry: ConfigEntry, vc: Any) -> No
     """Fewer clones than before: their entities and devices go from the registries."""
     from .compat import device_by_identifier
     from .const import MAX_CLONES
-    from .sim.entities import copy_setting_unique_ids
+    from .virtual.entities import copy_setting_unique_ids
 
     tail = entry.entry_id[-6:].upper()
     registry = er.async_get(hass)

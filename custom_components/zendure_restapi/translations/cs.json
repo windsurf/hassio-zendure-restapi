@@ -138,12 +138,13 @@
           "scan_interval": "Sekundy mezi dotazy (1-60)",
           "solar_power_entity": "Solární výkon mimo baterii (volitelné, pro nástěnku)",
           "solar_energy_entity": "Solární energie mimo baterii (volitelné, pro nástěnku)",
-          "create_dashboard": "Vytvořit řídicí panel Zendure RestAPI (existující zůstane beze změny)",
-          "rebuild_dashboard": "Nahradit stávající nástěnku novou (vaše úpravy se ztratí)"
+          "reset_settings": "Obnovit nastavení: nastavení regulace zpět na výchozí hodnoty",
+          "rebuild_dashboard": "Znovu sestavit nástěnku (vaše úpravy se ztratí)"
         },
         "data_description": {
           "solar_power_entity": "Chytrá zásuvka na mikroměniči nebo druhý měnič. Řady PV na nástěnce ji ukazují: místo vlastního PV baterie, pokud se nepoužívá, jinak vedle něj. Řízení ji nepotřebuje, síťový elektroměr tento výkon už vidí.",
-          "solar_energy_entity": "Její počítadlo kWh, pro denní součty na kartě History."
+          "solar_energy_entity": "Její počítadlo kWh, pro denní součty na kartě History.",
+          "reset_settings": "Rezervy a prahy spuštění 5 W, Zastavit nabíjení pod 50 W, Zastavit vybíjení pod 50 W, Zastavit po 30 s, Spustit po 30 s, Min. nabíjecí a vybíjecí výkon 0 W, Práh režimu 10 W, Práh korekce 40 W, síla korekce 80 %, Prodleva změny směru 10 s. Operation mode, Max. nabíjecí a vybíjecí výkon, ochrana SOC, měřič a Price Control zůstávají beze změny. V clusteru platí nastavení skupiny."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "Provozní režim, buffery, prahy a zdroj měřiče jsou entity clusteru. Baterie jsou jeho podpoložky.",
         "data": {
           "external_meter": "Externí měřič",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Znovu sestavit nástěnku (vaše úpravy se ztratí)"
         }
       },
       "virtual": {
         "title": "Virtual cluster",
         "description": "Copies, offsets, Max share and the group settings are entities of the Virtual cluster and its copies.",
         "data": {
-          "reset_copies": "Reset: every copy still and started again around your battery's state of charge",
+          "reset_copies": "Resetovat kopie: každá kopie se zastaví a znovu spustí kolem stavu nabití vaší baterie",
           "reset_settings": "Reset settings: every setting of the Virtual cluster and its copies back to its default",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Znovu sestavit nástěnku (vaše úpravy se ztratí)"
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, and the buffers, start thresholds, Concentrate below and Redistribute every as in a new cluster. The copies keep running; tick Reset as well to start them with the new offsets. Your own battery and Price Control are not touched."
+          "reset_settings": "Kopie 3, Load factor 1, odchylky SoC 0 / -20 / 15 %, dodatečná doba odezvy 0 / 1 / 3 s, Max share 0, Operation mode Follow source, rezervy a prahy spuštění 5 W, Zastavit nabíjení pod 50 W, Zastavit vybíjení pod 50 W, Zastavit po 30 s, Spustit po 30 s, Concentrate below 300 W, Redistribute every 30 s. Kopie běží dál; zaškrtněte také Resetovat kopie, aby se spustily s novými odchylkami. Vaše vlastní baterie a Price Control zůstávají beze změny."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Ztracené zápisy"
       },
+      "skipped_peaks": {
+        "name": "Přeskočené špičky"
+      },
+      "relay_switches": {
+        "name": "Sepnutí relé"
+      },
       "group_power": {
         "name": "Výkon baterie"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Vybíjet od odběru"
       },
+      "stop_charge_below": {
+        "name": "Zastavit nabíjení pod"
+      },
+      "stop_discharge_below": {
+        "name": "Zastavit vybíjení pod"
+      },
+      "stop_after": {
+        "name": "Zastavit po"
+      },
+      "start_after": {
+        "name": "Spustit po"
+      },
       "trim_factor": {
         "name": "Síla korekce"
       },
@@ -893,7 +912,7 @@
         "name": "Reset"
       },
       "rebuild_dashboard": {
-        "name": "Rebuild dashboard"
+        "name": "Znovu sestavit nástěnku"
       }
     }
   },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} se restartoval s limitem",
-      "description": "Po restartu (aktualizace firmwaru nebo výpadek proudu) se {device} vrátil s limity, které si naposledy sám uložil: nabíjení {input} W, vybíjení {output} W, zatímco Operation mode je ve standby. Integrace po restartu nic nezapisuje, protože aktualizace může ještě probíhat. Až skončí, zvolte znovu standby: příkaz standby se odešle znovu a baterie se zastaví. Tato zpráva zmizí sama, jakmile budou oba limity 0 nebo bude zvolen jiný režim."
+      "description": "Po restartu (aktualizace firmwaru nebo výpadek proudu) se {device} vrátil s limity, které si naposledy sám uložil: nabíjení {input} W, vybíjení {output} W, zatímco Operation mode je ve standby. Nejsou to limity, které tato integrace sama zapsala od spuštění Home Assistant, možná byly nastaveny ručně, proto je nechává být; své vlastní limity by vrátila sama. Chcete-li baterii zastavit, zvolte znovu standby: příkaz standby se odešle znovu a baterie se zastaví. Tato zpráva zmizí sama, jakmile budou oba limity 0 nebo bude zvolen jiný režim."
     },
     "new_property": {
       "title": "{device} hlásí nové vlastnosti",

@@ -111,6 +111,9 @@ class GroupSettings:
     start_discharge_at: int
     concentrate_below: int
     redistribute_s: int
+    # Seconds the demand stays above Concentrate below before a secondary is
+    # added (v1.7.4); 0 adds them at the first split, as before.
+    start_after: int = 0
 
 
 class Member(Protocol):

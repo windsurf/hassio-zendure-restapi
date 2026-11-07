@@ -37,11 +37,14 @@ The model of the device copies your battery's report once — product, firmware,
 | From standstill, full power after the first | ~2 s (1500 W/s; since v1.7.2, before 200 W/s) |
 | A running battery changes its power at | 200 W/s |
 | A stop is complete after | ~3 s |
-| Conversion, both ways | 95 % |
+| Conversion, discharging | a fixed ~33 W plus 2.7 %: cells = 1.027 × AC + 32.9 W (since v1.7.4; before, 95 % both ways) — 37 W of loss at 150 W, ~111 W at 3 kW |
+| Conversion, charging | cells = 0.967 × AC − 44 W (since v1.7.4): 2856 W into the cells at 3 kW as measured; the fixed ~44 W from a second, independent series on the same model (at 50 W AC next to nothing reaches the pack, measured on the DC side) — 41 % stored at 80 W, 53 % at 100 W |
 | Draw at rest | 29 W with smartMode 1, 5 W with 0 |
 | Energy per percent, discharging | the usable capacity measured on your battery over the range it was measured on (e.g. 7.97 kWh over 100 → 5 %: 84 Wh) |
 | Energy per percent, charging | that divided by the measured round trip efficiency of the cells (0.96: 87.5 Wh) |
 | Without measurements | the nominal pack capacity over 100 %, both ways |
+
+**Why the fixed part matters** (v1.7.4). With one 95 % a copy lost about 8 W at 150 W, a quarter of what the real inverter loses there. A night at the base load drained a copy far too slowly, so the Virtual cluster could not show what stopping at low demand or concentrating saves. Since v1.7.4 a copy at 150 W draws about 187 W from its cells, as your battery does; the grid figures of the Virtual cluster do not change, only how fast a copy's state of charge falls or rises. The measurements are of a SolarFlow 3000 Mix AC+; another model may have another fixed part.
 
 Since v1.7.2 the copies follow your battery's state of charge in step. Measured with `follow_source`: before, a copy ran 8 % fast charging and 4 % fast discharging, so it was full about 13 minutes early over a whole charge; a copy also reached full power in a quick mode some 15 s after your battery did. *Virtual cluster start* in the log and the diagnostics show which energy per percent the copies use (`measured` or `nominal`).
 
@@ -76,11 +79,12 @@ On the device *Virtual cluster*, and per copy on the copy's own device (*Virtual
 | *Virtual copy n* SoC offset (copy 1 / 2 / 3) | −50 … +50 % | 0 / −20 / +15 | applied at the start and at *Reset* only; only the differences count, since the set is centred on your battery (v1.7.2, see [Where the copies start](#where-the-copies-start)); copy 1 since v1.7.2 |
 | *Virtual copy n* Extra response time (copy 1 / 2 / 3) | 0–10 s, step 0.5 | 0 / 1 / 3 s | a write is in that copy this much later than the measured 1.8 s, as another unit or firmware might answer; applies at once; copy 1 since v1.7.2. With both offsets of copy 1 at 0 it is the twin of your battery |
 | *Virtual copy n* Max share (copy 1 / 2 / 3) | 0–5000 W, step 50 | 0 | the most that copy gives or takes in the group, as *Max share* on a battery under a real cluster; 0 is its own maximum; applies at once, in every mode — also quick and `follow_source`, so leave it at 0 to compare a copy with your battery (v1.7.2) |
-| Reset | button, and since v1.7.3 a tick under *Configure* | | every copy still, both limits 0, the copies started again around your battery's state of charge of that moment |
+| Reset copies | button *Reset*, and since v1.7.3 a tick under *Configure* (*Reset copies* since v1.7.4) | | every copy still, both limits 0, the copies started again around your battery's state of charge of that moment |
 | Charge/Discharge buffer, Start discharging at import, Start charging at export | as on a battery | your battery's | |
+| Stop charging below, Stop discharging below, Stop after, Start after | 0–500 W; 10–120 s (v1.7.4) | 50 W, 50 W, 30 s, 30 s | capped at *Concentrate below*, as on a battery cluster; *Start after* also holds the secondaries back on a short peak (see [Peaks](cluster.md#how-it-regulates)) |
 | Concentrate below, Redistribute every | as on the cluster | 300 W, 30 s | |
 | Rebuild dashboard | button, and since v1.7.3 a tick under *Configure* | | builds *Virtual Cluster* again |
-| Reset settings | tick under *Configure* (v1.7.3), not stored | | every setting above and on the copies back to its default: Copies 3, Load factor 1, the offsets, response times and Max share of the table, Operation mode *Follow source*, buffers, start thresholds, *Concentrate below* and *Redistribute every*; your battery and Price Control are not touched; the copies keep running, tick *Reset* as well to start them with the new offsets |
+| Reset settings | tick under *Configure* (v1.7.3), not stored | | every setting above and on the copies back to its default: Copies 3, Load factor 1, the offsets, response times and Max share of the table, Operation mode *Follow source*, buffers, start thresholds, stop limits, *Stop after* and *Start after*, *Concentrate below* and *Redistribute every*; your battery and Price Control are not touched; the copies keep running, tick *Reset copies* as well to start them with the new offsets |
 
 Since v1.7.3 neither is a tile on the dashboard (and *Reset settings*, next to them, is a tick only): *Reset* and *Rebuild dashboard* are ticks under *Configure* on the Virtual cluster's entry, a deliberate step rather than a tap away. The two buttons remain as entities, for an automation of your own.
 
@@ -150,7 +154,8 @@ Made once. After another number of copies a notification offers *Rebuild dashboa
 3. **The split under load.** Copies 3, Load factor 3: each copy gets about what your battery gets now. Splits, redistributions, direction changes and load drops with running secondaries come up all the time.
 4. **All three at a low load.** The primary keeps 60 % of its own maximum before the others get a share, so with copies of a 3 kW battery the secondaries hardly ever run at a normal house load. Set *Concentrate below* to 0 and *Max share clone 1* to, say, 300 W: the primary keeps 180 W and the rest is split over copies 2 and 3. Not what a real cluster would do for its yield, but it shows the split all day (v1.7.2).
 5. **State of charge.** Large offsets, for example −40 and +35: a secondary that is empty or full early.
-6. *Reset* between runs, so a run can be repeated.
+6. *Reset copies* between runs, so a run can be repeated.
+7. **Peaks and low load** (v1.7.4). A night at your base load shows two things of the copies' model: a primary that stops below *Stop discharging below* and rests, and short peaks that the primary covers alone while the secondaries wait *Start after*. Raise *Stop discharging below* just above your base load to see the stops; set *Start after* to 0 to see the secondaries join every peak, as before v1.7.4. What concentrating saves follows from the fixed loss of about 33 W per converting inverter; see [Why concentrate at all](cluster.md#how-it-regulates).
 
 The day of a test is not a different day for your battery: its energy, its logger and its daily result are what they would have been.
 

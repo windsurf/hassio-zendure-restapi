@@ -36,6 +36,9 @@ def group() -> dict:
     for key, object_id in (("clones", "copies"), ("load_factor", "load_factor"), ("charge_buffer", "charge_buffer"),
                            ("discharge_buffer", "discharge_buffer"), ("start_charge_at", "start_charging_at_export"),
                            ("start_discharge_at", "start_discharging_at_import"),
+                           ("stop_charge_below", "stop_charging_below"),
+                           ("stop_discharge_below", "stop_discharging_below"), ("stop_after", "stop_after"),
+                           ("start_after", "start_after"),
                            ("concentrate_below", "concentrate_below"), ("redistribute_every", "redistribute_every")):
         g[key] = f"number.virtual_cluster_{object_id}"
     # The settings of each copy, on the copy's device (v1.7.3).
@@ -237,3 +240,16 @@ def test_reset_and_rebuild_are_not_on_the_dashboard():
     # Under Configure since v1.7.3: a deliberate step, not a tile.
     body = text(virtual_views()[0])
     assert "button.virtual_cluster_reset" not in body and "button.virtual_cluster_rebuild_dashboard" not in body
+
+
+def test_the_sample_file_is_what_the_integration_builds():
+    # dashboard/virtual_cluster.yaml (v1.7.4) is the reference of the layout: it
+    # must not drift from the code that builds the dashboard.
+    from pathlib import Path
+
+    import yaml
+
+    path = Path(__file__).resolve().parent.parent / "dashboard" / "virtual_cluster.yaml"
+    sample = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert sample["title"] == CD.cluster_title(True)
+    assert sample["views"] == json.loads(json.dumps(virtual_views()))

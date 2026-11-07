@@ -60,6 +60,11 @@ QUICK_REACT_S = 10.0
 MIN_GAP_S = 15.0
 # The primary is "at its cap" within this of it, and "at nothing" below this.
 CAP_MARGIN_W = 50
+# Peaks (v1.7.4): the secondaries are added only once the demand has stayed
+# above Concentrate below for the cluster's Start after, unless the primary is
+# at its cap. A boiling-water tap of 2.2 kW for 10 s took two secondaries for
+# 10 to 30 s five times in one night; the primary alone covers such a peak up to
+# its own maximum.
 
 
 @dataclass
@@ -84,11 +89,19 @@ def _round(value: float) -> int:
     return int(round(value / ROUND_W) * ROUND_W)
 
 
-def split(total: float, rooms: dict[str, int]) -> dict[str, int]:
+def split(total: float, rooms: dict[str, int], floor: bool = False) -> dict[str, int]:
     """`total` over the batteries in proportion to their room, never past it.
 
     What one battery cannot take (its share above its room) goes to the
     others, so the sum is min(total, sum of rooms) before rounding.
+
+    Rounded per battery to ROUND_W. With `floor`, together never above the
+    total rounded down (v1.7.4): 181 W over two came out as 100 + 100, 19 W
+    into the grid with the primary at nothing and not allowed to charge; now one
+    of them gets 50 and the shortfall comes from the grid, the cheaper side to be
+    wrong. Only then: a primary that runs takes up a rounding excess by itself,
+    and rounding down there only moved energy from the batteries to the grid
+    (replay: +176 Wh import against -72 Wh export in an afternoon).
     """
     shares = {key: 0.0 for key in rooms}
     left = max(0.0, float(total))
@@ -106,7 +119,15 @@ def split(total: float, rooms: dict[str, int]) -> dict[str, int]:
             else:
                 shares[key] += share
         left = spill
-    return {key: min(rooms[key], _round(value)) for key, value in shares.items()}
+    out = {key: min(rooms[key], _round(value)) for key, value in shares.items()}
+    if not floor:
+        return out
+    ceiling = int(min(max(0.0, float(total)), sum(max(0, r) for r in rooms.values())) // ROUND_W * ROUND_W)
+    while sum(out.values()) > ceiling:
+        # Take a step off the battery whose rounding added the most.
+        key = max((k for k in out if out[k] > 0), key=lambda k: (out[k] - shares[k], k))
+        out[key] -= ROUND_W
+    return out
 
 
 class Distributor:
@@ -119,6 +140,7 @@ class Distributor:
         self.last_split: float | None = None
         self.at_cap_since: float | None = None
         self.idle_since: float | None = None
+        self.above_since: float | None = None
         self.demand: float = 0.0
 
     # ── Primary ───────────────────────────────────────────────────────────
@@ -212,6 +234,7 @@ class Distributor:
             self.last_split = None
             self.at_cap_since = None
             self.idle_since = None
+            self.above_since = None
             return self._finish(roles, status, reason, readings, grid)
 
         if previous is not None and previous != self.primary:
@@ -256,6 +279,14 @@ class Distributor:
         at_nothing = primary_limit <= CAP_MARGIN_W and secondaries_on > 0
         self.at_cap_since = (self.at_cap_since or now) if at_cap else None
         self.idle_since = (self.idle_since or now) if at_nothing else None
+        # How long the demand has been above Concentrate below (v1.7.4), counted
+        # at every decision, not only at a split.
+        threshold = s.concentrate_below
+        self.above_since = (self.above_since if self.above_since is not None else now) if demand > threshold else None
+        held = (
+            self.concentrated and demand > threshold and not at_cap and s.start_after > 0
+            and now - self.above_since < s.start_after
+        )
 
         due = self.last_split is None or now - self.last_split >= s.redistribute_s
         urgent = (
@@ -276,12 +307,18 @@ class Distributor:
         for r in closed:
             roles[r.key] = Role(ROLE_SECONDARY, NONE, 0)
 
-        if not (due or urgent):
-            return self._finish(roles, self._running_status(roles, secondaries), self._why(primary, direction), readings, grid)
+        why = self._why(primary, direction)
+        if held:
+            why = (f"{why}; secondaries wait: demand {round(demand)} W above {threshold} W "
+                   f"for {round(now - self.above_since)} of {s.start_after} s")
+        # A held peak does not use up the split: once the time is over the
+        # secondaries come at the next decision, not a whole interval later.
+        if not (due or urgent) or held:
+            return self._finish(roles, self._running_status(roles, secondaries), why, readings, grid)
 
-        # ── Concentrate below the threshold
-        threshold = s.concentrate_below
-        if self.concentrated and demand > threshold:
+        # ── Concentrate below the threshold; a peak shorter than Start after
+        # keeps the primary alone (v1.7.4).
+        if self.concentrated and demand > threshold and not held:
             self.concentrated = False
         elif not self.concentrated and demand < threshold * CONCENTRATE_RELEASE:
             self.concentrated = True
@@ -295,7 +332,7 @@ class Distributor:
             # its share at the first split after it runs again.
             share = PRIMARY_SHARE * primary_cap if primary_limit > CAP_MARGIN_W else 0.0
             total = min(sum(rooms.values()), max(0.0, demand - share))
-            targets = split(total, rooms)
+            targets = split(total, rooms, floor=share == 0.0)
 
         for r in secondaries:
             old = roles[r.key]
@@ -304,14 +341,19 @@ class Distributor:
             if new == old_limit:
                 roles[r.key] = Role(ROLE_SECONDARY, direction if new else NONE, new)
                 continue
-            if new and old_limit and abs(new - old_limit) < STEP_MIN:
+            # A small step is not worth a write, except a step down while the
+            # group delivers more than the house takes and the primary has nothing
+            # left to give back (v1.7.4): 100 -> 50 W was held at 100 W with
+            # the primary at nothing, -53 W at 155 W of load.
+            lowering = new < old_limit and excess < 0 and at_nothing
+            if new and old_limit and abs(new - old_limit) < STEP_MIN and not lowering:
                 continue
             roles[r.key] = Role(ROLE_SECONDARY, direction if new else NONE, new)
 
         self.last_split = now
         self.at_cap_since = None
         self.idle_since = None
-        return self._finish(roles, self._running_status(roles, secondaries), self._why(primary, direction), readings, grid)
+        return self._finish(roles, self._running_status(roles, secondaries), why, readings, grid)
 
     @staticmethod
     def _running_status(roles: dict[str, Role], secondaries: list[Reading]) -> str:

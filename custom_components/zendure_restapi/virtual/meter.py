@@ -43,7 +43,7 @@ class VirtualMeter:
     ) -> None:
         self.hass = source.coordinator.hass
         self._source = source            # the real battery's controller
-        self._clones = clones            # the SimDevices
+        self._clones = clones            # the VirtualDevices
         self._factor = factor
         self.data: dict[str, Any] = {}
         self.updated_at: datetime | None = None

@@ -138,12 +138,13 @@
           "scan_interval": "Segundos entre consultas (1-60)",
           "solar_power_entity": "Potencia solar externa a la batería (opcional, para el panel)",
           "solar_energy_entity": "Energía solar externa a la batería (opcional, para el panel)",
-          "create_dashboard": "Crear el panel Zendure RestAPI (uno existente no se modifica)",
-          "rebuild_dashboard": "Sustituir el panel existente por uno nuevo (se pierden tus cambios)"
+          "reset_settings": "Restablecer ajustes: los ajustes del control a sus valores predeterminados",
+          "rebuild_dashboard": "Reconstruir panel (se pierden tus cambios)"
         },
         "data_description": {
           "solar_power_entity": "Un enchufe inteligente en un microinversor o un segundo inversor. Las series PV del panel lo muestran: en lugar del PV propio de la batería si no se usa, junto a él en otro caso. El control no lo necesita, el contador de red ya ve esta potencia.",
-          "solar_energy_entity": "Su contador de kWh, para los totales diarios de la pestaña History."
+          "solar_energy_entity": "Su contador de kWh, para los totales diarios de la pestaña History.",
+          "reset_settings": "Márgenes y umbrales de inicio 5 W, Detener carga por debajo de 50 W, Detener descarga por debajo de 50 W, Detener tras 30 s, Iniciar tras 30 s, potencia de carga y descarga mín. 0 W, Umbral del modo 10 W, Umbral de corrección 40 W, fuerza de corrección 80 %, Retardo de cambio de sentido 10 s. Operation mode, potencia de carga y descarga máx., protección de SOC, el medidor y Price Control se quedan como están. En un clúster rigen los ajustes del grupo."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "El modo de funcionamiento, los búferes, los umbrales y la fuente del medidor son entidades del clúster. Las baterías son sus subentradas.",
         "data": {
           "external_meter": "Medidor externo",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Reconstruir panel (se pierden tus cambios)"
         }
       },
       "virtual": {
         "title": "Virtual cluster",
         "description": "Copies, offsets, Max share and the group settings are entities of the Virtual cluster and its copies.",
         "data": {
-          "reset_copies": "Reset: every copy still and started again around your battery's state of charge",
+          "reset_copies": "Restablecer copias: cada copia se detiene y vuelve a arrancar en torno al estado de carga de tu batería",
           "reset_settings": "Reset settings: every setting of the Virtual cluster and its copies back to its default",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Reconstruir panel (se pierden tus cambios)"
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, and the buffers, start thresholds, Concentrate below and Redistribute every as in a new cluster. The copies keep running; tick Reset as well to start them with the new offsets. Your own battery and Price Control are not touched."
+          "reset_settings": "Copias 3, Load factor 1, desviaciones de SoC 0 / -20 / 15 %, tiempo de respuesta adicional 0 / 1 / 3 s, Max share 0, Operation mode Follow source, márgenes y umbrales de inicio 5 W, Detener carga por debajo de 50 W, Detener descarga por debajo de 50 W, Detener tras 30 s, Iniciar tras 30 s, Concentrate below 300 W, Redistribute every 30 s. Las copias siguen funcionando; marca también Restablecer copias para arrancarlas con las nuevas desviaciones. Tu propia batería y Price Control no se modifican."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Escrituras perdidas"
       },
+      "skipped_peaks": {
+        "name": "Picos omitidos"
+      },
+      "relay_switches": {
+        "name": "Conmutaciones del relé"
+      },
       "group_power": {
         "name": "Potencia de la batería"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Descargar a partir de importación"
       },
+      "stop_charge_below": {
+        "name": "Detener carga por debajo de"
+      },
+      "stop_discharge_below": {
+        "name": "Detener descarga por debajo de"
+      },
+      "stop_after": {
+        "name": "Detener tras"
+      },
+      "start_after": {
+        "name": "Iniciar tras"
+      },
       "trim_factor": {
         "name": "Intensidad de corrección"
       },
@@ -893,7 +912,7 @@
         "name": "Reset"
       },
       "rebuild_dashboard": {
-        "name": "Rebuild dashboard"
+        "name": "Reconstruir panel"
       }
     }
   },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} se reinició con un límite",
-      "description": "Tras un reinicio (una actualización de firmware o un corte de luz), {device} volvió con los límites que había guardado por última vez: carga {input} W, descarga {output} W, mientras Operation mode está en standby. La integración no escribe nada tras un reinicio, porque una actualización puede seguir en curso. Cuando termine, vuelve a elegir standby: se envía de nuevo la orden de standby y la batería se detiene. Este mensaje desaparece solo cuando ambos límites son 0 o se elige otro modo."
+      "description": "Tras un reinicio (una actualización de firmware o un corte de luz), {device} volvió con los límites que había guardado por última vez: carga {input} W, descarga {output} W, mientras Operation mode está en standby. No son límites que esta integración haya escrito desde que se inició Home Assistant, quizá se pusieron a mano, así que los deja como están; sus propios límites los habría restablecido ella misma. Para detener la batería, vuelve a elegir standby: se envía de nuevo la orden de standby y la batería se detiene. Este mensaje desaparece solo cuando ambos límites son 0 o se elige otro modo."
     },
     "new_property": {
       "title": "{device} informa de propiedades nuevas",

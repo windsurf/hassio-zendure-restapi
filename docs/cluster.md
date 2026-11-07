@@ -76,13 +76,17 @@ Removing the cluster returns every battery to its own settings, in standby.
 
 **Secondaries.** Every *Redistribute every* (30 s), or sooner when needed, the cluster works out what the group should deliver — what the batteries deliver now plus what the grid still asks — and splits it:
 
-- below **Concentrate below** (300 W) the secondaries stop and the primary works alone; they come back once the demand is above it again, and stop again below 80 % of it;
+- below **Concentrate below** (300 W) the secondaries stop and the primary works alone; they come back once the demand has stayed above it for *Start after* (30 s, v1.7.4) — at once when the primary is at its maximum — and stop again below 80 % of it;
 - above it the secondaries take the demand minus 60 % of the primary's maximum, split over them by room, so the primary keeps margin to trim both ways;
-- limits are rounded to 50 W, and a secondary is only written again when its limit moves by 100 W or more.
+- limits are rounded to 50 W, and a secondary is only written again when its limit moves by 100 W or more. While the primary is at nothing (v1.7.4) the secondaries together never get more than the demand rounded down to 50 W, and a step down always counts when they deliver more than the house takes: the rest comes from the grid rather than going into it.
 
 **Sooner than 30 s.** When the primary has been at its maximum for 10 s while a secondary has room, or at nothing while secondaries still run, the cluster splits at once — but never within 15 s of the last split, because a secondary takes 6 to 15 s to start from standstill.
 
 **Load drop.** When the house load falls away while secondaries run — the oven switches off — the secondaries deliver more than the house takes. The primary goes to nothing and would like to turn. The cluster lowers the secondaries at once to what the house still takes, without waiting for the 10 or 15 seconds above, and the group keeps running in the same direction. A still-standing primary is given no share of the demand at such a split: moving load onto it would mean a cold start of 6 to 15 s with the grid uncovered. It takes its share again once it runs.
+
+**Peaks** (v1.7.4). A boiling-water tap of 2.2 kW for 10 s, a kettle, a compressor that starts: the demand jumps above *Concentrate below* for a few seconds. A secondary needs 6 to 15 s to start from standstill and would arrive when the peak is over, then run at a few hundred watts until the next split. So the cluster waits *Start after* seconds before it adds a secondary; the primary covers the peak alone, up to its own maximum. Only when the primary is at its maximum do the secondaries come at once. The cluster status shows the wait: *secondaries wait: demand … W above … W for x of y s*. Seen on a Virtual cluster before: two secondaries for 10 to 30 s, five times in one night, all on such peaks.
+
+**Why concentrate at all.** Every inverter that converts costs a fixed loss of about 33 W on top of a few per cent, whatever it delivers; at rest it takes about 5 W (both measured on a SolarFlow 3000 Mix AC+). At 300 W one battery loses about 41 W, three batteries at 100 W each about 107 W: two thirds more loss for the same output, about 1.6 kWh a day at a steady 300 W. Spreading a low load over several batteries throws that away, which is why the primary works alone below *Concentrate below* and why the secondaries are held back on a short peak. Above a few hundred watts per battery the fixed loss matters little and spreading costs next to nothing.
 
 **Direction change.** All batteries in the group always go the same way. Only when the group has nothing left to do in the running direction — the secondaries' share would be about zero — and the primary wants to turn, do the secondaries stop (`reversing`), one request each, and the primary turns with its own hold.
 
@@ -101,6 +105,7 @@ Removing the cluster returns every battery to its own settings, in standby.
 | Operation mode | select | standby, smart_matching, smart_charge_only, smart_discharge_only, quick_charge, quick_discharge |
 | Charge buffer / Discharge buffer | number | as on a battery, now for the group |
 | Start discharging at import / Start charging at export | number | as on a battery |
+| Stop charging below / Stop discharging below / Stop after / Start after | number | as on a battery (v1.7.4), with the same defaults: 50 W charging and discharging, *Stop after* and *Start after* 30 s (each 10–120 s); *Start after* also holds the secondaries back on a short peak; the primary stops, only while it works alone: capped at *Concentrate below*, off with *Concentrate below* at 0 |
 | Concentrate below | number | 0–1000 W, default 300 |
 | Redistribute every | number | 10–120 s, default 30 |
 | Meter source | select | as on a battery |

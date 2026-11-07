@@ -89,6 +89,9 @@ TRACKING_MAX_WEIGHT = 10    # seconds one meter sample may stand for
 ECHO_SETTLE = 2.0
 GAP_BINS = ((1.3, "under_1_3_s"), (2.0, "1_3_to_2_s"), (float("inf"), "2_s_or_more"))
 LOST_KEEP = 20
+# A run that stops or turns again within this many seconds of its start counts
+# as short (v1.7.4): the trace of a battery that was late for a peak, hunting.
+SHORT_RUN_S = 120.0
 HISTOGRAM_HOURS = 24
 HISTOGRAM_TOP = 2000        # W; larger values go in the top bin
 
@@ -322,6 +325,9 @@ class BatteryMeasure:
         default_factory=lambda: {name: {"checked": 0, "lost": 0} for _, name in GAP_BINS}
     )
     lost_recent: deque = field(default_factory=lambda: deque(maxlen=LOST_KEEP))
+    # Skipped peaks and relay switches (v1.7.4): what Start after held back,
+    # and what the battery did switch, today and in total.
+    switching: dict[str, Any] = field(default_factory=lambda: _new_switching(None))
 
     margin: MarginDay | None = None
     margin_yesterday: dict[str, Any] | None = None
@@ -336,6 +342,7 @@ class BatteryMeasure:
     _last_grid_at: datetime | None = None
     _last_command_at: datetime | None = None
     _echo: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _run_since: datetime | None = None
 
     # ── Battery polls ────────────────────────────────────────────────
 
@@ -697,6 +704,58 @@ class BatteryMeasure:
     def checked_writes(self) -> int:
         return sum(c["checked"] for c in self.writes.values())
 
+    # ── Skipped peaks and relay switches (v1.7.4) ───────────────────
+
+    def _switching_today(self, today: str) -> dict[str, Any]:
+        sw = self.switching
+        if sw.get("day") != today:
+            fresh = _new_switching(today)
+            fresh["skipped"]["total"] = sw.get("skipped", {}).get("total", 0)
+            fresh["relay"]["total"] = sw.get("relay", {}).get("total", 0)
+            fresh["relay"]["short_total"] = sw.get("relay", {}).get("short_total", 0)
+            self.switching = sw = fresh
+        return sw
+
+    def on_skipped_peak(self, today: str, direction: str, seconds: float, wh: float) -> None:
+        """A start Start after held back, and that never came: the demand fell back in time."""
+        sk = self._switching_today(today)["skipped"]
+        sk["total"] += 1
+        sk["today"] += 1
+        sk[f"{direction}_today"] = sk.get(f"{direction}_today", 0) + 1
+        sk["wh_today"] = round(sk["wh_today"] + max(0.0, wh), 1)
+        sk["longest_s_today"] = round(max(sk["longest_s_today"], seconds), 1)
+
+    def on_relay(self, now: datetime, today: str, kind: str) -> None:
+        """A start from standstill or a change of direction the controller ordered."""
+        if kind == "reversal":
+            self._end_run(now, today)
+        rl = self._switching_today(today)["relay"]
+        rl["total"] += 1
+        rl["today"] += 1
+        rl[f"{kind}s_today"] = rl.get(f"{kind}s_today", 0) + 1
+        self._run_since = now
+
+    def on_run_end(self, now: datetime, today: str) -> None:
+        """Both limits back at 0: the run that the last switch began has ended."""
+        self._end_run(now, today)
+
+    def _end_run(self, now: datetime, today: str) -> None:
+        since, self._run_since = self._run_since, None
+        if since is None:
+            return
+        if (now - since).total_seconds() < SHORT_RUN_S:
+            rl = self._switching_today(today)["relay"]
+            rl["short_today"] += 1
+            rl["short_total"] += 1
+
+    @property
+    def skipped_peaks(self) -> int:
+        return int(self.switching.get("skipped", {}).get("total", 0))
+
+    @property
+    def relay_switches(self) -> int:
+        return int(self.switching.get("relay", {}).get("total", 0))
+
     # ── Realized margin ──────────────────────────────────────────────
 
     def _margin(self, a: Sample, b: Sample, seconds, ac_in, ac_out, dc_in, dc_out) -> None:
@@ -762,6 +821,7 @@ class BatteryMeasure:
             "response_timeouts": self.response_timeouts,
             "writes": self.writes,
             "lost_recent": list(self.lost_recent),
+            "switching": self.switching,
             "margin": self.margin.to_dict() if self.margin else None,
             "margin_yesterday": self.margin_yesterday,
         }
@@ -807,6 +867,7 @@ class BatteryMeasure:
                         "checked": int(counts.get("checked") or 0), "lost": int(counts.get("lost") or 0)
                     }
         self.lost_recent = deque(_dicts(data.get("lost_recent")), maxlen=LOST_KEEP)
+        self.switching = _load_switching(data.get("switching"))
         self.margin = MarginDay.from_dict(data.get("margin"))
         yesterday = data.get("margin_yesterday")
         self.margin_yesterday = yesterday if isinstance(yesterday, dict) else None
@@ -832,6 +893,7 @@ class BatteryMeasure:
             "lost_writes": self.lost_writes,
             "writes_by_gap": self.writes,
             "lost_recent": list(self.lost_recent),
+            "switching": self.switching,
             "realized_margin": self.margin.summary() if self.margin else None,
             "realized_margin_yesterday": self.margin_yesterday,
             "totals_kwh": {
@@ -843,6 +905,31 @@ class BatteryMeasure:
             "cycles": list(self.cycles),
             "capacities": list(self.capacities),
         }
+
+
+def _new_switching(day: str | None) -> dict[str, Any]:
+    return {
+        "day": day,
+        "skipped": {"total": 0, "today": 0, "charge_today": 0, "discharge_today": 0,
+                    "wh_today": 0.0, "longest_s_today": 0.0},
+        "relay": {"total": 0, "today": 0, "starts_today": 0, "reversals_today": 0,
+                  "short_today": 0, "short_total": 0},
+    }
+
+
+def _load_switching(data: Any) -> dict[str, Any]:
+    out = _new_switching(None)
+    if not isinstance(data, dict):
+        return out
+    out["day"] = data.get("day") if isinstance(data.get("day"), str) else None
+    for part in ("skipped", "relay"):
+        stored = data.get(part)
+        if isinstance(stored, dict):
+            for key, default in out[part].items():
+                value = stored.get(key, default)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    out[part][key] = type(default)(value)
+    return out
 
 
 def _dicts(value: Any) -> list[dict[str, Any]]:

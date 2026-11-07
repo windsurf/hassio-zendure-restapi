@@ -14,7 +14,7 @@ import homeassistant.helpers.entity_registry as er
 
 from custom_components.zendure_restapi import cluster_entities as CE
 from custom_components.zendure_restapi.const import OPT_MAX_SHARE_CLONES
-from custom_components.zendure_restapi.sim import entities as E
+from custom_components.zendure_restapi.virtual import entities as E
 
 
 def test_copy_settings_keep_their_keys_and_lose_the_clone_number():

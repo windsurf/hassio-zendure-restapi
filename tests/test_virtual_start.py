@@ -8,7 +8,7 @@ stay the offsets that were set. Offsets 0 / -20 / +15 as on production.
 import pytest
 
 from custom_components.zendure_restapi.const import OPT_CLONES, OPT_SOC_OFFSET_1, OPT_SOC_OFFSET_2, OPT_SOC_OFFSET_3
-from custom_components.zendure_restapi.sim.cluster import VirtualCluster
+from custom_components.zendure_restapi.virtual.cluster import VirtualCluster
 
 
 def cluster(real: float, clones: int = 3, offset_2: float = -20, offset_3: float = 15,

@@ -138,12 +138,13 @@
           "scan_interval": "Seconden tussen bevragingen (1-60)",
           "solar_power_entity": "Zonnevermogen van buiten de batterij (optioneel, voor het dashboard)",
           "solar_energy_entity": "Zonne-energie van buiten de batterij (optioneel, voor het dashboard)",
-          "create_dashboard": "Zendure RestAPI-dashboard aanmaken (een bestaand dashboard blijft ongemoeid)",
-          "rebuild_dashboard": "Vervang het bestaande dashboard door een nieuw (je eigen wijzigingen daarin gaan verloren)"
+          "reset_settings": "Instellingen terugzetten: de regelinstellingen terug naar hun standaardwaarde",
+          "rebuild_dashboard": "Dashboard opnieuw opbouwen (je eigen wijzigingen daarin gaan verloren)"
         },
         "data_description": {
           "solar_power_entity": "Een slimme stekker aan een micro-omvormer of een tweede omvormer. De PV-series van het dashboard tonen hem: in plaats van de eigen PV van de batterij als die niet in gebruik is, anders ernaast. Voor het sturen is hij niet nodig, de netmeter ziet dit vermogen al.",
-          "solar_energy_entity": "De kWh-teller ervan, voor de dagtotalen op het tabblad History."
+          "solar_energy_entity": "De kWh-teller ervan, voor de dagtotalen op het tabblad History.",
+          "reset_settings": "Buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Min. laadvermogen en Min. ontlaadvermogen 0 W, Drempel modus 10 W, Drempel bijsturen 40 W, Bijstuursterkte 80 %, Wachttijd bij richtingwissel 10 s. Operation mode, Max. laadvermogen en Max. ontlaadvermogen, SOC-bescherming, de meter en Price Control blijven zoals ze zijn. In een cluster gelden de instellingen van de groep."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "Bedrijfsmodus, buffers, drempels en de meterbron zijn entiteiten van het cluster. De batterijen zijn zijn subitems.",
         "data": {
           "external_meter": "Externe meter",
-          "rebuild_dashboard": "Het clusterdashboard opnieuw opbouwen (je eigen wijzigingen daarin gaan verloren)"
+          "rebuild_dashboard": "Dashboard opnieuw opbouwen (je eigen wijzigingen daarin gaan verloren)"
         }
       },
       "virtual": {
         "title": "Virtueel cluster",
         "description": "Kopieën, afwijkingen, Max share en de groepsinstellingen zijn entiteiten van het virtuele cluster en zijn kopieën.",
         "data": {
-          "reset_copies": "Reset: elke kopie stil en opnieuw gestart rond de laadtoestand van je batterij",
+          "reset_copies": "Kopieën resetten: elke kopie stil en opnieuw gestart rond de laadtoestand van je batterij",
           "reset_settings": "Instellingen terugzetten: alle instellingen van het virtuele cluster en zijn kopieën terug naar de standaardwaarde",
-          "rebuild_dashboard": "Het clusterdashboard opnieuw opbouwen (je eigen wijzigingen daarin gaan verloren)"
+          "rebuild_dashboard": "Dashboard opnieuw opbouwen (je eigen wijzigingen daarin gaan verloren)"
         },
         "data_description": {
           "reset_copies": "De kopieën stoppen, beide limieten gaan naar 0, en elke kopie begint opnieuw op de laadtoestand van je batterij plus zijn SoC-afwijking.",
-          "reset_settings": "Kopieën 3, Load factor 1, SoC-afwijkingen 0 / -20 / 15 %, extra responstijd 0 / 1 / 3 s, Max share 0, Operation mode Follow source, en de buffers, startdrempels, Concentrate below en Redistribute every zoals in een nieuw cluster. De kopieën blijven doorlopen; vink ook Reset aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
+          "reset_settings": "Kopieën 3, Load factor 1, SoC-afwijkingen 0 / -20 / 15 %, extra responstijd 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Concentrate below 300 W, Redistribute every 30 s. De kopieën blijven doorlopen; vink ook Kopieën resetten aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Verloren schrijfacties"
       },
+      "skipped_peaks": {
+        "name": "Overgeslagen pieken"
+      },
+      "relay_switches": {
+        "name": "Relaisschakelingen"
+      },
       "group_power": {
         "name": "Batterijvermogen"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Ontladen starten bij afname"
       },
+      "stop_charge_below": {
+        "name": "Laden stoppen onder"
+      },
+      "stop_discharge_below": {
+        "name": "Ontladen stoppen onder"
+      },
+      "stop_after": {
+        "name": "Stoppen na"
+      },
+      "start_after": {
+        "name": "Starten na"
+      },
       "trim_factor": {
         "name": "Bijstuursterkte"
       },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} herstartte met een limiet",
-      "description": "Na een herstart (een firmware-upgrade of stroomuitval) kwam {device} terug met de limieten die hij zelf als laatste had opgeslagen: laden {input} W, ontladen {output} W, terwijl Operation mode op standby staat. De integratie schrijft na een herstart niets, want een upgrade kan nog bezig zijn. Is die klaar, kies dan opnieuw standby: dat stuurt de standby-opdracht opnieuw en stopt de batterij. Deze melding verdwijnt vanzelf als beide limieten 0 zijn of een andere modus is gekozen."
+      "description": "Na een herstart (een firmware-upgrade of stroomuitval) kwam {device} terug met de limieten die hij zelf als laatste had opgeslagen: laden {input} W, ontladen {output} W, terwijl Operation mode op standby staat. Dit zijn geen limieten die deze integratie zelf schreef sinds Home Assistant startte, misschien zijn ze met de hand gezet, dus laat ze ze staan; haar eigen limieten had ze zelf teruggezet. Wil je de batterij stoppen, kies dan opnieuw standby: dat stuurt de standby-opdracht opnieuw en stopt de batterij. Deze melding verdwijnt vanzelf als beide limieten 0 zijn of een andere modus is gekozen."
     },
     "new_property": {
       "title": "{device} meldt nieuwe eigenschappen",

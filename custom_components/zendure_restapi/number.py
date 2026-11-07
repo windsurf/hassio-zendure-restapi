@@ -94,6 +94,10 @@ from .const import (
     OPT_MAX_DISCHARGE_POWER,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    OPT_START_AFTER,
+    OPT_STOP_AFTER,
+    OPT_STOP_CHARGE_BELOW,
+    OPT_STOP_DISCHARGE_BELOW,
     OPT_TRIM_FACTOR,
     POWER_CEILING,
 )
@@ -230,7 +234,7 @@ async def async_setup_entry(
         async_add_entities(cluster_entities(Platform.NUMBER, hass, entry))
         return
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
-        from .sim.entities import virtual_entities
+        from .virtual.entities import virtual_entities
 
         async_add_entities(virtual_entities(Platform.NUMBER, hass, entry))
         return
@@ -430,6 +434,53 @@ SETTING_NUMBERS: tuple[tuple[ZendureNumberDescription, str], ...] = (
         entity_category=EntityCategory.CONFIG,
         icon="mdi:transmission-tower-export",
     ), OPT_START_CHARGE_AT),
+    # Stop below (v1.7.4): a running direction whose demand stays under the limit
+    # for Stop after seconds stops, and starts again only above the larger of
+    # the start threshold and the limit for as long. 0 W = off.
+    (ZendureNumberDescription(
+        key="stop_charge_below",
+        name="Stop charging below",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0,
+        native_max_value=500,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:battery-arrow-down-outline",
+    ), OPT_STOP_CHARGE_BELOW),
+    (ZendureNumberDescription(
+        key="stop_discharge_below",
+        name="Stop discharging below",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0,
+        native_max_value=500,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:battery-arrow-up-outline",
+    ), OPT_STOP_DISCHARGE_BELOW),
+    (ZendureNumberDescription(
+        key="stop_after",
+        name="Stop after",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=600,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:timer-stop-outline",
+    ), OPT_STOP_AFTER),
+    (ZendureNumberDescription(
+        key="start_after",
+        name="Start after",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=600,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:timer-play-outline",
+    ), OPT_START_AFTER),
     (ZendureNumberDescription(
         key="direction_change_delay",
         name="Direction change delay",

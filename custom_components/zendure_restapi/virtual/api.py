@@ -1,7 +1,7 @@
 """The local API of a simulated battery (v1.7.1).
 
 Offers what ZendureLocalApi offers to the coordinator and the controller —
-report, write one, write several — and answers from a SimDevice instead of
+report, write one, write several — and answers from a VirtualDevice instead of
 the network. Nothing leaves Home Assistant.
 """
 
@@ -9,13 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .device import SimDevice
+from .device import VirtualDevice
 
 
-class SimApi:
+class VirtualApi:
     """ZendureLocalApi for a battery that exists only in the model."""
 
-    def __init__(self, device: SimDevice) -> None:
+    def __init__(self, device: VirtualDevice) -> None:
         self.device = device
         self.sn: str | None = device.serial
         self.host = "simulated"

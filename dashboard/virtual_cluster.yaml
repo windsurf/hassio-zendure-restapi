@@ -1,0 +1,1018 @@
+# ============================================================
+# VIRTUAL CLUSTER DASHBOARD - v1.7.4
+# ============================================================
+#
+# The dashboard "Virtual Cluster" as the integration builds it
+# for a Virtual cluster with three virtual copies of one real
+# battery: a Cluster tab and a tab per copy. The real battery
+# keeps its own dashboard (dashboard/zendure_restapi.yaml).
+#
+# You do not need this file: the integration creates this
+# dashboard itself when you add a Virtual cluster, and the
+# button "Rebuild dashboard" on the Virtual cluster device
+# builds it again for your own devices. This file is the
+# reference of that layout, with the default entity ids.
+#
+# To use it by hand: Settings > Dashboards > Add dashboard,
+# open it, Edit > Raw configuration editor, paste this file.
+# Replace sensor.zendure_solarflow_3000_mix_ac_* with the
+# battery power and state of charge of your own battery, and
+# leave out the tabs of copies you do not have.
+#
+# The chart of today and tomorrow needs apexcharts-card (HACS).
+# ============================================================
+
+title: Virtual Cluster
+views:
+- title: Cluster
+  path: virtual-cluster
+  icon: mdi:home-battery-outline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Virtual Cluster (simulated)
+      heading_style: title
+      icon: mdi:home-battery-outline
+      badges:
+      - type: entity
+        entity: sensor.virtual_cluster_state_of_charge
+      - type: entity
+        entity: sensor.virtual_cluster_status
+      - type: entity
+        entity: select.virtual_cluster_operation_mode
+    - type: tile
+      entity: sensor.virtual_cluster_state_of_charge
+      icon: mdi:battery-charging
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_cluster_battery_power
+      icon: mdi:flash
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_p1_meter_grid_power
+      icon: mdi:transmission-tower
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_p1_meter_house_load
+      icon: mdi:home-lightning-bolt
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_p1_meter_real_grid_power
+      icon: mdi:transmission-tower-import
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_cluster_status
+      name: Integration
+      icon: mdi:tag-outline
+      state_content: integration_version
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Operation mode
+      heading_style: title
+      icon: mdi:state-machine
+      badges:
+      - type: entity
+        entity: select.virtual_cluster_operation_mode
+      - type: entity
+        entity: sensor.virtual_cluster_status
+    - type: markdown
+      content: '{% set s = ''sensor.virtual_cluster_status'' %}{% set b = state_attr(s, ''batteries'') or {} %}
+
+        **Status** {{ states(s) }} – {{ state_attr(s, ''reason'') }}
+
+
+        **Primary** {{ state_attr(s, ''primary'') or ''–'' }} | **Running** {{ b.values() | selectattr(''limit'', ''gt'', 0) | list | count + (1 if state_attr(s, ''primary'') else 0) }} of {{ b | count }} | **Demand** {{ state_attr(s, ''demand'') }} W | **Grid at last distribution** {{ state_attr(s, ''grid'') }} W
+
+
+        {% set p1 = states(''sensor.virtual_p1_meter_grid_power'') | float(0) %}{% set house = states(''sensor.virtual_p1_meter_house_load'') | float(0) %}{% set lf = states(''number.virtual_cluster_load_factor'') | float(1) %}**Virtual P1** {{ p1 | round(0) | int }} W = house {{ house | round(0) | int }} W × {{ lf }} − copies {{ (house * lf - p1) | round(0) | int }} W | **SoC spread** {{ state_attr(''sensor.virtual_cluster_state_of_charge'', ''spread'') }} points
+
+        '
+      grid_options:
+        columns: full
+        rows: auto
+    - type: tile
+      entity: select.virtual_cluster_operation_mode
+      icon: mdi:state-machine
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Overview
+      heading_style: title
+      icon: mdi:gauge
+    - type: gauge
+      entity: sensor.virtual_p1_meter_grid_power
+      min: -3000
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: -1500
+        yellow: 0
+        red: 1500
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_cluster_state_of_charge
+      min: 0
+      max: 100
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: 70
+        yellow: 30
+        red: 0
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_cluster_battery_power
+      min: -9000
+      max: 9000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Distribution
+      heading_style: title
+      icon: mdi:call-split
+    - type: markdown
+      content: '| Battery | Role | Direction | Limit | Power |
+
+        |---|---|---|---:|---:|
+
+        {% set b = state_attr(''sensor.virtual_cluster_status'', ''batteries'') or {} %}{% set p = {"Real": "sensor.zendure_solarflow_3000_mix_ac_battery_power", "Virtual copy 1": "sensor.virtual_copy_1_battery_power", "Virtual copy 2": "sensor.virtual_copy_2_battery_power", "Virtual copy 3": "sensor.virtual_copy_3_battery_power"} %}{% for name, v in b.items() %}{% set w = states(p[name]) | float(none) if name in p else none %}{% if v.role == ''primary'' %}{% set d = ''none'' if w is none or (w | abs) <= 25 else (''discharge'' if w > 0 else ''charge'') %}| {{ name }} | primary | {{ d }} | own loop |{% else %}| {{ name }} | {{ v.role }} | {{ v.direction }} | {{ v.limit }} W |{% endif %} {{ (w | round(0) | int) ~ '' W'' if w is not none else ''–'' }} |
+
+        {% endfor %}'
+      grid_options:
+        columns: full
+        rows: auto
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Cluster settings
+      heading_style: title
+      icon: mdi:tune
+    - type: tile
+      entity: number.virtual_cluster_copies
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:content-copy
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_load_factor
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:multiplication
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_charge_buffer
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_discharge_buffer
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_start_charging_at_export
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_start_discharging_at_import
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_stop_charging_below
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_stop_discharging_below
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_stop_after
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_start_after
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_concentrate_below
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_redistribute_every
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Today and tomorrow
+      heading_style: title
+      icon: mdi:chart-line
+    - type: custom:apexcharts-card
+      graph_span: 48h
+      span:
+        start: day
+      now:
+        show: true
+        label: Now
+      header:
+        show: false
+      yaxis:
+      - id: power
+        min: ~-3000
+        decimals: 0
+        align_to: 1500
+        apex_config:
+          stepSize: 1500
+          labels:
+            formatter: 'EVAL:function (v) { return Math.round(v) % 3000 === 0 ? Math.round(v) : ""; }'
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+          labels:
+            style:
+              fontSize: 10px
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        tooltip:
+          x:
+            format: dd-MM HH:mm
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
+      series:
+      - entity: sensor.virtual_p1_meter_grid_power
+        name: Virtual P1
+        type: area
+        unit: W
+        color: '#1E88E5'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+      - entity: sensor.virtual_cluster_battery_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+        transform: 'return x > 0 ? x : 0;'
+      - entity: sensor.virtual_cluster_battery_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+        transform: 'return x < 0 ? x : 0;'
+      - entity: sensor.zendure_solarflow_3000_mix_ac_battery_power
+        name: Real battery
+        type: line
+        unit: W
+        color: '#757575'
+        stroke_width: 1.5
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      - entity: sensor.virtual_cluster_state_of_charge
+        name: SoC cluster
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 2
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        stroke_dash: 4
+      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
+        name: SoC real
+        type: line
+        unit: '%'
+        color: '#757575'
+        stroke_width: 1.5
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        stroke_dash: 2
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+- title: Virtual copy 1
+  path: virtual_copy_1
+  icon: mdi:numeric-1-box-outline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Virtual copy 1 (simulated)
+      heading_style: title
+      icon: mdi:home-battery-outline
+      badges:
+      - type: entity
+        entity: sensor.virtual_copy_1_state_of_charge
+      - type: entity
+        entity: sensor.virtual_copy_1_controller_status
+    - type: tile
+      entity: sensor.virtual_copy_1_state_of_charge
+      icon: mdi:battery-charging
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_1_battery_power
+      icon: mdi:flash
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_1_controller_status
+      icon: mdi:cog-sync-outline
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_1_response_time
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Operation mode
+      heading_style: title
+      icon: mdi:state-machine
+    - type: markdown
+      content: '{% set c = ''sensor.virtual_copy_1_controller_status'' %}
+
+        **Status** {{ states(c) }} - {{ state_attr(c, ''reason'') }}
+
+
+        **Direction** {{ state_attr(c, ''direction'') }} | **Target** {{ state_attr(c, ''target_power'') }} W
+
+
+        **Virtual P1** {{ state_attr(c, ''meter_power'') }} W | **Battery** {{ state_attr(c, ''battery_power'') }} W
+
+
+        **Trim writes** {{ state_attr(c, ''trim_writes'') }}
+
+        '
+      grid_options:
+        columns: full
+        rows: auto
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Overview
+      heading_style: title
+      icon: mdi:gauge
+    - type: gauge
+      entity: sensor.virtual_p1_meter_grid_power
+      min: -3000
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: -1500
+        yellow: 0
+        red: 1500
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_1_state_of_charge
+      min: 0
+      max: 100
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: 70
+        yellow: 30
+        red: 0
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_1_charge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_1_discharge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Copy settings
+      heading_style: title
+      icon: mdi:tune-variant
+    - type: tile
+      entity: number.virtual_copy_1_max_share
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:arrow-collapse-vertical
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_1_soc_offset
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:battery-arrow-up-outline
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_1_extra_response_time
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:timer-sand
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Measured
+      heading_style: title
+      icon: mdi:stethoscope
+    - type: tile
+      entity: sensor.virtual_copy_1_response_time
+      icon: mdi:timer-outline
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+      name:
+        type: entity
+- title: Virtual copy 2
+  path: virtual_copy_2
+  icon: mdi:numeric-2-box-outline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Virtual copy 2 (simulated)
+      heading_style: title
+      icon: mdi:home-battery-outline
+      badges:
+      - type: entity
+        entity: sensor.virtual_copy_2_state_of_charge
+      - type: entity
+        entity: sensor.virtual_copy_2_controller_status
+    - type: tile
+      entity: sensor.virtual_copy_2_state_of_charge
+      icon: mdi:battery-charging
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_2_battery_power
+      icon: mdi:flash
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_2_controller_status
+      icon: mdi:cog-sync-outline
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_2_response_time
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Operation mode
+      heading_style: title
+      icon: mdi:state-machine
+    - type: markdown
+      content: '{% set c = ''sensor.virtual_copy_2_controller_status'' %}
+
+        **Status** {{ states(c) }} - {{ state_attr(c, ''reason'') }}
+
+
+        **Direction** {{ state_attr(c, ''direction'') }} | **Target** {{ state_attr(c, ''target_power'') }} W
+
+
+        **Virtual P1** {{ state_attr(c, ''meter_power'') }} W | **Battery** {{ state_attr(c, ''battery_power'') }} W
+
+
+        **Trim writes** {{ state_attr(c, ''trim_writes'') }}
+
+        '
+      grid_options:
+        columns: full
+        rows: auto
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Overview
+      heading_style: title
+      icon: mdi:gauge
+    - type: gauge
+      entity: sensor.virtual_p1_meter_grid_power
+      min: -3000
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: -1500
+        yellow: 0
+        red: 1500
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_2_state_of_charge
+      min: 0
+      max: 100
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: 70
+        yellow: 30
+        red: 0
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_2_charge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_2_discharge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Copy settings
+      heading_style: title
+      icon: mdi:tune-variant
+    - type: tile
+      entity: number.virtual_copy_2_max_share
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:arrow-collapse-vertical
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_2_soc_offset
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:battery-arrow-up-outline
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_2_extra_response_time
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:timer-sand
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Measured
+      heading_style: title
+      icon: mdi:stethoscope
+    - type: tile
+      entity: sensor.virtual_copy_2_response_time
+      icon: mdi:timer-outline
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+      name:
+        type: entity
+- title: Virtual copy 3
+  path: virtual_copy_3
+  icon: mdi:numeric-3-box-outline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Virtual copy 3 (simulated)
+      heading_style: title
+      icon: mdi:home-battery-outline
+      badges:
+      - type: entity
+        entity: sensor.virtual_copy_3_state_of_charge
+      - type: entity
+        entity: sensor.virtual_copy_3_controller_status
+    - type: tile
+      entity: sensor.virtual_copy_3_state_of_charge
+      icon: mdi:battery-charging
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_3_battery_power
+      icon: mdi:flash
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_3_controller_status
+      icon: mdi:cog-sync-outline
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.virtual_copy_3_response_time
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Operation mode
+      heading_style: title
+      icon: mdi:state-machine
+    - type: markdown
+      content: '{% set c = ''sensor.virtual_copy_3_controller_status'' %}
+
+        **Status** {{ states(c) }} - {{ state_attr(c, ''reason'') }}
+
+
+        **Direction** {{ state_attr(c, ''direction'') }} | **Target** {{ state_attr(c, ''target_power'') }} W
+
+
+        **Virtual P1** {{ state_attr(c, ''meter_power'') }} W | **Battery** {{ state_attr(c, ''battery_power'') }} W
+
+
+        **Trim writes** {{ state_attr(c, ''trim_writes'') }}
+
+        '
+      grid_options:
+        columns: full
+        rows: auto
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Overview
+      heading_style: title
+      icon: mdi:gauge
+    - type: gauge
+      entity: sensor.virtual_p1_meter_grid_power
+      min: -3000
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: -1500
+        yellow: 0
+        red: 1500
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_3_state_of_charge
+      min: 0
+      max: 100
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      severity:
+        green: 70
+        yellow: 30
+        red: 0
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_3_charge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+    - type: gauge
+      entity: sensor.virtual_copy_3_discharge_limit
+      min: 0
+      max: 3000
+      needle: true
+      grid_options:
+        columns: 6
+        rows: auto
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Copy settings
+      heading_style: title
+      icon: mdi:tune-variant
+    - type: tile
+      entity: number.virtual_copy_3_max_share
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:arrow-collapse-vertical
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_3_soc_offset
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:battery-arrow-up-outline
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_copy_3_extra_response_time
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      icon: mdi:timer-sand
+      name:
+        type: entity
+      grid_options:
+        columns: 6
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Measured
+      heading_style: title
+      icon: mdi:stethoscope
+    - type: tile
+      entity: sensor.virtual_copy_3_response_time
+      icon: mdi:timer-outline
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+      name:
+        type: entity
+

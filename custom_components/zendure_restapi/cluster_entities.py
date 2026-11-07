@@ -45,6 +45,10 @@ from .const import (
     OPT_REDISTRIBUTE,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    OPT_START_AFTER,
+    OPT_STOP_AFTER,
+    OPT_STOP_CHARGE_BELOW,
+    OPT_STOP_DISCHARGE_BELOW,
 )
 from .energy import WriteGate
 from .entity import TranslatedName
@@ -73,6 +77,20 @@ CLUSTER_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
      OPT_START_DISCHARGE_AT),
     (_watts("start_charge_at", "Start charging at export", 0, 200, 5, "mdi:transmission-tower-export"),
      OPT_START_CHARGE_AT),
+    (_watts("stop_charge_below", "Stop charging below", 0, 500, 5, "mdi:battery-arrow-down-outline"),
+     OPT_STOP_CHARGE_BELOW),
+    (_watts("stop_discharge_below", "Stop discharging below", 0, 500, 5, "mdi:battery-arrow-up-outline"),
+     OPT_STOP_DISCHARGE_BELOW),
+    (NumberEntityDescription(
+        key="stop_after", name="Stop after", native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=10, native_max_value=120, native_step=5, mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG, icon="mdi:timer-stop-outline",
+    ), OPT_STOP_AFTER),
+    (NumberEntityDescription(
+        key="start_after", name="Start after", native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=10, native_max_value=120, native_step=5, mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG, icon="mdi:timer-play-outline",
+    ), OPT_START_AFTER),
     (_watts("concentrate_below", "Concentrate below", 0, 1000, 50, "mdi:arrow-collapse-horizontal", category=False),
      OPT_CONCENTRATE_BELOW),
     (NumberEntityDescription(

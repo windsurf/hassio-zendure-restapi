@@ -14,8 +14,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CLUSTER_DEFAULTS,
+    CONF_DEVICE_TYPE,
     COORDINATED_KEYS,
     DEFAULTS,
+    DEVICE_TYPE_CLUSTER,
+    DEVICE_TYPE_VIRTUAL,
     MODE_FOLLOW,
     MODE_STANDBY,
     OPT_MAX_CHARGE_POWER,
@@ -58,7 +62,7 @@ class ZendureSettings:
         This is what an entry saved under an older version looks like after a
         mode is withdrawn.
         """
-        value = self._entry.options.get(key, DEFAULTS[key])
+        value = self._entry.options.get(key, self.default(key))
         if key == OPT_OPERATION_MODE and value not in OPERATION_MODES:
             _LOGGER.info(
                 "Stored operation mode '%s' no longer exists, falling back to '%s'",
@@ -69,17 +73,24 @@ class ZendureSettings:
             return DEFAULTS[key]
         return value
 
+    def default(self, key: str) -> Any:
+        """The default of a setting for this entry: a cluster has a few of its own (v1.7.4)."""
+        data = getattr(self._entry, "data", None) or {}
+        if key in CLUSTER_DEFAULTS and data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
+            return CLUSTER_DEFAULTS[key]
+        return DEFAULTS[key]
+
     def get_float(self, key: str) -> float:
         try:
             return float(self.get(key))
         except (TypeError, ValueError):
-            return float(DEFAULTS[key])
+            return float(self.default(key))
 
     def get_int(self, key: str) -> int:
         try:
             return int(self.get(key))
         except (TypeError, ValueError):
-            return int(DEFAULTS[key])
+            return int(self.default(key))
 
     def get_bool(self, key: str) -> bool:
         return bool(self.get(key))

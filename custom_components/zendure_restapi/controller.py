@@ -102,6 +102,11 @@ from .const import (
     OPT_SOC_PROTECTION,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    OPT_START_AFTER,
+    OPT_STOP_AFTER,
+    OPT_STOP_CHARGE_BELOW,
+    OPT_STOP_DISCHARGE_BELOW,
+    OPT_CONCENTRATE_BELOW,
     OPT_TRIM_FACTOR,
     SMART_MODES,
 )
@@ -132,6 +137,11 @@ class ControllerState:
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def _today(now: datetime) -> str:
+    """The local date of a moment, for the counters that start again every day."""
+    return dt_util.as_local(now).date().isoformat()
 
 
 def _as_int(value: Any) -> int | None:
@@ -224,6 +234,19 @@ class ZendureController:
         self._reverse_until: datetime | None = None
         self._last_direction = "none"
         self._idle_since: Any = None
+        # Stop below and Start after (v1.7.4): since when a running direction
+        # asks for less than its stop limit, which direction this controller
+        # stopped itself and in which mode, and since when a direction that is
+        # not running has been asked for above its start threshold.
+        self._below_since: datetime | None = None
+        self._below_dir: str | None = None
+        self._stopped: str | None = None
+        self._stopped_mode: str | None = None
+        self._start_since: datetime | None = None
+        self._start_dir: str | None = None
+        # Energy the grid gave while a start waited, and when that was last added.
+        self._start_wh = 0.0
+        self._start_last: datetime | None = None
         # Whether the one-time standby command has been sent for this stay in
         # standby. Cleared on the way out, so re-entering sends it again. None
         # until the first standby cycle decides it (v1.6.10): standby that is
@@ -311,11 +334,15 @@ class ZendureController:
         self.second_controller = False
 
         # ── Device restarts (v1.6.8) ─────────────────────────────────
-        # Recognised and shown, never answered with a write: whether an
-        # upgrade or a calibration is still running cannot be read from the
-        # report. The user chooses the mode again once it is done.
+        # Recognised and shown. Since v1.7.4 one exception: in standby, when
+        # the device comes back with limits this integration wrote itself, its
+        # last own setting is written back once (_restore), after a stable poll
+        # and with no update running. Anything else — a battery only watched,
+        # limits set by hand — is never answered with a write: the repair.
         self._restart_seen = 0
         self._restart_mismatch = False
+        self._restore: dict[str, int] | None = None
+        self._restore_seen_at: Any = None
         self._smart_checked_at: datetime | None = None
         self._prev_smart: int | None = None
         self._prev_snapshot: dict[str, Any] = {}
@@ -619,6 +646,8 @@ class ZendureController:
         if mode != MODE_STANDBY:
             # Arm the one-time standby command for the next stay in standby.
             self._standby_sent = False
+            # Every other mode writes its own limits on this cycle (v1.7.4).
+            self._restore = None
 
         if mode == MODE_STANDBY:
             await self._apply_standby(data)
@@ -917,6 +946,9 @@ class ZendureController:
         # a second later, and the two produce a square wave in grid power at
         # the polling period. After this command the controller is passive
         # again and whatever the manager does next is its own business.
+        if self._restore is not None:
+            if await self._restore_after_restart(data):
+                return
         if self._standby_sent is None:
             # The first standby cycle since setup (v1.6.10): standby was already
             # chosen, so leave the battery as it is — unless a limit this
@@ -1151,12 +1183,27 @@ class ZendureController:
         # continuing one — otherwise a load that disappears would leave the
         # battery discharging into the grid, with the controller waiting for an
         # idle state that can never arrive because nothing winds the limit down.
-        if self._last_direction == "discharge" and not idle:
+        #
+        # Idle is not the same as stopped: a battery delivering under the
+        # deadband (60 W) with its limit still set is idle and still running.
+        # That direction is balanced here as well, so its stop limit is checked
+        # and Start after does not count it as a new start, unless the grid asks
+        # for the other direction: that change stays as quick as before (v1.7.4).
+        # Without this, 40 W of demand on a 50 W stop limit ran on: the stop was
+        # only ever checked above 60 W.
+        running = self._device_direction(data)
+        quiet_discharge = (
+            idle and running == "discharge" and not (grid < start_charge and allow_charge)
+        )
+        quiet_charge = (
+            idle and running == "charge" and not (grid > start_discharge and allow_discharge)
+        )
+        if self._last_direction == "discharge" and (not idle or quiet_discharge):
             await self._smart_step(
                 data, charging=False, grid=grid, own=own, idle=idle,
             )
             return
-        if self._last_direction == "charge" and not idle:
+        if self._last_direction == "charge" and (not idle or quiet_charge):
             await self._smart_step(
                 data, charging=True, grid=grid, own=own, idle=idle,
             )
@@ -1170,6 +1217,17 @@ class ZendureController:
         # decides when a direction has ended, by reporting both limits at zero.
         if self._device_direction(data) == "none":
             self._last_direction = "none"
+
+        # A direction starts only once the demand has stayed past its start
+        # threshold for Start after seconds; after a stop of its own the
+        # threshold is the larger of the start threshold and the stop limit
+        # (v1.7.4). Without that, every short peak starts the battery: a
+        # boiling-water tap reheating at 2.2 kW for 9-10 s, every 7 to 30
+        # minutes, is over before the battery delivers from stand-still (6-15 s).
+        if await self._hold_start(
+            grid, mode, start_discharge, start_charge, allow_discharge, allow_charge
+        ):
+            return
 
         if grid > start_discharge and allow_discharge:
             await self._smart_step(
@@ -1485,6 +1543,12 @@ class ZendureController:
             # grid is positive (import); cover it down to buffer.
             raw = (grid + own - buffer) * factor
 
+        # Stop below comes before the floor and before the "settled" shortcut: on
+        # 20 W of demand and a limit of 20 W the shortcut returns every cycle, and
+        # a floor would keep the direction alive at its own value (v1.7.4).
+        if not starting and await self._stop_below(data, direction, raw):
+            return
+
         target = int(_clamp(raw, 0, cap))
 
         # A floor may raise the target above what the meter asks for, in every
@@ -1552,6 +1616,11 @@ class ZendureController:
             # Zero cycles means no settling state; the next poll evaluates
             # normally instead of reporting a hold it is not observing.
             self._hold = self._hold_cycles()
+            # A start ends a stop of its own, whichever direction starts.
+            self._stopped = None
+            self._start_since = None
+            self._start_dir = None
+            self._below_since = None
         self._last_direction = direction if target > 0 else "none"
         self._idle_since = None
 
@@ -1570,6 +1639,165 @@ class ZendureController:
             f"grid {grid:.0f} W, battery {own:.0f} W, factor {factor}",
             target=target,
             direction=direction,
+        )
+
+    # ── Stop below (v1.7.4) ──────────────────────────────────────────────
+
+    def _stop_limit(self, charging: bool) -> int:
+        """The demand under which a running direction stops, 0 when off.
+
+        In a battery cluster only the primary runs this loop, and its own demand
+        is the cluster's only while it works alone: below Concentrate below. So
+        the limit is capped there, and with Concentrate below at 0 it is off.
+        """
+        limit = max(0, self.settings.get_int(
+            OPT_STOP_CHARGE_BELOW if charging else OPT_STOP_DISCHARGE_BELOW
+        ))
+        group = getattr(self.settings, "group", None)
+        if limit > 0 and getattr(self.settings, "coordinated", False) and group is not None:
+            limit = min(limit, max(0, group.get_int(OPT_CONCENTRATE_BELOW)))
+        return limit
+
+    def _stop_after(self) -> int:
+        """Seconds the demand must stay under the limit before a direction stops."""
+        return max(0, self.settings.get_int(OPT_STOP_AFTER))
+
+    async def _stop_below(self, data: dict[str, Any], direction: str, raw: float) -> bool:
+        """Stop a running direction whose demand stays under its limit; True when stopped.
+
+        The demand is the target before clamp and floor: with the battery
+        running the grid sits near zero and says nothing, the target is what the
+        battery needs to keep it there. Stopping writes both limits to 0 in one
+        request, the state in which the device rests (5 W measured, against
+        ~37 W of conversion loss at 145 W). The trim loop is not touched before:
+        it follows the low demand until the time is up.
+        """
+        limit = self._stop_limit(direction == "charge")
+        if limit <= 0 or raw >= limit:
+            self._below_since = None
+            self._below_dir = None
+            return False
+        now = dt_util.utcnow()
+        if self._below_since is None or self._below_dir != direction:
+            self._below_since = now
+            self._below_dir = direction
+        waited = (now - self._below_since).total_seconds()
+        after = self._stop_after()
+        if waited < after:
+            return False
+        await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
+        self._owns_limits = False
+        self._last_direction = "none"
+        self._trim_direction = None
+        self._pending = 0.0
+        self._below_since = None
+        self._below_dir = None
+        self._stopped = direction
+        self._stopped_mode = str(self.settings.get(OPT_OPERATION_MODE))
+        self._start_since = None
+        self._start_dir = None
+        self._set_state(
+            "tracking",
+            f"stopped {direction}: demand {max(0.0, raw):.0f} W under {limit} W for {waited:.0f} s",
+        )
+        return True
+
+    def _start_after(self) -> int:
+        """Seconds the demand must stay past the start threshold before a direction starts."""
+        return max(0, self.settings.get_int(OPT_START_AFTER))
+
+    async def _hold_start(
+        self,
+        grid: float,
+        mode: str,
+        start_discharge: int,
+        start_charge: int,
+        allow_discharge: bool,
+        allow_charge: bool,
+    ) -> bool:
+        """Hold back a start until the demand has stayed past its threshold; True while it holds.
+
+        Only called while no direction runs (since v1.7.4 also not for one
+        that runs under the deadband: that one is balanced, see _apply_smart).
+        The threshold of a direction is
+        the larger of its start threshold and its stop limit, always (v1.7.4):
+        a start below the stop limit would only stop again after Stop after.
+        Until then this applied only after a stop of its own, which the
+        controller keeps in memory alone, so after a restart of Home Assistant,
+        a reload or a mode change the first start came at the start threshold
+        and stopped again a minute later. A changed mode or a stop limit set
+        back to 0 ends a stop of its own; a start ends it too (_smart_step).
+        With the stop limits at 0 and Start after at 0 this holds nothing, and
+        the start is exactly as in v1.7.3.
+        """
+        stopped = self._stopped
+        if stopped is not None:
+            if self._stop_limit(stopped == "charge") <= 0 or self._stopped_mode != mode:
+                stopped = self._stopped = None
+        discharge_at = max(start_discharge, self._stop_limit(False))
+        charge_at = max(-start_charge, self._stop_limit(True))
+        if grid > discharge_at and allow_discharge:
+            wanted, demand, threshold = "discharge", grid, discharge_at
+        elif -grid > charge_at and allow_charge:
+            wanted, demand, threshold = "charge", -grid, charge_at
+        else:
+            # The demand fell back before Start after was up: a skipped peak.
+            self._skipped_peak()
+            self._start_since = None
+            self._start_dir = None
+            if stopped is None:
+                # Past the start threshold but not past the stop limit: a start
+                # here would stop again after Stop after.
+                if grid > start_discharge and allow_discharge:
+                    waiting, demand, limit = "discharge", grid, discharge_at
+                elif grid < start_charge and allow_charge:
+                    waiting, demand, limit = "charge", -grid, charge_at
+                else:
+                    return False
+                self._set_state(
+                    "tracking",
+                    f"{waiting} waits: demand {demand:.0f} W under the stop limit {limit} W",
+                )
+                return True
+            limit = discharge_at if stopped == "discharge" else charge_at
+            demand = grid if stopped == "discharge" else -grid
+            self._set_state(
+                "tracking",
+                f"stopped {stopped}: demand {max(0.0, demand):.0f} W, "
+                f"starts again above {limit} W for {self._start_after()} s",
+            )
+            return True
+        after = self._start_after()
+        if after <= 0:
+            return False
+        now = dt_util.utcnow()
+        if self._start_since is None or self._start_dir != wanted:
+            # The other direction was waiting: that one never came.
+            self._skipped_peak()
+            self._start_since = now
+            self._start_dir = wanted
+            self._start_wh = 0.0
+            self._start_last = now
+        # What the grid gave meanwhile, for the skipped peak should it end so.
+        self._start_wh += demand * max(0.0, (now - self._start_last).total_seconds()) / 3600.0
+        self._start_last = now
+        waited = (now - self._start_since).total_seconds()
+        if waited >= after:
+            return False
+        self._set_state(
+            "tracking",
+            f"{wanted} waits: demand {demand:.0f} W above {threshold} W for {waited:.0f} of {after} s",
+        )
+        return True
+
+    def _skipped_peak(self) -> None:
+        """File a start that Start after held back and that never came (v1.7.4)."""
+        since, direction = self._start_since, self._start_dir
+        if since is None or direction is None:
+            return
+        now = dt_util.utcnow()
+        self.measure.on_skipped_peak(
+            _today(now), direction, (now - since).total_seconds(), self._start_wh
         )
 
     def _mode_threshold(self) -> int:
@@ -2028,6 +2256,8 @@ class ZendureController:
     def _restart_check(self, data: dict[str, Any], after_restart: bool = False) -> None:
         """One repair while standby holds a limit the device brought back.
 
+        Unless the limits are this integration's own (v1.7.4): then its last own
+        setting goes back once instead (_own_setting, _restore_after_restart).
         Only standby: every other mode writes its own limit on its next cycle.
         The repair goes away once the limits are 0 again or another mode is
         chosen. Choosing standby again sends the standby command again.
@@ -2037,11 +2267,79 @@ class ZendureController:
         limit_out = _as_int(data.get("outputLimit")) or 0
         holding = mode == MODE_STANDBY and (limit_in > 0 or limit_out > 0)
         if after_restart and holding and not self._restart_mismatch:
+            restore = self._own_setting({"inputLimit": limit_in, "outputLimit": limit_out})
+            if restore is not None:
+                # Written back on the next standby cycle, not now: one stable
+                # poll after the restart first (v1.7.4).
+                self._restore = restore
+                self._restore_seen_at = self.coordinator.updated_at
+                _LOGGER.info(
+                    "Restart in standby with limits of our own (charge %s W, discharge %s W): "
+                    "writing back the last own setting %s", limit_in, limit_out, restore,
+                )
+                return
             self._restart_mismatch = True
             self._restart_issue(True, limit_in, limit_out)
         elif self._restart_mismatch and not holding:
             self._restart_mismatch = False
             self._restart_issue(False)
+
+    def _own_setting(self, came_back: dict[str, int]) -> dict[str, int] | None:
+        """The last setting this integration wrote, when the limits a restart
+        brought back are its own; None otherwise (v1.7.4).
+
+        Own means: every limit above 0 that came back is among the last
+        WRITE_HISTORY values this integration wrote for that limit in this run
+        of Home Assistant. A battery only watched has no own setting; a limit
+        set by hand is not among them; after a restart of Home Assistant the
+        history is empty and the repair comes, as before.
+        """
+        last: dict[str, int] = {}
+        for key in ("inputLimit", "outputLimit", "smartMode"):
+            history = self._last_written.get(key)
+            if history:
+                last[key] = history[0][0]
+        if "inputLimit" not in last or "outputLimit" not in last:
+            return None
+        for key, value in came_back.items():
+            if value <= 0:
+                continue
+            ours = any(w[0] == value for w in self._last_written.get(key, ()))
+            if not ours:
+                return None
+        if all(last.get(key) == value for key, value in came_back.items()):
+            return None
+        return last
+
+    async def _restore_after_restart(self, data: dict[str, Any]) -> bool:
+        """Write the last own setting back once, in standby after a restart; True when written.
+
+        Waits for one poll after the one that showed the restart, and while
+        the device reports an update running (OTAState not 0); the repair stays
+        away meanwhile. A mode other than standby drops it (_run).
+        """
+        restore = self._restore
+        if restore is None:
+            return False
+        if self.coordinator.updated_at == self._restore_seen_at:
+            self._set_state("standby", "restart: one stable poll before the last own setting goes back")
+            return True
+        ota = _as_int(data.get("OTAState"))
+        if ota not in (None, 0):
+            self._set_state("standby", f"restart: waiting for the update to finish (OTA state {ota})")
+            return True
+        await self._write_many(list(restore.items()), data, force=True)
+        self._restore = None
+        self._standby_sent = True
+        self._owns_limits = False
+        self._last_direction = "none"
+        if restore.get("inputLimit", 0) <= 0 and restore.get("outputLimit", 0) <= 0:
+            _OPEN_LIMITS.discard(self._stop_key())
+        self._set_state(
+            "standby",
+            f"restored after a restart: charge {restore['inputLimit']} W, discharge {restore['outputLimit']} W",
+        )
+        return True
 
     def _restart_issue(self, create: bool, limit_in: int = 0, limit_out: int = 0) -> None:
         entry = getattr(self.coordinator, "config_entry", None)
@@ -2137,10 +2435,19 @@ class ZendureController:
         """
         target_key = key or ("inputLimit" if ac_mode == AC_MODE_CHARGE else "outputLimit")
         other_key = "outputLimit" if target_key == "inputLimit" else "inputLimit"
+        was_running = (_as_int(data.get("inputLimit")) or 0) > 0 or (_as_int(data.get("outputLimit")) or 0) > 0
+        was_mode = _as_int(data.get("acMode"))
         await self._write_many(
             [("smartMode", 1), (other_key, 0), ("acMode", ac_mode), (target_key, limit)], data
         )
         self._owns_limits = limit > 0
+        # Relay switches (v1.7.4): a start from standstill, or a change of direction.
+        if limit > 0 and (_as_int(data.get(target_key)) or 0) > 0:
+            now = dt_util.utcnow()
+            if not was_running:
+                self.measure.on_relay(now, _today(now), "start")
+            elif was_mode is not None and was_mode != ac_mode:
+                self.measure.on_relay(now, _today(now), "reversal")
 
     @staticmethod
     def _holds(data: dict[str, Any], key: str, value: Any) -> bool:
@@ -2199,6 +2506,14 @@ class ZendureController:
         data[key] = value
         if key == "smartMode" and _as_int(value) == 0:
             self._smart_off_at = dt_util.utcnow()
+        if (
+            key in ("inputLimit", "outputLimit")
+            and (_as_int(data.get("inputLimit")) or 0) <= 0
+            and (_as_int(data.get("outputLimit")) or 0) <= 0
+        ):
+            # Both limits at 0: the run that the last relay switch began ends.
+            now = dt_util.utcnow()
+            self.measure.on_run_end(now, _today(now))
         try:
             written = int(value)
         except (TypeError, ValueError):

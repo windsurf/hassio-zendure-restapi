@@ -13,7 +13,8 @@ Timings, as measured on a SolarFlow 3000 Mix AC+ and in Zendure's own replay
     from standstill full power follows within       ~2 s after that (v1.7.2)
     a running battery changes its power at          200 W/s
     a stop is complete after                        ~3 s from the write
-    conversion, both ways                           95 %
+    conversion, discharging (v1.7.4)           DC = 1.027 x AC + 32.9 W
+    conversion, charging (v1.7.4)              DC = 0.967 x AC - 44 W
     draw at rest                                    29 W with smartMode 1, 5 W with 0
 
 Energy per percent (v1.7.2), measured on the same device over full
@@ -38,7 +39,19 @@ START_DELAY_S = 6.2         # from standstill: first power this long after the s
 RAMP_UP_W_S = 200.0         # a running battery
 RAMP_UP_COLD_W_S = 1500.0   # from standstill: 0 to 3 kW in ~2 s, measured (v1.7.2)
 RAMP_DOWN_W_S = 2500.0      # a 3 kW stop in ~1.2 s after the setpoint: ~3 s from the write
-EFFICIENCY = 0.95
+# Conversion as a fixed plus a proportional part (v1.7.4); until then one
+# 95 % both ways, which at 150 W gave ~8 W of loss against ~37 W measured.
+# Discharging: least squares over 33 still pairs on a 3000 Mix AC+ (README2,
+# "Separating the fixed and proportional parts"): 37 W at 31 W AC, 39 W at
+# 131 W, ~111 W at 3 kW. Charging: a fixed ~44 W from a second, independent
+# series on the same model (published measurements; at 50 W AC next to nothing reached
+# the pack, measured on the DC side), the proportional part fitted to our own
+# 3 kW point (2856 W DC of 2999 W AC, three windows). Under ~46 W AC the
+# converter takes more than comes in, and the cells give the rest.
+DISCHARGE_FACTOR = 1.027
+DISCHARGE_FIXED_W = 32.9
+CHARGE_FACTOR = 0.967
+CHARGE_FIXED_W = 44.0
 REST_DRAW_FLAG_W = 29.0     # cells at rest with smartMode 1 (backup closed)
 REST_DRAW_W = 5.0           # cells at rest with smartMode 0 (backup closed)
 FLOW_W = 20.0               # below this the inverter counts as standing still
@@ -49,6 +62,20 @@ SOC_LIMIT_LOWER = 2
 _DYNAMIC = ("outputLimit", "inputLimit", "acMode", "smartMode")
 
 
+def cells(ac: float) -> float:
+    """Power at the cells for a power at the AC port (v1.7.4).
+
+    Positive while discharging (drawn from the cells), negative while charging
+    (stored in them); a charge too small for the converter's own draw comes out
+    positive: the cells give the difference.
+    """
+    if ac > 0:
+        return DISCHARGE_FACTOR * ac + DISCHARGE_FIXED_W
+    if ac < 0:
+        return -(CHARGE_FACTOR * -ac - CHARGE_FIXED_W)
+    return 0.0
+
+
 def _int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -56,7 +83,7 @@ def _int(value: Any, default: int = 0) -> int:
         return default
 
 
-class SimDevice:
+class VirtualDevice:
     """One simulated battery, a copy of a real one."""
 
     def __init__(
@@ -190,10 +217,8 @@ class SimDevice:
             return
         # Cells over this slice, at the power it starts with: discharge draws
         # more than the house gets, charge stores less.
-        if self.power > 0:
-            dc = self.power / EFFICIENCY
-        elif self.power < 0:
-            dc = self.power * EFFICIENCY
+        if self.power != 0:
+            dc = cells(self.power)
         else:
             dc = REST_DRAW_FLAG_W if _int(self.props.get("smartMode")) == 1 else REST_DRAW_W
         per = self.wh_per_percent_out if dc > 0 else self.wh_per_percent_in
@@ -251,12 +276,7 @@ class SimDevice:
         p["packInputPower"] = max(0, ac)
         p["outputPackPower"] = max(0, -ac)
         p["packState"] = 2 if ac > 5 else (1 if ac < -5 else 0)
-        if self.power > 0:
-            dc = self.power / EFFICIENCY
-        elif self.power < 0:
-            dc = -self.power * EFFICIENCY
-        else:
-            dc = 0.0
+        dc = abs(cells(self.power)) if self.power != 0 else 0.0
         share = dc / max(1, len(self.packs))
         for pack in self.packs:
             pack["socLevel"] = int(round(self.soc))

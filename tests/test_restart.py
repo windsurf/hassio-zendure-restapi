@@ -1,4 +1,7 @@
-"""A device restart: recognised, recorded and shown, never answered with a write.
+"""A device restart: recognised, recorded and shown, never answered with a write,
+with one exception since v1.7.4: in standby, limits that this integration wrote
+itself are answered once with its last own setting, after a stable poll and with
+no update running.
 
 Modelled on a firmware upgrade of a SolarFlow 3000 Mix AC+: 275 s without a
 report, then messageId starting again, smartMode 0, and the limits the device
@@ -7,6 +10,7 @@ messageId counts in 8 bits, so its turn from 255 to 0 is not a restart.
 """
 
 import asyncio
+from collections import deque
 from datetime import timedelta
 from unittest.mock import MagicMock
 
@@ -207,3 +211,83 @@ def test_first_run_records_keys_silently_then_new_keys_raise_a_repair(issues):
     co._track_unknown({"electricLevel": 50, "acReverse": 0, "testKey": 0})
     assert [i for i, _ in created] == ["new_property_entry1"]
     assert created[0][1]["translation_placeholders"]["keys"] == "testKey"
+
+
+# Fresh copies: a test that writes the standby command changes the report it
+# was handed, and the module-level AFTER is shared between tests.
+BEFORE_HELD = dict(BEFORE)
+_AFTER_HELD = {"messageId": 9, "acMode": 1, "inputLimit": 3000, "outputLimit": 0, "smartMode": 0,
+               "electricLevel": 94, "socLimit": 2, "socStatus": 0, "faultLevel": 0}
+
+
+def after_held():
+    return dict(_AFTER_HELD)
+
+
+def own_history(c):
+    # quick_charge wrote 3000 W, then standby stopped it: the last own setting is 0, 0, smartMode 0
+    c._last_written = {
+        "inputLimit": deque([(0, "mode"), (3000, "mode")]),
+        "outputLimit": deque([(0, "mode")]),
+        "smartMode": deque([(0, "mode"), (1, "mode")]),
+    }
+
+
+def test_own_limit_after_a_restart_in_standby_goes_back_to_the_last_own_setting(issues):
+    created, _ = issues
+    co = make_coordinator()
+    co.config_entry = MagicMock(entry_id="entry1", title="Test battery")
+    c = make_controller(C.MODE_STANDBY, co)
+    own_history(c)
+    report(co, dict(BEFORE_HELD), T0)
+    c._watch_writers()
+    report(co, after_held(), T0 + timedelta(seconds=285))
+    c._watch_writers()
+    assert created == [], "no repair: the limit is our own"
+    assert c._restore == {"inputLimit": 0, "outputLimit": 0, "smartMode": 0}
+    # same poll: one stable poll first
+    asyncio.run(c._apply_standby(co.data))
+    assert sent(c) == []
+    report(co, after_held(), T0 + timedelta(seconds=295))
+    asyncio.run(c._apply_standby(co.data))
+    assert sent(c) == [[("inputLimit", 0), ("outputLimit", 0), ("smartMode", 0)]]
+    assert c._restore is None
+    assert "restored after a restart" in c._set_state.call_args.args[1]
+    # once: the next standby cycle is passive again
+    asyncio.run(c._apply_standby(co.data))
+    assert len(sent(c)) == 1
+
+
+def test_an_update_still_running_holds_the_restore(issues):
+    co = make_coordinator()
+    co.config_entry = MagicMock(entry_id="entry1", title="Test battery")
+    c = make_controller(C.MODE_STANDBY, co)
+    own_history(c)
+    report(co, dict(BEFORE_HELD), T0)
+    c._watch_writers()
+    report(co, after_held(), T0 + timedelta(seconds=285))
+    c._watch_writers()
+    report(co, {**after_held(), "OTAState": 1}, T0 + timedelta(seconds=295))
+    asyncio.run(c._apply_standby(co.data))
+    assert sent(c) == [] and c._restore is not None
+    report(co, {**after_held(), "OTAState": 0}, T0 + timedelta(seconds=305))
+    asyncio.run(c._apply_standby(co.data))
+    assert len(sent(c)) == 1
+
+
+def test_a_limit_that_is_not_our_own_gets_the_repair_and_no_write(issues):
+    created, _ = issues
+    co = make_coordinator()
+    co.config_entry = MagicMock(entry_id="entry1", title="Test battery")
+    c = make_controller(C.MODE_STANDBY, co)
+    # we only ever wrote 0: the 3000 W came from someone else (set by hand)
+    c._last_written = {"inputLimit": deque([(0, "mode")]), "outputLimit": deque([(0, "mode")])}
+    c._standby_sent = True  # the standby command went out before the restart
+    report(co, dict(BEFORE_HELD), T0)
+    c._watch_writers()
+    report(co, after_held(), T0 + timedelta(seconds=285))
+    c._watch_writers()
+    assert [i for i, _ in created] == ["restart_limits_entry1"] and c._restore is None
+    report(co, after_held(), T0 + timedelta(seconds=295))
+    asyncio.run(c._apply_standby(co.data))
+    assert sent(c) == []

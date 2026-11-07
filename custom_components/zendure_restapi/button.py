@@ -21,6 +21,6 @@ async def async_setup_entry(
 
         async_add_entities(cluster_entities(Platform.BUTTON, hass, entry))
     elif kind == DEVICE_TYPE_VIRTUAL:
-        from .sim.entities import virtual_entities
+        from .virtual.entities import virtual_entities
 
         async_add_entities(virtual_entities(Platform.BUTTON, hass, entry))

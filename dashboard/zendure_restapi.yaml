@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.7.3
+# ZENDURE RESTAPI DASHBOARD - v1.7.4
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -526,6 +526,38 @@ views:
       - type: numeric-input
         style: slider
     - type: tile
+      entity: number.zendure_solarflow_3000_mix_ac_stop_charging_below
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.zendure_solarflow_3000_mix_ac_stop_discharging_below
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.zendure_solarflow_3000_mix_ac_stop_after
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
+      entity: number.zendure_solarflow_3000_mix_ac_start_after
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+    - type: tile
       entity: number.zendure_solarflow_3000_mix_ac_mode_threshold
       name:
         type: entity
@@ -664,6 +696,41 @@ views:
     column_span: 2
     cards:
     - type: heading
+      heading: Advanced settings
+      heading_style: title
+      icon: mdi:tune-variant
+    - type: tile
+      entity: select.zendure_solarflow_3000_mix_ac_fan_speed_mode
+      name:
+        type: entity
+    - type: tile
+      entity: switch.zendure_solarflow_3000_mix_ac_fan_forced_on
+      name:
+        type: entity
+    - type: tile
+      entity: number.zendure_solarflow_3000_mix_ac_calibration_interval
+      name:
+        type: entity
+    - type: tile
+      entity: select.zendure_solarflow_3000_mix_ac_grid_standard
+      name:
+        type: entity
+    - type: tile
+      entity: binary_sensor.zendure_solarflow_3000_mix_ac_pv_ac_coupling
+      name:
+        type: entity
+    - type: tile
+      entity: binary_sensor.zendure_solarflow_3000_mix_ac_soc_compensation
+      name:
+        type: entity
+    - type: tile
+      entity: binary_sensor.zendure_solarflow_3000_mix_ac_hv_battery_control
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
       heading: Pack 1
       heading_style: title
       icon: mdi:battery-high
@@ -705,6 +772,85 @@ views:
         type: entity
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_model
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_pack_1_type
+      name:
+        type: entity
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Device data
+      heading_style: title
+      icon: mdi:database-outline
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_bind_state
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_device_timestamp
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_report_timestamp
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_message_id
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_timezone_offset
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_write_response
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_factory_mode_state
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_grid_hd_status
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_iot_connection_state
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_legacy_mode
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_off_grid_state
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_ota_state
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_phase_switch
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_powerhub_status
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_slave_address
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_voltage_wake_up
+      name:
+        type: entity
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_hv_battery_voltage_raw
       name:
         type: entity
   - type: grid
@@ -1597,7 +1743,7 @@ views:
         yaxis_id: power
         group_by:
           func: avg
-          duration: 10s
+          duration: 1min
           fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_home_output_power
         name: Discharging
@@ -1615,7 +1761,7 @@ views:
         yaxis_id: power
         group_by:
           func: avg
-          duration: 10s
+          duration: 1min
           fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_grid_input_power
         name: Charging
@@ -1634,7 +1780,7 @@ views:
         yaxis_id: power
         group_by:
           func: avg
-          duration: 10s
+          duration: 1min
           fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
         name: PV
@@ -1652,7 +1798,7 @@ views:
         yaxis_id: power
         group_by:
           func: avg
-          duration: 10s
+          duration: 1min
           fill: last
       - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
         name: SoC
@@ -1669,7 +1815,7 @@ views:
           legend_value: false
         group_by:
           func: avg
-          duration: 10s
+          duration: 1min
           fill: last
         stroke_dash: 4
       grid_options:
@@ -2031,13 +2177,28 @@ views:
       grid_options:
         columns: 12
         rows: 2
-  - type: grid
-    column_span: 2
-    cards:
-    - type: heading
-      heading: Margin
-      heading_style: title
-      icon: mdi:cash-check
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_skipped_peaks
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_relay_switches
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
     - type: tile
       entity: sensor.price_control_realized_margin
       name:

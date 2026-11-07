@@ -8,7 +8,7 @@
                                             ├─ clone 2  twin SoC + offset
                                             └─ clone 3  twin SoC + offset
 
-Each clone is the integration's own coordinator and controller on a SimDevice
+Each clone is the integration's own coordinator and controller on a VirtualDevice
 instead of the network, so it regulates with exactly the code of the real
 battery and with the real battery's own tuning. The group logic is the
 battery cluster of v1.7.0, unchanged. The clones are kept here, not in
@@ -58,6 +58,10 @@ from ..const import (
     OPT_RESPONSE_OFFSET_3,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
+    OPT_START_AFTER,
+    OPT_STOP_AFTER,
+    OPT_STOP_CHARGE_BELOW,
+    OPT_STOP_DISCHARGE_BELOW,
     OPT_TAKE_PART,
     PACK_PREFIX,
     SIGNAL_CLUSTER,
@@ -72,8 +76,8 @@ from ..cluster.runtime import ClusterCoordinator
 from ..member import ZendureMember
 from ..registry import model_name, pack_model
 from ..settings import SettingsView, ZendureSettings
-from .api import SimApi
-from .device import SimDevice
+from .api import VirtualApi
+from .device import VirtualDevice
 from .meter import VirtualMeter
 
 _LOGGER = logging.getLogger(__name__)
@@ -113,7 +117,9 @@ class VirtualSettings(ZendureSettings):
 # returns to Follow source and not to the standby of a real battery.
 VIRTUAL_RESET_KEYS = (
     OPT_OPERATION_MODE, OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER,
-    OPT_START_DISCHARGE_AT, OPT_START_CHARGE_AT, OPT_CONCENTRATE_BELOW, OPT_REDISTRIBUTE,
+    OPT_START_DISCHARGE_AT, OPT_START_CHARGE_AT,
+    OPT_STOP_DISCHARGE_BELOW, OPT_STOP_CHARGE_BELOW, OPT_STOP_AFTER, OPT_START_AFTER,
+    OPT_CONCENTRATE_BELOW, OPT_REDISTRIBUTE,
     OPT_CLONES, OPT_LOAD_FACTOR,
     OPT_SOC_OFFSET_1, OPT_SOC_OFFSET_2, OPT_SOC_OFFSET_3,
     OPT_RESPONSE_OFFSET_1, OPT_RESPONSE_OFFSET_2, OPT_RESPONSE_OFFSET_3,
@@ -152,11 +158,11 @@ class GroupView:
         return bool(self.get(key))
 
 
-class SimCoordinator(ZendureCoordinator):
+class VirtualCoordinator(ZendureCoordinator):
     """The poll of a clone. No config entry of its own: no stored measurements,
     no repairs, no Price Control for a battery that does not exist."""
 
-    def __init__(self, hass: HomeAssistant, api: SimApi, scan_interval: int) -> None:
+    def __init__(self, hass: HomeAssistant, api: VirtualApi, scan_interval: int) -> None:
         super().__init__(hass, api, scan_interval)
         self.config_entry = None
 
@@ -170,7 +176,7 @@ OLD_COPY_PREFIXES = ("virtual_mix_", "virtual_battery_")
 class Clone:
     """One copy of the real battery."""
 
-    def __init__(self, index: int, name: str, model: str, device: SimDevice, coordinator: SimCoordinator,
+    def __init__(self, index: int, name: str, model: str, device: VirtualDevice, coordinator: VirtualCoordinator,
                  settings: MemorySettings, view: SettingsView, controller: ZendureController,
                  member: ZendureMember) -> None:
         self.index = index
@@ -263,6 +269,7 @@ class VirtualCluster:
             start_discharge_at=s.get_int(OPT_START_DISCHARGE_AT),
             concentrate_below=s.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=s.get_int(OPT_REDISTRIBUTE),
+            start_after=s.get_int(OPT_START_AFTER),
         )
 
     def load_factor(self) -> float:
@@ -389,11 +396,11 @@ class VirtualCluster:
         tail = self.entry.entry_id[-6:].upper()
         for index, soc in enumerate(socs, start=1):
             serial = f"SIMULATED{index}{tail}"
-            device = SimDevice(source_coord.raw, serial, soc, capacity,
+            device = VirtualDevice(source_coord.raw, serial, soc, capacity,
                                extra_delay=lambda i=index: self.response_offset(i),
                                wh_per_percent=self.energy["wh_per_percent"],
                                charge_efficiency=self.energy["charge_efficiency"])
-            coordinator = SimCoordinator(self.hass, SimApi(device), scan)
+            coordinator = VirtualCoordinator(self.hass, VirtualApi(device), scan)
             settings = MemorySettings(own)
             view = SettingsView(settings)
             controller = ZendureController(coordinator, view)

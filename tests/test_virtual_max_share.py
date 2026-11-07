@@ -15,7 +15,7 @@ from custom_components.zendure_restapi.cluster.contract import (
 )
 from custom_components.zendure_restapi.cluster.group import Distributor
 from custom_components.zendure_restapi.const import MAX_SHARE_LIMIT, OPT_MAX_SHARE_CLONES, VIRTUAL_DEFAULTS
-from custom_components.zendure_restapi.sim.cluster import VirtualCluster
+from custom_components.zendure_restapi.virtual.cluster import VirtualCluster
 
 
 def cluster(values: dict, clones: list | None = None) -> VirtualCluster:

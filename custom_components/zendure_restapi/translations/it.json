@@ -138,12 +138,13 @@
           "scan_interval": "Secondi tra le interrogazioni (1-60)",
           "solar_power_entity": "Potenza solare esterna alla batteria (facoltativo, per la dashboard)",
           "solar_energy_entity": "Energia solare esterna alla batteria (facoltativo, per la dashboard)",
-          "create_dashboard": "Crea la dashboard Zendure RestAPI (una esistente resta invariata)",
-          "rebuild_dashboard": "Sostituisci la dashboard esistente con una nuova (le tue modifiche vanno perse)"
+          "reset_settings": "Reimposta impostazioni: le impostazioni di controllo ai valori predefiniti",
+          "rebuild_dashboard": "Ricostruisci dashboard (le tue modifiche vanno perse)"
         },
         "data_description": {
           "solar_power_entity": "Una presa smart su un microinverter o un secondo inverter. Le serie PV della dashboard la mostrano: al posto del PV della batteria se non è in uso, accanto altrimenti. Il controllo non ne ha bisogno, il contatore di rete vede già questa potenza.",
-          "solar_energy_entity": "Il suo contatore kWh, per i totali giornalieri della scheda History."
+          "solar_energy_entity": "Il suo contatore kWh, per i totali giornalieri della scheda History.",
+          "reset_settings": "Margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, potenza di carica e scarica min 0 W, Soglia modalità 10 W, Soglia di correzione 40 W, forza di correzione 80 %, Ritardo cambio direzione 10 s. Operation mode, potenza di carica e scarica max, protezione SOC, il contatore e Price Control restano come sono. In un cluster valgono le impostazioni del gruppo."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "Modalità operativa, buffer, soglie e sorgente del contatore sono entità del cluster. Le batterie sono le sue sottovoci.",
         "data": {
           "external_meter": "Contatore esterno",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Ricostruisci dashboard (le tue modifiche vanno perse)"
         }
       },
       "virtual": {
         "title": "Virtual cluster",
         "description": "Copies, offsets, Max share and the group settings are entities of the Virtual cluster and its copies.",
         "data": {
-          "reset_copies": "Reset: every copy still and started again around your battery's state of charge",
+          "reset_copies": "Reimposta copie: ogni copia si ferma e riparte intorno allo stato di carica della tua batteria",
           "reset_settings": "Reset settings: every setting of the Virtual cluster and its copies back to its default",
-          "rebuild_dashboard": "Rebuild the cluster dashboard (your own changes to it are lost)"
+          "rebuild_dashboard": "Ricostruisci dashboard (le tue modifiche vanno perse)"
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, and the buffers, start thresholds, Concentrate below and Redistribute every as in a new cluster. The copies keep running; tick Reset as well to start them with the new offsets. Your own battery and Price Control are not touched."
+          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Concentrate below 300 W, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Scritture perse"
       },
+      "skipped_peaks": {
+        "name": "Picchi saltati"
+      },
+      "relay_switches": {
+        "name": "Commutazioni del relè"
+      },
       "group_power": {
         "name": "Potenza batteria"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Avvia scarica da prelievo"
       },
+      "stop_charge_below": {
+        "name": "Ferma carica sotto"
+      },
+      "stop_discharge_below": {
+        "name": "Ferma scarica sotto"
+      },
+      "stop_after": {
+        "name": "Ferma dopo"
+      },
+      "start_after": {
+        "name": "Avvia dopo"
+      },
       "trim_factor": {
         "name": "Intensità di correzione"
       },
@@ -893,7 +912,7 @@
         "name": "Reset"
       },
       "rebuild_dashboard": {
-        "name": "Rebuild dashboard"
+        "name": "Ricostruisci dashboard"
       }
     }
   },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} si è riavviato con un limite",
-      "description": "Dopo un riavvio (aggiornamento firmware o mancanza di corrente) {device} è tornato con i limiti che aveva salvato per ultimi: carica {input} W, scarica {output} W, mentre Operation mode è su standby. L'integrazione non scrive nulla dopo un riavvio, perché un aggiornamento potrebbe essere ancora in corso. Al termine, scegli di nuovo standby: il comando di standby viene inviato di nuovo e la batteria si ferma. Questo messaggio scompare da solo quando entrambi i limiti sono 0 o viene scelta un'altra modalità."
+      "description": "Dopo un riavvio (aggiornamento firmware o mancanza di corrente) {device} è tornato con i limiti che aveva salvato per ultimi: carica {input} W, scarica {output} W, mentre Operation mode è su standby. Non sono limiti scritti da questa integrazione dall'avvio di Home Assistant, forse impostati a mano, quindi li lascia stare; i propri limiti li avrebbe ripristinati da sola. Per fermare la batteria, scegli di nuovo standby: il comando di standby viene inviato di nuovo e la batteria si ferma. Questo messaggio scompare da solo quando entrambi i limiti sono 0 o viene scelta un'altra modalità."
     },
     "new_property": {
       "title": "{device} segnala nuove proprietà",

@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.3"
+INTEGRATION_VERSION = "1.7.4"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -209,6 +209,12 @@ OPT_MAX_CHARGE_POWER = "max_charge_power"
 OPT_MAX_DISCHARGE_POWER = "max_discharge_power"
 OPT_START_DISCHARGE_AT = "start_discharge_at"
 OPT_START_CHARGE_AT = "start_charge_at"
+# Stop a running direction whose demand stays under a limit for a time (v1.7.4).
+OPT_STOP_CHARGE_BELOW = "stop_charge_below"
+OPT_STOP_DISCHARGE_BELOW = "stop_discharge_below"
+OPT_STOP_AFTER = "stop_after"
+# How long the demand stays past the start threshold before a direction starts (v1.7.4).
+OPT_START_AFTER = "start_after"
 OPT_DIRECTION_DELAY = "direction_change_delay"
 OPT_MODE_THRESHOLD = "mode_threshold"
 OPT_TRIM_THRESHOLD = "trim_threshold"
@@ -229,12 +235,14 @@ OPT_CREATE_DASHBOARD = "create_dashboard"
 # Set once the dashboard was created, found, or tried without being asked
 # (v1.6.3): it is made by default, once, and never again after a user deleted it.
 OPT_DASHBOARD_OFFERED = "dashboard_offered"
-# A one-off request to replace the existing dashboard with a fresh one (v1.6.6).
+# A one-off request to replace the existing dashboard with a fresh one (v1.6.6);
+# the tick reads *Rebuild dashboard* on a battery as on a cluster since v1.7.4.
 # The user's own edits to it are lost; the options say so.
 OPT_REBUILD_DASHBOARD = "rebuild_dashboard"
 # Reset the copies of a Virtual cluster from its options (v1.7.3); not stored.
 OPT_RESET_COPIES = "reset_copies"
-# Every setting of a Virtual cluster back to its default, from its options (v1.7.3); not stored.
+# Every setting of a Virtual cluster back to its default, from its options (v1.7.3);
+# on a battery its controller settings (v1.7.4). Not stored.
 OPT_RESET_SETTINGS = "reset_settings"
 # Solar from outside the device, for the dashboard only (v1.6.6): a smart plug
 # on a micro inverter, a second inverter. Control needs none of it, the grid
@@ -351,6 +359,7 @@ CLUSTER_KEY = "_cluster"
 # Settings of a member that come from the cluster while it takes part.
 COORDINATED_KEYS = frozenset({
     "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
+    "stop_charge_below", "stop_discharge_below", "stop_after", "start_after",
     "meter_source", "external_meter",
 })
 
@@ -358,7 +367,7 @@ COORDINATED_KEYS = frozenset({
 # A copy of an existing battery, up to three times, under a cluster of
 # its own with a virtual P1: house load x Load factor - what the clones
 # deliver. Writes nothing to the real battery and does not claim the grid.
-# The model lives in sim/.
+# The model lives in virtual/ (virtual/ until v1.7.4).
 DEVICE_TYPE_VIRTUAL = "virtual_cluster"
 VIRTUAL_DEVICE_NAME = "Virtual cluster"
 VIRTUAL_MODEL = "Virtual cluster (simulated)"
@@ -446,6 +455,27 @@ DEFAULTS = {
     OPT_MAX_DISCHARGE_POWER: 800,
     OPT_START_DISCHARGE_AT: 5,          # W of import before discharging starts
     OPT_START_CHARGE_AT: 5,             # W of export before charging starts
+    # Stop a running direction whose demand stays under the limit for Stop after
+    # seconds, and start it only once the demand has stayed past the start
+    # threshold for Start after seconds; after a stop of its own past the larger
+    # of the start threshold and the limit (v1.7.4). Measured on a SolarFlow 3000
+    # Mix AC+: 5 W at rest against a fixed ~33 W of conversion loss while running,
+    # so under 50 W less than two thirds of what leaves the pack reaches the
+    # house. 50 W lies under the base load of nearly every house: it stops only
+    # those moments, and a day plan that covers the base load is not in the way.
+    # Charging has a larger fixed part (~44 W): at 50 W AC about 8 % reaches
+    # the cells, at 80 W about 41 %. Charging stops below 50 W as well: on a
+    # fixed-price contract with feed-in costs even 8 % beats exporting. On a
+    # dynamic contract from 2027 exporting beats storing below about 80 W;
+    # the docs advise 80 W for charging there.
+    # Start after 30 s lets the short peaks of a kettle tap or a compressor
+    # (about 10 s) pass to the grid with room to spare; the battery needs 6-15 s
+    # to wake anyway. A cluster has the same defaults: below Concentrate below
+    # only its primary works, and that is one battery.
+    OPT_STOP_CHARGE_BELOW: 50,          # W, 0 = off
+    OPT_STOP_DISCHARGE_BELOW: 50,       # W, 0 = off
+    OPT_STOP_AFTER: 30,                 # s under the stop limit before stopping
+    OPT_START_AFTER: 30,                # s past the start threshold before starting, 0 = at once
     OPT_DIRECTION_DELAY: 10,            # s to pause between directions, 0 = off
     # Smallest adjustment worth writing, per loop. Both keep the values the
     # constants used to hold, so the behaviour is unchanged until they are
@@ -504,6 +534,22 @@ DEFAULTS = {
     # Virtual cluster (v1.7.1)
     **VIRTUAL_DEFAULTS,
 }
+
+# The controller settings *Reset settings* takes back to their defaults on a
+# battery (v1.7.4): a key removed from the options falls back to its default.
+# The Operation mode (a planner's), Max charge and Max discharge power (sized to
+# the installation), SOC protection, the meter and Price Control stay.
+BATTERY_RESET_KEYS = (
+    OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER, OPT_START_CHARGE_AT, OPT_START_DISCHARGE_AT,
+    OPT_STOP_CHARGE_BELOW, OPT_STOP_DISCHARGE_BELOW, OPT_STOP_AFTER, OPT_START_AFTER,
+    OPT_MIN_CHARGE_POWER, OPT_MIN_DISCHARGE_POWER, OPT_MODE_THRESHOLD, OPT_TRIM_THRESHOLD,
+    OPT_TRIM_FACTOR, OPT_DIRECTION_DELAY,
+)
+
+# Defaults of a battery cluster and a Virtual cluster that differ from a
+# battery's. None since v1.7.4: a cluster at low demand is its primary
+# alone, so it stops as a battery does. Kept for a setting that needs its own.
+CLUSTER_DEFAULTS: dict = {}
 
 # ── Controller tuning ────────────────────────────────────────────────────
 # The first step is deliberately undershot: the device's actual response is

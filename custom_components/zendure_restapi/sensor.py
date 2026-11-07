@@ -396,7 +396,7 @@ async def async_setup_entry(
         async_add_entities(cluster_entities(Platform.SENSOR, hass, entry))
         return
     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL:
-        from .sim.entities import virtual_entities
+        from .virtual.entities import virtual_entities
 
         async_add_entities(virtual_entities(Platform.SENSOR, hass, entry))
         return
@@ -1054,6 +1054,31 @@ MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
             "by_gap": {gap: dict(counts) for gap, counts in m.writes.items()},
             "recent": list(m.lost_recent),
             "basis": "a limit write the device's next report does not show, by the time since the command before it",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="skipped_peaks",
+        name="Skipped peaks",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:chart-bell-curve",
+        value=lambda m: m.skipped_peaks,
+        attributes=lambda m: {
+            **{k: v for k, v in m.switching.get("skipped", {}).items() if k != "total"},
+            "day": m.switching.get("day"),
+            "basis": "starts that Start after held back and that never came: the demand fell back in time (v1.7.4)",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="relay_switches",
+        name="Relay switches",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:electric-switch",
+        value=lambda m: m.relay_switches,
+        attributes=lambda m: {
+            **{k: v for k, v in m.switching.get("relay", {}).items() if k != "total"},
+            "day": m.switching.get("day"),
+            "basis": "starts from standstill and changes of direction ordered by the integration; "
+                     "short: stopped or turned again within 2 minutes (v1.7.4)",
         },
     ),
     ZendureMeasureDescription(

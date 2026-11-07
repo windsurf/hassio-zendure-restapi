@@ -138,12 +138,13 @@
           "scan_interval": "Sekunden zwischen Abfragen (1-60)",
           "solar_power_entity": "Solarleistung von außerhalb des Speichers (optional, für das Dashboard)",
           "solar_energy_entity": "Solarenergie von außerhalb des Speichers (optional, für das Dashboard)",
-          "create_dashboard": "Zendure-RestAPI-Dashboard anlegen (ein vorhandenes bleibt unverändert)",
-          "rebuild_dashboard": "Vorhandenes Dashboard durch ein neues ersetzen (eigene Änderungen daran gehen verloren)"
+          "reset_settings": "Einstellungen zurücksetzen: die Regeleinstellungen auf ihre Standardwerte",
+          "rebuild_dashboard": "Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
         },
         "data_description": {
           "solar_power_entity": "Eine smarte Steckdose an einem Mikrowechselrichter oder ein zweiter Wechselrichter. Die PV-Reihen des Dashboards zeigen sie: statt der eigenen PV des Speichers, wenn diese nicht genutzt wird, sonst daneben. Für die Regelung ist sie nicht nötig, der Netzzähler sieht diese Leistung bereits.",
-          "solar_energy_entity": "Ihr kWh-Zähler, für die Tagessummen im Tab History."
+          "solar_energy_entity": "Ihr kWh-Zähler, für die Tagessummen im Tab History.",
+          "reset_settings": "Puffer und Startschwellen 5 W, Laden stoppen unter 50 W, Entladen stoppen unter 50 W, Stoppen nach 30 s, Starten nach 30 s, Min. Ladeleistung und Min. Entladeleistung 0 W, Schwelle Modus 10 W, Schwelle Nachregelung 40 W, Nachregelstärke 80 %, Wartezeit bei Richtungswechsel 10 s. Operation mode, Max. Ladeleistung und Max. Entladeleistung, SOC-Schutz, der Zähler und Price Control bleiben, wie sie sind. In einem Cluster gelten die Einstellungen der Gruppe."
         }
       },
       "external": {
@@ -184,20 +185,20 @@
         "description": "Betriebsmodus, Puffer, Schwellen und die Zählerquelle sind Entitäten des Clusters. Die Batterien sind seine Untereinträge.",
         "data": {
           "external_meter": "Externer Zähler",
-          "rebuild_dashboard": "Cluster-Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
+          "rebuild_dashboard": "Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
         }
       },
       "virtual": {
         "title": "Virtueller Cluster",
         "description": "Kopien, Abweichungen, Max. Anteil und die Gruppeneinstellungen sind Entitäten des virtuellen Clusters und seiner Kopien.",
         "data": {
-          "reset_copies": "Zurücksetzen: jede Kopie anhalten und um den Ladezustand deiner Batterie neu starten",
+          "reset_copies": "Kopien zurücksetzen: jede Kopie anhalten und um den Ladezustand deiner Batterie neu starten",
           "reset_settings": "Einstellungen zurücksetzen: alle Einstellungen des virtuellen Clusters und seiner Kopien auf den Standardwert",
-          "rebuild_dashboard": "Cluster-Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
+          "rebuild_dashboard": "Dashboard neu aufbauen (eigene Änderungen daran gehen verloren)"
         },
         "data_description": {
           "reset_copies": "Die Kopien halten an, beide Limits gehen auf 0, und jede beginnt neu beim Ladezustand deiner Batterie plus ihrer SoC-Abweichung.",
-          "reset_settings": "Kopien 3, Load factor 1, SoC-Abweichungen 0 / -20 / 15 %, zusätzliche Reaktionszeit 0 / 1 / 3 s, Max. Anteil 0, Operation mode Follow source, und die Puffer, Startschwellen, Concentrate below und Redistribute every wie in einem neuen Cluster. Die Kopien laufen weiter; hake auch Zurücksetzen an, um sie mit den neuen Abweichungen zu starten. Deine eigene Batterie und Price Control bleiben unberührt."
+          "reset_settings": "Kopien 3, Load factor 1, SoC-Abweichungen 0 / -20 / 15 %, zusätzliche Reaktionszeit 0 / 1 / 3 s, Max. Anteil 0, Operation mode Follow source, Puffer und Startschwellen 5 W, Laden stoppen unter 50 W, Entladen stoppen unter 50 W, Stoppen nach 30 s, Starten nach 30 s, Concentrate below 300 W, Redistribute every 30 s. Die Kopien laufen weiter; hake auch Kopien zurücksetzen an, um sie mit den neuen Abweichungen zu starten. Deine eigene Batterie und Price Control bleiben unberührt."
         }
       }
     },
@@ -671,6 +672,12 @@
       "lost_writes": {
         "name": "Verlorene Schreibbefehle"
       },
+      "skipped_peaks": {
+        "name": "Übersprungene Spitzen"
+      },
+      "relay_switches": {
+        "name": "Relaisschaltungen"
+      },
       "group_power": {
         "name": "Batterieleistung"
       },
@@ -837,6 +844,18 @@
       "start_discharge_at": {
         "name": "Entladen ab Bezug"
       },
+      "stop_charge_below": {
+        "name": "Laden stoppen unter"
+      },
+      "stop_discharge_below": {
+        "name": "Entladen stoppen unter"
+      },
+      "stop_after": {
+        "name": "Stoppen nach"
+      },
+      "start_after": {
+        "name": "Starten nach"
+      },
       "trim_factor": {
         "name": "Nachregelstärke"
       },
@@ -929,7 +948,7 @@
     },
     "restart_limits": {
       "title": "{device} hat mit einem Limit neu gestartet",
-      "description": "Nach einem Neustart (Firmware-Update oder Stromausfall) kam {device} mit den Limits zurück, die es zuletzt selbst gespeichert hatte: Laden {input} W, Entladen {output} W, während Operation mode auf Standby steht. Die Integration schreibt nach einem Neustart nichts, weil ein Update noch laufen kann. Ist es fertig, wähle Standby erneut: Das sendet den Standby-Befehl erneut und stoppt die Batterie. Diese Meldung verschwindet von selbst, wenn beide Limits 0 sind oder ein anderer Modus gewählt ist."
+      "description": "Nach einem Neustart (Firmware-Update oder Stromausfall) kam {device} mit den Limits zurück, die es zuletzt selbst gespeichert hatte: Laden {input} W, Entladen {output} W, während Operation mode auf Standby steht. Das sind keine Limits, die diese Integration seit dem Start von Home Assistant selbst geschrieben hat, vielleicht wurden sie von Hand gesetzt, daher lässt sie sie stehen; ihre eigenen Limits hätte sie selbst zurückgesetzt. Um die Batterie zu stoppen, wähle Standby erneut: Das sendet den Standby-Befehl erneut und stoppt die Batterie. Diese Meldung verschwindet von selbst, wenn beide Limits 0 sind oder ein anderer Modus gewählt ist."
     },
     "new_property": {
       "title": "{device} meldet neue Eigenschaften",

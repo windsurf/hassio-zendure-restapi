@@ -10,14 +10,14 @@ from types import SimpleNamespace
 
 import pytest
 
-import custom_components.zendure_restapi.sim.cluster as SC
+import custom_components.zendure_restapi.virtual.cluster as SC
 from custom_components.zendure_restapi.cluster_entities import CLUSTER_NUMBERS
 from custom_components.zendure_restapi.const import (
     OPT_CLONES, OPT_LOAD_FACTOR, OPT_MAX_SHARE_CLONES, OPT_OPERATION_MODE, OPT_SOC_OFFSET_2,
     MODE_FOLLOW_SOURCE, MODE_STANDBY,
 )
-from custom_components.zendure_restapi.sim.cluster import VIRTUAL_RESET_KEYS, VirtualCluster, VirtualSettings
-from custom_components.zendure_restapi.sim.entities import TEST_NUMBERS, copy_numbers
+from custom_components.zendure_restapi.virtual.cluster import VIRTUAL_RESET_KEYS, VirtualCluster, VirtualSettings
+from custom_components.zendure_restapi.virtual.entities import TEST_NUMBERS, copy_numbers
 
 
 def cluster(options: dict) -> VirtualCluster:

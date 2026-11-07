@@ -61,6 +61,7 @@ from .const import (
     OPT_REBUILD_DASHBOARD,
     OPT_RESET_COPIES,
     OPT_RESET_SETTINGS,
+    BATTERY_RESET_KEYS,
     OPT_SOLAR_ENERGY,
     OPT_SOLAR_POWER,
     OPT_DASHBOARD_OFFERED,
@@ -943,7 +944,11 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
 
         battery = entry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_METER
         if user_input is not None:
-            merged = {**entry.options, **user_input}
+            # Reset settings (v1.7.4): the controller settings back to their
+            # defaults by leaving them out; the tick itself is not stored.
+            reset = battery and user_input.pop(OPT_RESET_SETTINGS, False)
+            base = {k: v for k, v in entry.options.items() if not (reset and k in BATTERY_RESET_KEYS)}
+            merged = {**base, **user_input}
             # An emptied selector is left out of user_input: drop the old value.
             for key in (OPT_SOLAR_POWER, OPT_SOLAR_ENERGY):
                 if battery and not user_input.get(key):
@@ -971,7 +976,11 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
                 ] = selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class=device_class)
                 )
-            fields[vol.Optional(OPT_CREATE_DASHBOARD, default=False)] = bool
+            # One tick since v1.7.4, as on a cluster: Rebuild dashboard makes it
+            # when it is gone and replaces it when it is there. Create the
+            # dashboard stays an option when the battery is added.
+            # Reset settings above Rebuild dashboard (v1.7.4), as on a Virtual cluster.
+            fields[vol.Optional(OPT_RESET_SETTINGS, default=False)] = bool
             fields[vol.Optional(OPT_REBUILD_DASHBOARD, default=False)] = bool
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
 
