@@ -61,7 +61,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .api import ZendureApiError
+from .api import ZendureApiError, ZendureConnectionError
 from .const import (
     DOMAIN,
     CLUSTER_KEY,
@@ -1960,6 +1960,10 @@ class ZendureController:
             return None
         if self.meter.last_update_success is False:
             return None
+        # During the grace for dropped polls the meter keeps its last report:
+        # good enough for the entities, not for trimming against.
+        if getattr(self.meter, "failed_polls", 0):
+            return None
         return self._checked(
             self.meter.updated_at,
             (self.meter.data or {}).get("total_power"),
@@ -2486,9 +2490,10 @@ class ZendureController:
         _LOGGER.debug("write %s", changes)
         try:
             await self.coordinator.api.async_write_properties(changes)
+        except ZendureConnectionError:
+            # No answer even after the retries: not a refusal, the link is down.
+            raise
         except ZendureApiError as err:
-            if "connection failed" in str(err) or "timeout" in str(err):
-                raise
             _LOGGER.warning(
                 "The device refused several properties in one write (%s); writing them one at a time from now on",
                 err,

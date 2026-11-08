@@ -90,6 +90,21 @@ METER_MARKER_KEY = "meterType"
 HTTP_TIMEOUT = 8
 MAX_WRITE_BODY_BYTES = 512
 
+# A battery at the edge of the WiFi drops a request now and then: a timeout, a
+# reset connection, an empty or cut-off body. Such a failure is retried; an
+# answer the device gave (an HTTP status other than 200, JSON that is not an
+# object) is not, because asking again gets the same answer.
+# Writes set a property to a value, so sending one again is harmless even when
+# the first attempt did arrive and only its answer was lost.
+WRITE_ATTEMPTS = 3
+# The report is polled again on the next interval anyway: one quick retry.
+READ_ATTEMPTS = 2
+# Seconds to wait before the 2nd, 3rd, ... attempt.
+RETRY_DELAYS = (0.5, 1.5)
+# Polls in a row that may fail before the entities turn unavailable. Until
+# then the coordinator keeps the last report (its age stays in updated_at).
+POLL_FAILURE_GRACE = 2
+
 PATH_REPORT = "/properties/report"
 PATH_WRITE = "/properties/write"
 PATH_RPC = "/rpc"

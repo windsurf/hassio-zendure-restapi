@@ -1,0 +1,3 @@
+# Everything Home Assistant writes into its config directory.
+config/*
+!config/configuration.yaml

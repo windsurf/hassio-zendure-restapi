@@ -20,6 +20,7 @@ from .const import (
     DEVICE_TYPE_METER,
     DOMAIN,
     PACK_PREFIX,
+    POLL_FAILURE_GRACE,
 )
 from .properties import PACK_KEYS
 from .registry import is_meter_report
@@ -133,6 +134,9 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # messageId starting again without a restart (v1.7.2).
         self.message_id_resets: deque[dict[str, Any]] = deque(maxlen=RESTART_HISTORY)
         self._failing_since: datetime | None = None
+        # Polls in a row that failed; up to POLL_FAILURE_GRACE of them keep the
+        # last report instead of turning every entity unavailable.
+        self.failed_polls = 0
         self._last_good_at: datetime | None = None
         self._last_good: dict[str, Any] = {}
 
@@ -177,8 +181,25 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ZendureApiError as err:
             if self._failing_since is None:
                 self._failing_since = self.fetch_started_at
+            self.failed_polls += 1
+            if self.data and self.failed_polls <= POLL_FAILURE_GRACE:
+                # A dropped poll on a weak WiFi link: keep the last report.
+                # updated_at is left alone, so every age check still sees how
+                # old the values are.
+                _LOGGER.warning(
+                    "Zendure device %s did not answer (%s); keeping the last report "
+                    "(failed poll %d of %d before it shows unavailable)",
+                    self.title or self.device_id, err, self.failed_polls, POLL_FAILURE_GRACE,
+                )
+                return self.data
             raise UpdateFailed(str(err)) from err
 
+        if self.failed_polls:
+            _LOGGER.info(
+                "Zendure device %s answers again after %d failed poll(s)",
+                self.title or self.device_id, self.failed_polls,
+            )
+            self.failed_polls = 0
         now = dt_util.utcnow()
         self.updated_at = now
         self.raw = payload

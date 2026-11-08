@@ -31,8 +31,11 @@ from .const import (
     PATH_REPORT,
     PATH_RPC,
     PATH_WRITE,
+    READ_ATTEMPTS,
+    RETRY_DELAYS,
     RPC_MQTT_GET_CONFIG,
     RPC_MQTT_STATUS,
+    WRITE_ATTEMPTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +43,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class ZendureApiError(Exception):
     """Raised when the device cannot be reached or answers unusably."""
+
+
+class ZendureConnectionError(ZendureApiError):
+    """Raised when a request got no usable answer: timeout, dropped connection,
+    empty or cut-off body. Worth trying again, unlike an answer the device gave."""
 
 
 class ZendureBodyTooLarge(ZendureApiError):
@@ -86,7 +94,7 @@ class ZendureLocalApi:
         is the coordinator's job, because the payload envelope differs between
         firmware revisions.
         """
-        return await self._request("GET", PATH_REPORT)
+        return await self._request("GET", PATH_REPORT, attempts=READ_ATTEMPTS)
 
     async def async_get_mqtt_status(self) -> dict[str, Any]:
         """Query the device's MQTT client status."""
@@ -117,7 +125,7 @@ class ZendureLocalApi:
             )
 
         _LOGGER.debug("Write %s=%s to %s", key, value, self.base_url)
-        return await self._request("POST", PATH_WRITE, payload)
+        return await self._request("POST", PATH_WRITE, payload, attempts=WRITE_ATTEMPTS)
 
     async def async_write_properties(self, properties: dict[str, Any]) -> dict[str, Any]:
         """Write several properties that belong together in one request (v1.6.4).
@@ -141,7 +149,7 @@ class ZendureLocalApi:
             )
 
         _LOGGER.debug("Write %s to %s", properties, self.base_url)
-        return await self._request("POST", PATH_WRITE, payload)
+        return await self._request("POST", PATH_WRITE, payload, attempts=WRITE_ATTEMPTS)
 
     async def async_rpc(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Issue an RPC command."""
@@ -150,11 +158,50 @@ class ZendureLocalApi:
         payload: dict[str, Any] = {"sn": self._sn, "method": method}
         if params is not None:
             payload["params"] = params
-        return await self._request("POST", PATH_RPC, payload)
+        return await self._request("POST", PATH_RPC, payload, attempts=WRITE_ATTEMPTS)
 
     # ── Transport ────────────────────────────────────────────────────────
 
     async def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        attempts: int = 1,
+    ) -> dict[str, Any]:
+        """Send one request, trying again on a dropped connection.
+
+        Only ZendureConnectionError is retried: the device did not answer, or
+        its answer did not arrive whole. Every retry is logged at warning, a
+        request that got through after one at info, so a flaky link shows in
+        the log without debug logging switched on.
+        """
+        what = _describe(method, path, payload)
+        attempts = max(1, attempts)
+        for attempt in range(1, attempts + 1):
+            try:
+                result = await self._request_once(method, path, payload)
+            except ZendureConnectionError as err:
+                if attempt >= attempts:
+                    if attempts > 1:
+                        _LOGGER.warning(
+                            "%s to %s failed after %d attempts: %s", what, self.base_url, attempts, err
+                        )
+                        raise ZendureConnectionError(f"{err} (after {attempts} attempts)") from err
+                    raise
+                delay = RETRY_DELAYS[min(attempt - 1, len(RETRY_DELAYS) - 1)]
+                _LOGGER.warning(
+                    "%s to %s failed (%s); attempt %d of %d in %.1f s",
+                    what, self.base_url, err, attempt + 1, attempts, delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            if attempt > 1:
+                _LOGGER.info("%s to %s succeeded on attempt %d of %d", what, self.base_url, attempt, attempts)
+            return result
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    async def _request_once(
         self, method: str, path: str, payload: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
@@ -170,19 +217,30 @@ class ZendureLocalApi:
 
                 text = await response.text()
         except aiohttp.ClientError as err:
-            raise ZendureApiError(f"connection failed: {err}") from err
+            raise ZendureConnectionError(f"connection failed: {err}") from err
         except TimeoutError as err:
-            raise ZendureApiError(f"timeout after {HTTP_TIMEOUT}s on {path}") from err
+            raise ZendureConnectionError(f"timeout after {HTTP_TIMEOUT}s on {path}") from err
 
         if not text.strip():
-            raise ZendureApiError(f"empty response on {path}")
+            raise ZendureConnectionError(f"empty response on {path}")
 
         try:
             decoded = json.loads(text)
         except ValueError as err:
-            raise ZendureApiError(f"invalid JSON on {path}: {err}") from err
+            # On a weak link this is a body cut off on the way.
+            raise ZendureConnectionError(f"invalid JSON on {path}: {err}") from err
 
         if not isinstance(decoded, dict):
             raise ZendureApiError(f"unexpected payload type on {path}")
 
         return decoded
+
+
+def _describe(method: str, path: str, payload: dict[str, Any] | None) -> str:
+    """A short name for a request in the log: the properties a write sets."""
+    if method == "POST" and path == PATH_WRITE and payload:
+        props = payload.get("properties") or {}
+        return "Write " + ", ".join(f"{k}={v}" for k, v in props.items())
+    if method == "POST" and path == PATH_RPC and payload:
+        return f"RPC {payload.get('method')}"
+    return f"{method} {path}"

@@ -1,0 +1,50 @@
+# Test environment: Home Assistant with this integration, and a simulated
+# Zendure battery on a link that drops requests on purpose.
+#
+#   cd dev && docker compose up -d
+#   open http://localhost:8123, finish onboarding, then add the integration
+#   "Zendure RestAPI" with host  zendure-sim  and port  80.
+#
+# See dev/README.md for the fault settings.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-stable}
+    container_name: zendure-ha
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    environment:
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ./config:/config
+      # The integration from this checkout, live: restart Home Assistant to
+      # pick up a change.
+      - ../custom_components/zendure_restapi:/config/custom_components/zendure_restapi:ro
+    depends_on:
+      - zendure-sim
+
+  zendure-sim:
+    image: python:3.13-slim
+    container_name: zendure-sim
+    restart: unless-stopped
+    command: ["python", "-u", "/sim/sim.py"]
+    ports:
+      # Reachable from the host too, to poke at it with curl.
+      - "${SIM_PORT:-8080}:80"
+    environment:
+      SIM_MODEL: /model/device.py
+      SIM_SERIAL: ${SIM_SERIAL:-HOA1SIM00000001}
+      SIM_SOC: ${SIM_SOC:-60}
+      SIM_CAPACITY_KWH: ${SIM_CAPACITY_KWH:-8.0}
+      # Fractions of requests, 0.0 to 1.0, that fail in each way.
+      SIM_DROP_RATE: ${SIM_DROP_RATE:-0.15}
+      SIM_HANG_RATE: ${SIM_HANG_RATE:-0.05}
+      SIM_TRUNCATE_RATE: ${SIM_TRUNCATE_RATE:-0.05}
+      # A hang lasts longer than the integration's 8 s timeout.
+      SIM_HANG_SECONDS: ${SIM_HANG_SECONDS:-10}
+    volumes:
+      - ./simulator:/sim:ro
+      # The integration's own battery model. Not inside /sim: that mount is
+      # read-only, so Docker cannot create a mount point in it.
+      - ../custom_components/zendure_restapi/virtual/device.py:/model/device.py:ro

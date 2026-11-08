@@ -22,6 +22,7 @@ def make_coordinator() -> CO.ZendureCoordinator:
     co.restart_seq = 0
     co.message_id_resets = deque(maxlen=CO.RESTART_HISTORY)
     co._failing_since = None
+    co.failed_polls = 0
     co._last_good_at = None
     co._last_good = {}
     co.title = "Test battery"

@@ -1,0 +1,9 @@
+# Home Assistant configuration for the dev/ test environment.
+default_config:
+
+logger:
+  default: warning
+  logs:
+    # The retry and grace messages are at warning and info; debug shows every
+    # write the controller makes.
+    custom_components.zendure_restapi: info
