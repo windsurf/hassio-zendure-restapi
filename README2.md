@@ -224,7 +224,7 @@ Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000
 
 Steering on dynamic tariffs, built in, in two ways:
 
-- **Fixed prices.** At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, and in between it follows the meter or rests. Any sensor that gives the current price per kWh will do: Nord Pool, EnergyZero, Zonneplan, Tibber, Frank Energie, or a template of your own.
+- **Fixed prices.** At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, and in between it follows the meter or rests. Any sensor that gives the current price per kWh will do: EPEX Spot, Nord Pool, Zonneplan, Frank Energie, or a template of your own.
 - **Day plan.** Over the prices of today and tomorrow from a price sensor with a price list — **EPEX Spot** or **Nord Pool** from HACS, the **Zonneplan** integration and [others](#other-price-sources-epex-spot-zonneplan-and-more) — it works out for every quarter of an hour whether to charge, discharge or neither — with an import price and an export price each from a formula of their own, the conversion losses on both sides, wear, and a minimum margin per kWh that every cycle has to clear.
 
 ### Modes per band
@@ -285,7 +285,7 @@ Price control is a device of its own, linked to one battery — this integration
 | Export factor, Export surcharge | day plan: export price = spot × factor + surcharge, when net metering is off | 1.00, 0.02 |
 | Wear cost | day plan: per kWh through the battery | 0.02 |
 | Minimum margin | day plan: per kWh, below this no cycle | 0.02 |
-| Expected house load | day plan: the part of a discharge that covers the house and is worth the import price; the rest is sold | 400 W |
+| Expected house load | day plan: the part of a discharge that covers the house and is worth the import price; the rest is sold. The steady load in the discharge hours, without short peaks ([more](#a-cherry-picker-not-a-whole-house-battery)) | 400 W |
 | Charge efficiency, Discharge efficiency | day plan: grid to cells, cells to house | 95 %, 95 % |
 | Electricity price | the price the sensor gives, per kWh in Home Assistant's currency | — |
 | Import price, Export price | now, from the formulas | — |
@@ -304,6 +304,24 @@ Every period can charge, discharge or do neither, as far as the modes allow: wit
     value × discharge efficiency − import price ÷ charge efficiency − wear ≥ minimum margin
 
 with value the import price for the expected house load, and the export price for the rest. An amount per kWh, not a percentage: a percentage of a price near zero or below means nothing. The plan is made again every quarter of an hour, on every price change and when a setting changes, each time from the actual state of charge, and runs outside the event loop.
+
+### A cherry picker, not a whole-house battery
+
+The day plan does not try to run the house from the battery. It uses the battery where the invoice gains from it, and leaves the rest to the grid.
+
+**What the battery is for.** Charging in the cheapest quarters and discharging in the dearest, where the difference pays for the conversion loss and the wear (*Minimum margin*). Without net metering, from 2027, also taking in solar surplus and covering the house between the blocks with `smart_matching`; the [replays](#replays) show that this is where the plan earns under the 2027 rules.
+
+**What comes from the grid, on purpose.**
+
+- **Short peaks:** a tap or kettle reheating, a coffee machine, an induction hob that pulses. From standstill the battery needs 6 to 15 seconds before it delivers, so it would arrive when the peak is over. In the smart modes *Start after* leaves them to the grid, in `standby` they come from the grid anyway; during a quick block the battery already runs at full power and covers them ([docs/low_demand.md](docs/low_demand.md)).
+- **Very low demand:** below the stop limits (50 W charging and discharging) the fixed loss of the converter takes most of the energy.
+- **Large loads outside the planned blocks:** a car, a heat pump, electric heating, a dryer. With `standby` between the blocks (the preset under net metering) the battery serves them only in the quarters the plan has chosen on price. With `smart_matching` between the blocks (the preset from 2027) it also covers a load that lasts, up to its power and as long as it holds energy; that can spend what the plan set aside for the dearest quarters. The plan does not see such a load coming.
+
+**Why not cover everything.** To run every load from the battery, battery and inverter would have to match the largest loads and the whole day's use, and that energy has to be bought or caught first. A home battery of a few kWh has a limited number of kWh to shift each day; the plan spends them where the price difference is largest. Whether a larger battery pays off depends on your prices and your use; the day plan does not assume one.
+
+**What it costs.** Whatever comes from the grid is paid at the import price of that quarter. For the peaks of a 2.2 kW boiling-water tap at night that is about 0.12 kWh; the battery could not have covered them anyway.
+
+**For the settings.** *Expected house load* is the load the battery actually covers while it discharges: the steady part in those hours, without the short peaks. With `quick_discharge` (the preset) it only decides which part of a discharge counts at the import price and which part is sold; with `smart_discharge_only` it is all the plan counts on. How much energy the short peaks take is in the measured diagnostic *Skipped peaks* (attribute `wh_today`).
 
 ### Replays
 
@@ -400,22 +418,20 @@ A sensor with VAT and 3 decimals, such as `sensor.nordpool_kwh_nl_eur_3_10_021`,
 
 #### Other price sources: EPEX Spot, Zonneplan and more
 
-**One price per country.** The day-ahead price is set once a day, for all of Europe in one auction. EPEX Spot and Nord Pool both publish its outcome, so for the same price area and the same quarter they give the same price. A dynamic contract is that price plus your supplier's surcharge, energy tax and VAT, which you set in [Your tariff](#your-tariff). That is why any dynamic contract works with **EPEX Spot** or **Nord Pool** as the price sensor, whatever the supplier is called. EPEX Spot is the easier of the two to set up and is the recommended source.
+**One price per country.** The day-ahead price is set once a day, for all of Europe in one auction. EPEX Spot and Nord Pool both publish its outcome, so for the same price area and the same quarter they give the same price. A dynamic contract is that price plus your supplier's surcharge, energy tax and VAT, which you set in [Your tariff](#your-tariff). That is why any dynamic contract works with **EPEX Spot** or **Nord Pool** as the price sensor, whatever the supplier is called. EPEX Spot is the easier of the two to set up and is the recommended source. Some suppliers bill per quarter, others per hour (the average of the four quarters): the day plan plans per quarter either way; with hourly billing the quarters within an hour cost the same on your bill, so a choice between them gains nothing, but it costs nothing either.
 
 Price Control recognises the price list itself; you only choose the sensor. The status sensor shows which list it found in the attribute `price_format`.
 
 | Integration | Sensor to choose | Attribute | `price_format` | The price sensor holds |
 |---|---|---|---|---|
+| **EPEX Spot** (HACS), recommended | *Market price* | `data` | `epex_spot` | **Spot price excl. VAT** |
+| **EPEX Spot** (HACS), recommended | *Total price* | `data` | `epex_spot` | **Import price (whole tariff)** |
 | **Nord Pool** (HACS) | `sensor.nordpool_kwh_…` | `raw_today`, `raw_tomorrow` | `nord_pool` | see the table above |
-| **EPEX Spot** (HACS) | *Market price* | `data` | `epex_spot` | **Spot price excl. VAT** |
-| **EPEX Spot** (HACS) | *Total price* | `data` | `epex_spot` | **Import price (whole tariff)** |
 | **Zonneplan** | *Current quarter-hourly electricity tariff* (`…_current_quarter_hourly_electricity_tariff`) | `forecast` | `zonneplan` | **Import price (whole tariff)** |
-| ENTSO-e (HACS) | the *current price* sensor | `prices_today`, `prices_tomorrow` | `entso_e` | as set up in ENTSO-e |
 | Frank Energie (HACS) | the current electricity price | `prices` | `frank_energie` | as set up |
-| Tibber | **via EPEX Spot** (HACS): where Tibber's price follows the EPEX day-ahead price, choose the EPEX Spot price sensor and enter Tibber's surcharge in [Your tariff](#your-tariff); tested by a user on v1.6.6 (#6). Alternative: a template sensor with the list from `tibber.get_prices` | `data` via EPEX Spot; `prices` for the template | `epex_spot`; `tibber` for the template | via EPEX Spot as for EPEX Spot; for the template **Import price (whole tariff)**, Tibber gives the total price |
-| Energi Data Service | the price sensor | `raw_today`, `raw_tomorrow` | `energi_data_service` | as set up |
+| ENTSO-e (HACS) | the *current price* sensor | `prices_today`, `prices_tomorrow` | `entso_e` | as set up in ENTSO-e |
 
-Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; Tibber via EPEX Spot is tested by a user; the other four (including the Tibber template) are read from their documented attributes. A list that is recognised but not named shows `price_format: other`.
+EPEX Spot, Nord Pool and Zonneplan are tested on a live installation; Frank Energie and ENTSO-e are read from their documented attributes. Another list with a start time and a price per period is read as well and shows `price_format: other`, but it is not supported: for any other supplier, choose EPEX Spot or Nord Pool and set your supplier's surcharge in [Your tariff](#your-tariff).
 
 **Suppliers.** Examples of dynamic contracts that follow the day-ahead price, and so work with EPEX Spot or Nord Pool (market area `NL` or `DE-LU`):
 
@@ -427,11 +443,11 @@ Nord Pool, EPEX Spot and Zonneplan are tested on a live installation; Tibber via
 | Germany | Tibber, Ostrom (SimplyDynamic) | hour |
 | Germany | E.ON (dynamic tariff) | see your contract |
 
-Contract terms change: what counts is your own contract.
+Zonneplan and Frank Energie customers can also choose their supplier's own integration (table above). Contract terms change: what counts is your own contract.
 
 **EPEX Spot** ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)) fetches the day-ahead prices for many market areas, per quarter of an hour where the source has them. Install it from HACS ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)), restart, and add it under **Add integration → EPEX Spot** with your market area. It makes two sensors that both work:
 
-- **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import factor and surcharge in Price Control, as in [Your tariff](#your-tariff). With **Tibber** as the source in the EPEX Spot options (API token), *Market price* is Tibber's total price, all-in: choose **Import price (whole tariff)** instead.
+- **Market price** — the bare spot price. Choose **Spot price excl. VAT** and set the import factor and surcharge in Price Control, as in [Your tariff](#your-tariff). With a supplier as the source in the EPEX Spot options (some offer one, with an API token), *Market price* is that supplier's total price, all-in: choose **Import price (whole tariff)** instead.
 - **Total price** — the market price with the surcharge, tax and VAT you enter in the EPEX Spot options. Choose **Import price (whole tariff)**; the import surcharge in Price Control is then only used to work back to the spot price for the export formula.
 
 **Zonneplan** customers already have their own prices: the Zonneplan integration's quarter tariff sensor carries a list of today and tomorrow, all-in, exactly what Zonneplan bills. Choose **Import price (whole tariff)**.
@@ -846,6 +862,10 @@ Why it waits on both sides, with pictures of always on, hysteresis and timers, h
 
 **Everything at 0** is how it worked before v1.7.4: the battery never switches, follows short peaks about 1 s late at a good efficiency, but covers the base load all night at its worst efficiency. With net metering, standby is the better choice for those hours; without it, let a day plan decide.
 
+#### After a short peak
+
+*Since v1.7.5.* When a short peak ends, the battery is still delivering what the peak asked for and takes a few seconds to come down; the grid shows that as export, while the battery power the integration reads lags the device by a sample. Grid + battery − buffer then comes out below zero although the house still takes its base load. Until v1.7.4 that took the limit to 0: the direction ended, and the next base load waited `Start after` before a new start — measured on a Virtual cluster after about one boiling-water peak in four, each time some 30 s of base load from the grid and an extra start. Now a running direction is ended only by two mode cycles in a row with nothing to do, or by the stop rule; the first such cycle keeps 30 W running, and the trim loop never takes a running limit to 0. When the surplus is real (the sun comes out), the change to charging follows one mode cycle later.
+
 ### Reversing direction
 
 `Direction change delay` pauses between opposite directions: the current limit is cleared, the configured number of seconds elapses, then the new direction is written. It defaults to 10 seconds, matching the default polling interval; set it to 0 to reverse immediately.
@@ -865,6 +885,18 @@ If the meter stops reporting, both limits go to zero — a closed loop without f
 At the device's own SOC bounds the smart modes respect the direction the device has closed: at `upper_limit` charging is not opened, at `lower_limit` discharging is not, and a direction already running is cleared once. The other direction stays open, as it does on the device. Before v1.5.4 the loop kept ordering into a battery that accepted nothing — at 100 % 59 trim writes in a quarter of an hour, at 5 % a discharge limit averaging 1,353 W with nothing flowing — and the status read "within 10 W". `quick` and `manual` keep their order, which is the operator's, and the status adds that the device refuses it. A missing or unreadable `socLimit` counts as no bound.
 
 Below the lower SOC bound the battery is charged back regardless of strategy, except in `manual` and `quick_discharge` where the operator's intent is explicit; switchable off.
+
+#### Keeping distance from the SOC bounds
+
+*Since v1.7.5.* A battery that reaches a bound stays away from it for 5 percentage points:
+
+- **SOC protection charges to the lower bound + 5.** Below *minSoc* the battery charges at full power until *minSoc* + 5 (15 % with a lower bound of 10 %), not just back to the bound. Stopping at the bound itself left the battery on the edge, where the next discharge took it under again. Only on a battery on its own in a smart mode, as before: not in `standby`, `manual` or `quick_discharge`, and not in a battery cluster, where one battery would charge from the grid while another discharges.
+- **Empty stays empty until the lower bound + 5.** Once the device reports *lower limit*, the smart modes discharge again only from *minSoc* + 5. The device itself reopens discharging one point above its bound: at 11 % the battery discharged a few hundred watts, was back at 10 % within a minute, closed, and charged a little from the grid by itself — every few seconds *Discharging / Standby / Charging* in the Zendure app, and the grid swinging between export and import. Charging stays open all the time.
+- **Full stays full until the upper bound − 5.** Likewise, after *upper limit* the smart modes charge again only from *socSet* − 5 (95 % with an upper bound of 100 %). Discharging stays open. The cost: up to 5 % of the capacity that a little more sun could have filled goes to the grid instead.
+- **In a battery cluster** a battery held empty or full counts as such for the distribution: it gets no discharging or charging share until it is past the margin.
+- **The status says where it opens again:** `discharging blocked: battery empty (lower limit), discharges again from 15 %`.
+- **The device's own protection is left alone.** At its lower bound the device may set a small charge limit itself (about 27 W measured on a SolarFlow 800 Plus) to charge from the grid. A battery held at 0 no longer writes 0 over that every cycle, and such a 0 does not count as a *lost write*.
+- **What does not change:** `quick_*` and `manual` keep the operator's order at a bound, as before; an automation or planner that steers with those modes keeps its own limits. The 5 points are fixed.
 
 `smartMode` is set to RAM before writing limits, so frequent adjustments never reach flash. At a ten second interval that is tens of thousands of limit writes a year. `standby` hands it back on entry, because the device stays awake while it is set.
 
@@ -1101,9 +1133,9 @@ The sensors sit on the battery device as diagnostics; *Realized margin* sits on 
 | Standby draw | median DC draw at rest (both limits zero, AC below 10 W, after 30 s), last 24 hours, by time | at rest | Backup mode: a repair appears above 15 W over at least an hour of rest |
 | Response time | from a limit write of 200 W or more until the grid has moved 90 % of that step, median of the last 20; start and stop separately as attributes | every step; without a meter on the battery poll, which is only as fine as the poll interval | *Direction change delay*, buffers |
 | Grid tracking error | median distance between the grid and the buffer while a smart mode balances, last 24 hours, by time | only while the battery can still follow: not at its ceiling, not with the limit at zero | *Trim strength*, thresholds |
-| Lost writes | limit writes the device did not keep, with the checked and lost counts by the time since the command before it: under 1.3 s, 1.3 to 2 s, 2 s or more | every limit write the next report can confirm; a direction the device closes at its SOC bound does not count | how fast the controller may write (see below) |
+| Lost writes | limit writes the device did not keep, with the checked and lost counts by the time since the command before it: under 1.3 s, 1.3 to 2 s, 2 s or more | every limit write the next report can confirm; a direction the device closes at its SOC bound does not count, nor a 0 over the small charge limit the device sets itself at its lower bound (v1.7.5) | how fast the controller may write (see below) |
 | Skipped peaks | starts that *Start after* held back and that never came, because the demand fell back in time; today per direction, the energy the grid gave meanwhile and the longest, and the total (v1.7.4) | a smart mode with *Start after* above 0 |
-| Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4) | every direction write |
+| Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4). Counted from what the integration writes, not heard: whether a relay clicks each time is not reported by the device, so the count is an upper limit and the figure to compare between settings | every direction write |
 | Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
 
 **Blocks and cycles.** A block is a stretch of charging or discharging; a pause of up to two minutes does not end it. A SOC bound counts when the device flags it (*SOC limit status*) or when the battery stands still at its lower or upper SOC limit. The day plan stops at the lower limit itself, so the device never flags it there.
@@ -1229,7 +1261,7 @@ data:
   keep_days: 2
 ```
 
-The statistics are not affected by either. For the raw readings at full resolution beyond those days, switch on **Trace recording**: it writes every sample of the meters and the battery to CSV, one file per hour, outside the database.
+The statistics are not affected by either. For the raw readings at full resolution beyond those days, switch on **Trace recording**: it writes every sample of the meters and the battery to CSV, a new file every 5,000 rows or so (some 80 minutes at one sample a second), outside the database.
 
 <a id="debug-logging"></a>
 
@@ -1280,7 +1312,7 @@ The status changes only when the state or the reason changes, so it adds little 
 
 ### The sample trace
 
-The **Trace recording** switch writes one CSV row per meter sample to `config/zendure_restapi/trace_<date>_<time>.csv`. Switching it on always starts a new file; switching it off flushes the buffer and releases the file, so a measurement run is one file. It reports off after a restart whatever it was doing before — a recording that silently resumes is worse than one you have to start yourself.
+The **Trace recording** switch writes one CSV row per meter sample to `config/zendure_restapi/trace_<serial>_<date>_<time>_<nnn>.csv`, where `<serial>` is the last four characters of the battery's serial number, so two batteries' files are told apart (since v1.7.5; before, `trace_<date>_<time>_<nnn>.csv`), and `<nnn>` counts the files of one recording, which rolls over to the next file at about 5,000 rows. Switching it on always starts a new file; switching it off flushes the buffer and releases the file, so a measurement run is one file. The switch shows the file and its row count in its attributes, updated every 30 rows (since v1.7.5; before, only on switching and at a new file). It reports off after a restart whatever it was doing before — a recording that silently resumes is worse than one you have to start yourself.
 
 The switch is the only control. Hanging it on the debug log level would need no new entity, but that level cannot be lowered again without a restart, so every recording would run until the next one and no file would ever be closed properly.
 
@@ -1293,6 +1325,21 @@ The `writer` column names whoever last moved a limit: `mode`, `trim`, `none`, or
 Two things to watch when doing that. The battery poll interval sets the resolution at which a foreign write becomes visible, so a manager that evaluates on the same period as the poll will be undercounted — for a measurement run, poll the battery every second or two. And entering `standby` costs two writes of its own — clearing a limit it still owned, then handing back `smartMode`; give it a minute before the run starts.
 
 At one sample a second a day of recording is roughly 86,000 rows and some 15 MB. Rows are buffered for half a minute at a time, so an abrupt restart loses that half minute.
+
+In a battery cluster or a Virtual cluster a battery's row ends with `role` (primary, secondary or quick) and `cluster_limit_w` (the limit the cluster gave it); outside one both stay empty (v1.7.5).
+
+### The cluster trace
+
+A battery cluster and a Virtual cluster have a **Trace recording** switch of their own (v1.7.5). It writes one row per decision of the cluster, every 2 seconds, to `config/zendure_restapi/trace_cluster_<date>_<time>_<nnn>.csv`, and behaves as on a battery: a new file when switched on, closed when switched off, off after a restart.
+
+| Columns | |
+|---|---|
+| `ts`, `mode`, `status`, `reason` | time (local, milliseconds, as in the battery trace), the cluster's Operation mode, status and reason |
+| `grid_w`, `primary`, `group_power_w`, `group_soc` | the meter the decision was taken on (the virtual P1 on a Virtual cluster), the primary, and power and state of charge of the group |
+| `b1_…`, `b2_…`, … | per battery, in the cluster's order: `name`, `available`, `role`, `direction` and `cluster_limit_w` as decided; `input_limit`, `output_limit`, `power_w` and `soc` as read for this decision, before its writes; `status` and `reason` of the battery's own controller, so a primary that stops or waits shows as well |
+| `house_w`, `real_grid_w`, `virtual_p1_w`, `load_factor` | Virtual cluster only: the real house load, the real meter, what the virtual P1 shows the copies (house load × Load factor − copies), and the factor |
+
+The cluster file and the batteries' files share the time column `ts`, so they can be laid side by side afterwards. On a Virtual cluster the cluster trace is the only trace of the copies; the trace of your real battery runs on its own switch.
 
 ---
 
@@ -1308,7 +1355,7 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **The dashboard template** (v1.6.9): the version tile next to *Error*, and the status card naming the controller entity once.
 - **A meter recognised by its report** (v1.6.7, issue #7): the Smart Meter 3CT without `meterType` is a meter, the P1 meter is unchanged, and a battery stays a battery, also without `product`.
 - **Several batteries on one phase** (v1.7.2): the cluster takes up to four on any phase, refuses a fifth, and splits over four exactly as over two or three; the phase changes no decision. A Virtual cluster's Max share per copy counts at once and brings the copies in at a low load; the Distribution table shows the primary's own loop and every battery's power. The model behind the copies starts from standstill in about 2 s and takes the measured energy per percent each way.
-- **Price lists of other integrations**: a Tibber list is read per quarter and named `tibber`; ENTSO-e and Frank Energie keep their own names.
+- **Price lists of other integrations**: ENTSO-e and Frank Energie keep their own names; any other list with a start time and a price is read and named `other`.
 - **The change of clocks** (v1.6.10): the night with 25 hours and the night with 23 give every quarter once and a quarter of an hour long, with Nord Pool and with prices as text.
 - **The Inverter power limit** (v1.6.10; read-back v1.7.3): its slider reaches the reported value, a higher value is refused and not written, lowering is written, without a reported value nothing is written, *Charge power limit* keeps its range, and a write of a setting the battery keeps is read back and noted in the logbook.
 - **A former battery entry** (v1.6.10): a Smart Meter 3CT that was added as a battery loses the battery entities it no longer has; the meter's own entities, also the disabled ones, stay; the generic meter name has no brand in it. The clean-up looks only at the meter entry, never at a cluster or a Virtual cluster.
@@ -1405,6 +1452,21 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.7.5 — A trace of the cluster, distance from the SOC bounds, and any dynamic contract
+
+**A battery cluster and a Virtual cluster can now be recorded decision by decision, a battery keeps away from its SOC bounds, and a running battery no longer drops out after a short peak.** Nothing to set: the defaults apply.
+
+- **A running battery no longer drops to 0 after a short peak:** right after a short peak the grid shows the export of a battery still ramping down while its measured power lags a sample, and grid + battery − buffer came out below zero: the limit went to 0, the direction ended, and the base load needed a new start after *Start after* — in about one peak out of four on a Virtual cluster. A running direction is now ended only by two mode cycles in a row with nothing to do, or by the stop rule; the first such cycle keeps 30 W running. The trim loop no longer takes a running limit to 0 either. A real change to the other direction comes one mode cycle (10 s) later. See [After a short peak](#after-a-short-peak).
+
+- **Distance from the SOC bounds (issue #8):** SOC protection charges to the lower bound + 5 points instead of just back to the bound; once the device reports empty, the smart modes discharge again only from the lower bound + 5, and once full charge again only from the upper bound − 5. On two SolarFlow 800 Plus at a lower bound of 10 % the battery swung between 10 and 11 % every few seconds. In a cluster a battery held empty or full counts as such. See [Keeping distance from the SOC bounds](#keeping-distance-from-the-soc-bounds).
+- **The device's own charge at its lower bound is left alone:** a battery held at 0 no longer writes 0 over the small charge limit the device sets itself at its lower bound, and such a 0 no longer counts as a lost write. Seen on a SolarFlow 800 Plus, where writes were counted as lost against the device's own protection.
+- **Counters of the copies:** a copy of a Virtual cluster carries *Skipped peaks* and *Relay switches* on its *Controller status* (`skipped_peaks`, `skipped_peaks_today`, `relay_switches`, `relay_switches_today`, `short_runs_today`); it still has no entities of its own for them.
+- **Trace recording shows its row count while it runs:** the switch's `rows` follows every 30 rows; until now it read 0 until the file was closed. The row count is left out of the history.
+- **Trace recording for a cluster.** A battery cluster and a Virtual cluster have a *Trace recording* switch: one CSV row per decision, every 2 s, with each battery's role, direction, limits, power, state of charge and status, and on a Virtual cluster the house load and both meters. See [The cluster trace](#the-cluster-trace). A battery's trace file now carries the last four characters of its serial number (`trace_1234_…`), and its rows `role` and `cluster_limit_w` in a cluster. The switch sits under *Operation mode* on the Cluster tab; *Rebuild dashboard* adds it.
+- **Price sources: EPEX Spot recommended, fewer named lists.** The day-ahead price is one price per country, from EPEX Spot and Nord Pool alike, so any dynamic contract works with either of them plus your supplier's surcharge. [Other price sources](#other-price-sources-epex-spot-zonneplan-and-more) now says so, puts EPEX Spot first and lists suppliers in the Netherlands and Germany as examples. Named in `price_format` are EPEX Spot, Nord Pool, Zonneplan, Frank Energie and ENTSO-e; Tibber and Energi Data Service are no longer named. Their lists are still read, so a plan does not change; the status shows `price_format: other` instead. For Tibber, choose EPEX Spot or Nord Pool and set Tibber's surcharge in [Your tariff](#your-tariff).
+- **A cherry picker, not a whole-house battery:** a new section under [Price control](#a-cherry-picker-not-a-whole-house-battery) on what the day plan uses the battery for, what comes from the grid on purpose and why, what that costs, and what *Expected house load* stands for. No change in behaviour.
+- **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging; *Stop charging below* 50 W by default, like discharging (was 80 W). A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
+
 ### v1.7.4 — Stopping at low demand
 
 **A single battery now stops at low demand by default.** It stops discharging and charging when the demand stays under 50 W for 30 s and starts only after 30 s past the start threshold; a value you set yourself stays. Set both limits and `Start after` to 0 to decide exactly as in v1.7.3.
@@ -1427,7 +1489,6 @@ Recent releases are listed in full. Earlier ones are grouped by minor version, k
 - **Reset settings on a battery:** under the battery's *Configure*, above *Rebuild dashboard*, a tick takes the controller settings back to their defaults: buffers and start thresholds 5 W, Stop charging below and Stop discharging below 50 W, Stop after 30 s, Start after 30 s, Min charge and Min discharge power 0 W, Mode threshold 10 W, Trim threshold 40 W, Trim strength 80 %, Direction change delay 10 s. The Operation mode, Max charge and Max discharge power, SOC protection, the meter and Price Control stay. The tick is not stored.
 - **Reset copies:** the tick *Reset* of a Virtual cluster reads *Reset copies*; the text under *Reset settings* lists every default.
 - The battery dashboard and the cluster dashboards show the three settings; *Reset settings* of a Virtual cluster takes them back to their defaults; a new cluster does not take them from its first battery.
-- **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging; *Stop charging below* 50 W by default, like discharging (was 80 W). A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
 
 ### v1.7.3 — A dashboard per kind of cluster, clearer names, and a guarded Inverter power limit
 

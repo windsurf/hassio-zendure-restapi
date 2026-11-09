@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.4"
+INTEGRATION_VERSION = "1.7.5"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -569,6 +569,22 @@ CONTROL_FACTOR_BALANCE = 1.00
 # 41 W of discharge, which a 30 W band reads as "still running" forever.
 # The primary test is therefore whether the controller is commanding anything.
 CONTROL_DEADBAND = 60           # W
+# Distance kept from the SOC bounds (v1.7.5), in percentage points. After
+# the device reports empty, a smart mode discharges again only from minSoc +
+# this; after full, it charges again only from socSet − this. SOC protection
+# charges a single battery to minSoc + this. Without it a battery at minSoc
+# swings between 10 and 11 %: discharging opens at 11, closes at 10.
+SOC_REARM_POINTS = 5
+# A charge limit the device sets itself at its lower bound (its own SOC
+# protection, ~27 W measured on a SolarFlow 800 Plus) is left alone up to this.
+DEVICE_SELF_CHARGE_W = 50
+# Lowest limit a running direction is brought to in one step (v1.7.5).
+# After a short peak the grid shows a large export while the measured battery
+# power still lags the device by a sample; net + battery − buffer then comes
+# out below zero and the limit went to 0, ending the direction and costing a
+# new start. Now the first such cycle leaves this much running; only a second
+# cycle in a row with nothing to do ends it (or the stop rule does).
+RUN_FLOOR_W = 30
 
 # Ignore adjustments smaller than this, to avoid pointless writes. The value
 # lives in DEFAULTS[OPT_MODE_THRESHOLD]; this is the floor used before the

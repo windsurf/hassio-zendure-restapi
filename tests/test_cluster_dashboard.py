@@ -31,6 +31,7 @@ def group() -> dict:
         "real_grid": "sensor.virtual_p1_meter_real_grid_power",
         "reset": "button.virtual_cluster_reset",
         "rebuild": "button.virtual_cluster_rebuild_dashboard",
+        "trace": "switch.virtual_cluster_trace_recording",
     }
     # The group's own settings, as Home Assistant has them.
     for key, object_id in (("clones", "copies"), ("load_factor", "load_factor"), ("charge_buffer", "charge_buffer"),

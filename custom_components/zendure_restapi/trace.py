@@ -31,7 +31,7 @@ import csv
 import logging
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
@@ -72,14 +72,78 @@ COLUMNS = (
     "foreign_writes",    # cumulative, everything else that moved a limit
     "meter_source",      # meter grid_w came from: zendure | external | none
     "external_w",        # external meter power, raw; empty without one
+    # In a battery cluster or a Virtual cluster (v1.7.5); empty outside one.
+    "role",              # primary | secondary | quick, as the cluster set it
+    "cluster_limit_w",   # the limit the cluster gave this battery
 )
+
+# The trace of a battery cluster or a Virtual cluster (v1.7.5): one row per
+# decision of the cluster, every 2 s. The batteries follow as b1_…, b2_… in
+# the order of the cluster, as many as it has; a Virtual cluster adds the
+# house load and both meters at the end.
+CLUSTER_COLUMNS = (
+    "ts",                # local time, milliseconds, as in the battery trace
+    "mode",              # the cluster's Operation mode
+    "status",            # the cluster's status
+    "reason",            # why that status
+    "grid_w",            # the meter the cluster decided on (virtual P1 on a Virtual cluster)
+    "primary",           # name of the primary, empty without one
+    "group_power_w",     # sum of the batteries' AC power, positive discharging
+    "group_soc",         # state of charge of the group, weighted by capacity
+)
+CLUSTER_BATTERY_COLUMNS = (
+    "name",              # the battery's name in the cluster
+    "available",         # 1 reporting and taking part, 0 not
+    "role",              # primary | secondary | quick | none, from this decision
+    "direction",         # charge | discharge | none, from this decision
+    "cluster_limit_w",   # the limit this decision gave it
+    "input_limit",       # charge limit as the device reports it
+    "output_limit",      # discharge limit as the device reports it
+    "power_w",           # AC power, positive discharging
+    "soc",               # state of charge
+    "status",            # the battery's own controller status
+    "reason",            # why that status
+)
+VIRTUAL_COLUMNS = (
+    "house_w",           # house load from the real battery's meter
+    "real_grid_w",       # the real meter
+    "virtual_p1_w",      # what the virtual P1 meter shows the copies
+    "load_factor",       # house load multiplier of the Virtual cluster
+)
+MAX_CLUSTER_BATTERIES = 6
+
+
+def cluster_columns(batteries: int, virtual: bool) -> tuple[str, ...]:
+    """The header of a cluster trace with this many batteries."""
+    columns = list(CLUSTER_COLUMNS)
+    for n in range(1, max(0, min(batteries, MAX_CLUSTER_BATTERIES)) + 1):
+        columns += [f"b{n}_{c}" for c in CLUSTER_BATTERY_COLUMNS]
+    if virtual:
+        columns += list(VIRTUAL_COLUMNS)
+    return tuple(columns)
 
 
 class ZendureTrace:
-    """Buffers trace rows and flushes them to a CSV file."""
+    """Buffers trace rows and flushes them to a CSV file.
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    The file name starts with ``prefix``, asked for when a file opens: a
+    battery's ends in the last four characters of its serial number, a
+    cluster's is ``trace_cluster`` (v1.7.5). Until v1.7.4 every file was
+    ``trace_<stamp>_<nnn>.csv``, and two batteries were not to tell apart.
+    ``columns`` likewise, asked for when a recording starts: a cluster's header
+    depends on how many batteries it has.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        prefix: Callable[[], str] | None = None,
+        columns: Callable[[], tuple[str, ...]] | None = None,
+    ) -> None:
         self.hass = hass
+        self._prefix = prefix or (lambda: "trace")
+        self._columns_of = columns or (lambda: COLUMNS)
+        self._columns: tuple[str, ...] = COLUMNS
         self._path: Path | None = None
         self._buffer: list[list[Any]] = []
         self._rows = 0
@@ -120,6 +184,8 @@ class ZendureTrace:
         if self.active:
             # Switching on while a file is open would silently continue it.
             await self.async_close()
+        # Fixed for the whole recording, rollovers included: one header per series.
+        self._columns = tuple(self._columns_of())
         await self._async_open()
         self._notify()
 
@@ -169,7 +235,7 @@ class ZendureTrace:
             if not await self._async_open():
                 return
 
-        self._buffer.append([values.get(column, "") for column in COLUMNS])
+        self._buffer.append([values.get(column, "") for column in self._columns])
 
         # Counted with the buffer included, so a file lands on its limit rather
         # than up to a flush past it. Counting flushed rows only made the size
@@ -207,9 +273,9 @@ class ZendureTrace:
             TRACE_MAX_ROWS + random.randint(-TRACE_ROWS_JITTER, TRACE_ROWS_JITTER),
         )
         directory = Path(self.hass.config.path(TRACE_DIR))
-        path = directory / f"trace_{self._stamp}_{self._sequence:03d}.csv"
+        path = directory / f"{self._prefix()}_{self._stamp}_{self._sequence:03d}.csv"
         try:
-            await self.hass.async_add_executor_job(self._create, directory, path)
+            await self.hass.async_add_executor_job(self._create, directory, path, self._columns)
         except OSError as err:
             _LOGGER.warning("Trace recording disabled, cannot write %s: %s", path, err)
             self._failed = True
@@ -235,12 +301,16 @@ class ZendureTrace:
             self._notify()
             return
         self._rows += len(rows)
+        # The switch shows the row count; until v1.7.4 it was refreshed only on
+        # start, stop and rollover, so a running recording read 0 rows for a
+        # whole file (v1.7.5). Once per flush: every 30 rows.
+        self._notify()
 
     @staticmethod
-    def _create(directory: Path, path: Path) -> None:
+    def _create(directory: Path, path: Path, columns: tuple[str, ...] = COLUMNS) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="", encoding="utf-8") as handle:
-            csv.writer(handle).writerow(COLUMNS)
+            csv.writer(handle).writerow(columns)
 
     @staticmethod
     def _append(path: Path, rows: list[list[Any]]) -> None:

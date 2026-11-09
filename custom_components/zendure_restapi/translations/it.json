@@ -8,7 +8,7 @@
           "zendure": "Batteria Zendure — inizia da qui (anche un contatore P1 Zendure)",
           "external_meter": "Contatore di rete esterno via IP — il più veloce (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Contatore di rete esterno da Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Controllo in base al prezzo — caricare quando l'energia costa poco, scaricare quando costa molto (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "price_control": "Controllo in base al prezzo — caricare quando l'energia costa poco, scaricare quando costa molto (Nord Pool, EPEX Spot, Zonneplan, …)",
           "battery_cluster": "Cluster di batterie — fino a sei batterie, su qualsiasi fase, come un unico sistema",
           "virtual_cluster": "Virtual cluster (simulated) — copies of a battery under a cluster, writing nothing real"
         }
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Per il piano giornaliero. Nord Pool (HACS) con IVA e senza costi aggiuntivi: prezzo spot IVA inclusa. Senza IVA: prezzo spot. Con l'intera tariffa nei costi aggiuntivi: prezzo di prelievo. EPEX Spot: sensore Market price: prezzo spot; sensore Total price: prezzo di prelievo. Zonneplan: prezzo di prelievo.",
-          "price_entity": "Prezzi fissi: qualsiasi sensore con il prezzo attuale. Piano giornaliero: un sensore con un elenco di prezzi — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie o Energi Data Service."
+          "price_entity": "Prezzi fissi: qualsiasi sensore con il prezzo attuale. Piano giornaliero: un sensore con un elenco di prezzi — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e o Frank Energie."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Per il piano giornaliero. Nord Pool (HACS) con IVA e senza costi aggiuntivi: prezzo spot IVA inclusa. Senza IVA: prezzo spot. Con l'intera tariffa nei costi aggiuntivi: prezzo di prelievo. EPEX Spot: sensore Market price: prezzo spot; sensore Total price: prezzo di prelievo. Zonneplan: prezzo di prelievo.",
-          "price_entity": "Prezzi fissi: qualsiasi sensore con il prezzo attuale. Piano giornaliero: un sensore con un elenco di prezzi — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie o Energi Data Service."
+          "price_entity": "Prezzi fissi: qualsiasi sensore con il prezzo attuale. Piano giornaliero: un sensore con un elenco di prezzi — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e o Frank Energie."
         }
       },
       "device": {
@@ -396,8 +396,6 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
-              "tibber": "Tibber",
-              "energi_data_service": "Energi Data Service",
               "other": "altro elenco prezzi"
             }
           },

@@ -140,8 +140,9 @@ PLATFORMS: list[Platform] = [
 # An external meter entry has no switches, selects or numbers of its own.
 EXTERNAL_PLATFORMS: list[Platform] = [Platform.SENSOR]
 PRICE_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT]
-CLUSTER_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON]
-VIRTUAL_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON]
+# Since v1.7.5 with a switch: Trace recording of the cluster.
+CLUSTER_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
+VIRTUAL_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
 RUNTIME_SUFFIX = "_runtime"
 

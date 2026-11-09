@@ -1,5 +1,5 @@
 # ============================================================
-# VIRTUAL CLUSTER DASHBOARD - v1.7.4
+# VIRTUAL CLUSTER DASHBOARD - v1.7.5
 # ============================================================
 #
 # The dashboard "Virtual Cluster" as the integration builds it
@@ -110,6 +110,11 @@ views:
       grid_options:
         columns: 12
         rows: 2
+      name:
+        type: entity
+    - type: tile
+      entity: switch.virtual_cluster_trace_recording
+      icon: mdi:record-rec
       name:
         type: entity
   - type: grid

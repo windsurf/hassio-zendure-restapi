@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription, NumberMode
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.components.sensor import (
@@ -149,6 +150,8 @@ def cluster_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
         return [ClusterNumber(entry, cluster, d, settings, key) for d, key in CLUSTER_NUMBERS]
     if platform == Platform.BUTTON:
         return [RebuildButton(entry, cluster, REBUILD_DESCRIPTION)]
+    if platform == Platform.SWITCH:
+        return [ClusterTraceSwitch(entry, cluster, TRACE_DESCRIPTION, cluster.trace)]
     if platform == Platform.SENSOR:
         return [
             ClusterStatus(entry, cluster, STATUS_DESCRIPTION),
@@ -301,6 +304,57 @@ class ClusterValue(ClusterEntity, SensorEntity):
         if not self._extra:
             return None
         return {key: fn(self._cluster) for key, fn in self._extra.items()}
+
+
+# Trace recording of the cluster (v1.7.5): the same key, and so the same
+# name in every language, as on a battery.
+TRACE_DESCRIPTION = SwitchEntityDescription(
+    key="trace_recording",
+    name="Trace recording",
+    icon="mdi:record-rec",
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+
+class ClusterTraceSwitch(ClusterEntity, SwitchEntity):
+    """Starts and stops the cluster trace: one CSV row per decision (v1.7.5).
+
+    Off after a restart, whatever it was before, as on a battery. The file is
+    trace_cluster_<stamp>_<nnn>.csv in the same folder as the batteries' traces.
+    """
+
+    # The row count follows every flush (v1.7.5); it is not worth a history.
+    _unrecorded_attributes = frozenset({"rows"})
+
+    def __init__(self, entry: ConfigEntry, cluster: Any, description: SwitchEntityDescription, trace: Any) -> None:
+        super().__init__(entry, cluster, description)
+        self._trace = trace
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # The recorder stops itself on a write failure: the switch follows it.
+        self.async_on_remove(self._trace.add_listener(self.async_write_ha_state))
+
+    def _due(self) -> bool:
+        # No state write per decision (every 2 s); the switch follows the
+        # recorder on start, stop, every flush (30 rows), rollover and failure.
+        return False
+
+    @property
+    def is_on(self) -> bool:
+        return self._trace.wanted
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"file": self._trace.path, "rows": self._trace.rows}
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._trace.async_start()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._trace.async_stop()
+        self.async_write_ha_state()
 
 
 class RebuildButton(ClusterEntity, ButtonEntity):

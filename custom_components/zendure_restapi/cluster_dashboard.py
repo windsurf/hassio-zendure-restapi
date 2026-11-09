@@ -336,6 +336,8 @@ def cluster_view(
             _markdown(status_text(group, virtual)) if group.get("status") else None,
             _tile(group.get("mode"), icon="mdi:state-machine", features_position="bottom",
                   features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
+            # v1.7.5: the cluster's trace, one CSV row per decision.
+            _tile(group.get("trace"), icon="mdi:record-rec"),
             # Reset and Rebuild dashboard are under Configure since v1.7.3: a
             # deliberate step rather than a tile one tap away.
         ], badges=[e for e in (group.get("mode"), group.get("status")) if e]),
@@ -468,6 +470,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         "rebuild": _entity(registry, "button", f"{eid}_rebuild_dashboard"),
         # v1.7.3: the meter the group steers on; a battery cluster only.
         "meter_source": _entity(registry, "select", f"{eid}_meter_source"),
+        # v1.7.5: Trace recording of the cluster.
+        "trace": _entity(registry, "switch", f"{eid}_trace_recording"),
     }
     for key in ("clones", "load_factor", "soc_offset_1", "soc_offset_2", "soc_offset_3",
                 "response_offset_1", "response_offset_2", "response_offset_3",

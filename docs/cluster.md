@@ -115,6 +115,8 @@ Removing the cluster returns every battery to its own settings, in standby.
 
 Since v1.7.3 these two are named as on a battery; the device says it is the cluster. On an existing installation their ids move once, history included: `sensor.battery_cluster_group_power` → `sensor.battery_cluster_battery_power`, `sensor.battery_cluster_group_state_of_charge` → `sensor.battery_cluster_state_of_charge`; an id you renamed yourself stays. | Batteries taking part | sensor | how many are available; attributes per battery | | Rebuild dashboard | button | builds the dashboard *Cluster* again (v1.7.1) |
 
+**Trace recording** (switch, v1.7.5): one CSV row per decision, every 2 s, to `trace_cluster_<date>_<time>_<nnn>.csv`: the decision and, per battery, role, direction, limits, power, state of charge and status; off after a restart. See [The cluster trace](../README2.md#the-cluster-trace).
+
 The grid reading itself has no sensor of its own here, as on a battery since v1.6.6: use the sensor of the meter, which keeps its history. Like the energy counters since v1.6.7, the cluster's figures are written only when they move: *Status* when the status, the primary or a battery's role or limit changes, *Battery power* per 50 W, *State of charge* per 0.5 %, and each at most once a minute otherwise. The decision itself is taken every 2 seconds.
 
 **On each battery in the group:**

@@ -94,7 +94,7 @@ Since v1.7.3 neither is a tile on the dashboard (and *Reset settings*, next to t
 
 ## Entities
 
-**Virtual cluster:** the settings above, and Status, Battery power, State of charge (*Group power* and *Group state of charge* until v1.7.2; ids `sensor.virtual_cluster_battery_power` and `sensor.virtual_cluster_state_of_charge`), Batteries taking part — as on the [cluster](cluster.md#entities).
+**Virtual cluster:** the settings above, and Status, Battery power, State of charge (*Group power* and *Group state of charge* until v1.7.2; ids `sensor.virtual_cluster_battery_power` and `sensor.virtual_cluster_state_of_charge`), Batteries taking part — as on the [cluster](cluster.md#entities). **Trace recording** (`switch.virtual_cluster_trace_recording`, v1.7.5): one CSV row per decision with each copy's role, limits, power, state of charge and status, plus the house load, the real meter, the virtual P1 and the Load factor; the only trace of the copies. See [The cluster trace](../README2.md#the-cluster-trace).
 
 **Virtual P1 meter** (model marked *(simulated)*):
 
@@ -106,7 +106,7 @@ Since v1.7.3 neither is a tile on the dashboard (and *Reset settings*, next to t
 
 Until v1.7.2 these were *Power* and *Real grid*, and *Load factor* was a sensor of its own, a copy of the setting; its entity is removed. The ids move once: `sensor.virtual_p1_meter_power` → `sensor.virtual_p1_meter_grid_power`, `sensor.virtual_p1_meter_real_grid` → `sensor.virtual_p1_meter_real_grid_power`.
 
-**Each copy** (*Virtual copy 1/2/3*, model marked *(simulated)*): State of charge, Battery power, Controller status (with its role and limit), Charge limit, Discharge limit, Response time, and its settings Max share, SoC offset and Extra response time. No energy counters, so the Energy dashboard never sees a battery that does not exist, and no Price Control.
+**Each copy** (*Virtual copy 1/2/3*, model marked *(simulated)*): State of charge, Battery power, Controller status (with its role and limit, and since v1.7.5 the counters a battery has as entities: `skipped_peaks`, `skipped_peaks_today`, `relay_switches`, `relay_switches_today`, `short_runs_today`), Charge limit, Discharge limit, Response time, and its settings Max share, SoC offset and Extra response time. No energy counters, so the Energy dashboard never sees a battery that does not exist, and no Price Control.
 
 ## Where the copies start
 
@@ -154,7 +154,7 @@ Made once. After another number of copies a notification offers *Rebuild dashboa
 3. **The split under load.** Copies 3, Load factor 3: each copy gets about what your battery gets now. Splits, redistributions, direction changes and load drops with running secondaries come up all the time.
 4. **All three at a low load.** The primary keeps 60 % of its own maximum before the others get a share, so with copies of a 3 kW battery the secondaries hardly ever run at a normal house load. Set *Concentrate below* to 0 and *Max share clone 1* to, say, 300 W: the primary keeps 180 W and the rest is split over copies 2 and 3. Not what a real cluster would do for its yield, but it shows the split all day (v1.7.2).
 5. **State of charge.** Large offsets, for example −40 and +35: a secondary that is empty or full early.
-6. *Reset copies* between runs, so a run can be repeated.
+6. *Reset copies* between runs, so a run can be repeated. For a run you want to read back second by second, switch on the Virtual cluster's *Trace recording* and the real battery's at the same time (v1.7.5).
 7. **Peaks and low load** (v1.7.4). A night at your base load shows two things of the copies' model: a primary that stops below *Stop discharging below* and rests, and short peaks that the primary covers alone while the secondaries wait *Start after*. Raise *Stop discharging below* just above your base load to see the stops; set *Start after* to 0 to see the secondaries join every peak, as before v1.7.4. What concentrating saves follows from the fixed loss of about 33 W per converting inverter; see [Why concentrate at all](cluster.md#how-it-regulates).
 
 The day of a test is not a different day for your battery: its energy, its logger and its daily result are what they would have been.

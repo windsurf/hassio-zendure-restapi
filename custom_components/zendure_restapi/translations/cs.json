@@ -8,7 +8,7 @@
           "zendure": "Baterie Zendure — začněte zde (také elektroměr P1 Zendure)",
           "external_meter": "Externí elektroměr přes IP — nejrychlejší (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externí elektroměr z Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Řízení podle ceny — nabíjet, když je elektřina levná, vybíjet, když je drahá (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "price_control": "Řízení podle ceny — nabíjet, když je elektřina levná, vybíjet, když je drahá (Nord Pool, EPEX Spot, Zonneplan, …)",
           "battery_cluster": "Bateriový cluster — až šest baterií, na libovolné fázi, jako jeden systém",
           "virtual_cluster": "Virtual cluster (simulated) — copies of a battery under a cluster, writing nothing real"
         }
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena. EPEX Spot: senzor Market price: spotová cena; senzor Total price: nákupní cena. Zonneplan: nákupní cena.",
-          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie nebo Energi Data Service."
+          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena. EPEX Spot: senzor Market price: spotová cena; senzor Total price: nákupní cena. Zonneplan: nákupní cena.",
-          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie nebo Energi Data Service."
+          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie."
         }
       },
       "device": {
@@ -396,8 +396,6 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
-              "tibber": "Tibber",
-              "energi_data_service": "Energi Data Service",
               "other": "jiný ceník"
             }
           },

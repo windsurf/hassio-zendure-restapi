@@ -206,14 +206,15 @@ def price_scale(attributes: dict[str, Any]) -> float:
 # attributes read together (today and tomorrow); the first family that gives
 # prices is used, so two lists of different meaning are never mixed.
 #   Nord Pool (HACS)       raw_today, raw_tomorrow: start, end, value
-#   Energi Data Service    raw_today, raw_tomorrow: hour, price
 #   EPEX Spot (HACS)       data: start_time, end_time, price_per_kwh
 #   Zonneplan              forecast: start_date, end_date,
 #                          price_tax_included.amount (× 10^-7)
 #   Zonneplan (older)      forecast: datetime, electricity_price (× 10^-7)
 #   ENTSO-e (HACS)         prices_today, prices_tomorrow, prices: time, price
 #   Frank Energie (HACS)   prices: from, till, price
-#   Tibber                 prices: start_time, price
+# Other lists with these fields are read as well and named "other" (since
+# v1.7.5 only these sources are named; the day-ahead price itself is the same
+# from EPEX Spot, Nord Pool and ENTSO-e).
 PRICE_FAMILIES: tuple[tuple[str, ...], ...] = (
     ("raw_today", "raw_tomorrow"),
     ("data",),
@@ -237,7 +238,6 @@ VALUE_KEYS: tuple[tuple[str, float | None], ...] = (
 # field: shown in the status attributes, so a wrong sensor is quick to spot.
 FORMAT_NAMES = {
     ("raw_today", "start", "value"): "nord_pool",
-    ("raw_today", "hour", "price"): "energi_data_service",
     ("data", "start_time", "price_per_kwh"): "epex_spot",
     ("data", "start_time", "price_ct_per_kwh"): "epex_spot",
     ("data", "start_time", "price_eur_per_mwh"): "epex_spot",
@@ -245,7 +245,6 @@ FORMAT_NAMES = {
     ("forecast", "datetime", "electricity_price"): "zonneplan",
     ("prices_today", "time", "price"): "entso_e",
     ("prices_today", "from", "price"): "frank_energie",
-    ("prices_today", "start_time", "price"): "tibber",
 }
 # The length of a period whose end is not given and cannot be taken from the
 # next one: the most common step in the list, else an hour.
@@ -324,11 +323,11 @@ def _read(attributes: dict[str, Any]) -> tuple[list[Period], str | None]:
 def read_prices(attributes: dict[str, Any]) -> list[Period]:
     """The price list of a price sensor: today, and tomorrow when known.
 
-    Recognises the lists of Nord Pool (HACS), EPEX Spot, Zonneplan, ENTSO-e,
-    Frank Energie, Tibber (a template sensor) and Energi Data Service
-    (PRICE_FAMILIES). Values per kWh in
-    the currency's main unit, whatever the sensor's own scale. Entries without
-    a usable start or value are left out; a missing end is the next start.
+    Recognises the lists of Nord Pool (HACS), EPEX Spot, Zonneplan, ENTSO-e
+    and Frank Energie (PRICE_FAMILIES); another list with the same fields is
+    read too. Values per kWh in the currency's main unit, whatever the
+    sensor's own scale. Entries without a usable start or value are left out;
+    a missing end is the next start.
     Sorted by start, duplicates dropped.
     """
     return _read(attributes)[0]

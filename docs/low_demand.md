@@ -114,7 +114,11 @@ Starting at once bought nothing: the same 24.5 Wh from the grid as not starting 
 
 **By design: cooking comes from the grid.** `Start after` counts continuous demand: every pause starts its time again. A load that pulses with pulses shorter than `Start after` — an induction hob at half power, cycling 10 s on and 10 s off — therefore never starts the battery and comes from the grid as a whole, like the tap. That is deliberate: from standstill the battery is late for every pulse, and each start costs a relay switch and conversion loss that the few watt-hours it could cover do not make up. In smart matching the battery is there to take the solar surplus, and to cover the house where it can do so efficiently; when to discharge for large loads is better left to a day plan or a planner that knows the prices. Set `Start after` lower if you want such a load covered anyway.
 
+**The same choice in the day plan.** Price Control's day plan works the same way: it uses the battery where the invoice gains from it and leaves short peaks, very low demand and large loads outside its blocks to the grid. See [A cherry picker, not a whole-house battery](../README2.md#a-cherry-picker-not-a-whole-house-battery).
+
 **Seeing it on your own installation.** Two measured diagnostics count what happens: *Skipped peaks*, the starts that `Start after` held back and that never came (per direction, with the energy the grid gave meanwhile and the longest), and *Relay switches*, the starts from standstill and changes of direction the battery did make, with the *short* runs that stopped or turned again within 2 minutes. Many short runs mean hunting; with `Start after` they should be rare.
+
+**What a relay switch is here.** The counter follows what this integration writes: a limit above zero after both were at zero, or another `acMode`. The device does not report its relays, so whether each of these is an audible click is not known; a change of direction may well be handled inside the inverter without one. Read the figure as an upper limit and as the number to compare between two settings, not as a count of relay operations. A counter that takes every change of sign in the measured power (as some automations do) counts far more, because the power swings around zero by a few watts while nothing switches.
 
 ## Not flooding the battery
 

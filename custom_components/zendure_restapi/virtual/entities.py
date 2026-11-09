@@ -58,10 +58,12 @@ from ..cluster_entities import (
     POWER_DESCRIPTION,
     SOC_DESCRIPTION,
     STATUS_DESCRIPTION,
+    TRACE_DESCRIPTION,
     ClusterEntity,
     ClusterNumber,
     ClusterSelect,
     ClusterStatus,
+    ClusterTraceSwitch,
     ClusterValue,
 )
 from .cluster import Clone, VirtualCluster
@@ -177,6 +179,8 @@ def virtual_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
                 _on_copy(copies[-1], clone)
     elif platform == Platform.BUTTON:
         entities = [ResetButton(entry, vc, RESET_DESCRIPTION), RebuildButton(entry, vc, REBUILD_DESCRIPTION)]
+    elif platform == Platform.SWITCH:
+        entities = [ClusterTraceSwitch(entry, vc, TRACE_DESCRIPTION, vc.cluster.trace)]
     elif platform == Platform.SENSOR:
         entities = [
             ClusterStatus(entry, vc, STATUS_DESCRIPTION),

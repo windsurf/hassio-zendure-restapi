@@ -52,6 +52,8 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
 
+from .const import DEVICE_SELF_CHARGE_W
+
 # ── Thresholds ───────────────────────────────────────────────────────────
 
 GAP_SECONDS = 60            # a longer gap between readings is not bridged
@@ -660,7 +662,10 @@ class BatteryMeasure:
             # it. Unless the device closed that direction at its SOC bound.
             soc_limit = self._last.soc_limit if self._last is not None else None
             closed = (key == "inputLimit" and soc_limit == 1) or (key == "outputLimit" and soc_limit == 2)
-            if not closed:
+            # At its lower bound the device sets a small charge limit itself (its
+            # own SOC protection); a 0 written again over it is not lost (v1.7.5).
+            self_charge = key == "inputLimit" and soc_limit == 2 and value == 0
+            if not closed and not self_charge:
                 self._file(key, pending, reported=None, lost=True)
         self._echo[key] = {"at": now, "value": value, "gap": gap}
 
@@ -694,6 +699,9 @@ class BatteryMeasure:
             )
             if closed:
                 continue  # the device closed that direction at its SOC bound itself
+            if (key == "inputLimit" and soc_limit == 2 and pending["value"] == 0
+                    and 0 < got <= DEVICE_SELF_CHARGE_W):
+                continue  # its own SOC protection charging at the lower bound (v1.7.5)
             self._file(key, pending, reported=got, lost=got != pending["value"])
 
     @property
@@ -755,6 +763,21 @@ class BatteryMeasure:
     @property
     def relay_switches(self) -> int:
         return int(self.switching.get("relay", {}).get("total", 0))
+
+    def switching_summary(self, today: str) -> dict[str, Any]:
+        """Both counters in brief, for a copy of a Virtual cluster that has no
+        entities for them (v1.7.5): totals, and today's counts while the stored
+        day is today. Reads only; the day turns over on the next count."""
+        sk = self.switching.get("skipped", {})
+        rl = self.switching.get("relay", {})
+        current = self.switching.get("day") == today
+        return {
+            "skipped_peaks": int(sk.get("total", 0)),
+            "skipped_peaks_today": int(sk.get("today", 0)) if current else 0,
+            "relay_switches": int(rl.get("total", 0)),
+            "relay_switches_today": int(rl.get("today", 0)) if current else 0,
+            "short_runs_today": int(rl.get("short_today", 0)) if current else 0,
+        }
 
     # ── Realized margin ──────────────────────────────────────────────
 

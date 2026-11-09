@@ -5,9 +5,7 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE),
 since v1.7.0.
 
 Versions v1.6.x and earlier were released under the MIT License and remain
-available under it. Code from those versions, including a contribution by
-Noxeus (pull request #6, the Tibber price forecast in dayplan.py), is used
-here under that licence:
+available under it. Code from those versions is used here under that licence:
 
   Copyright (c) 2026 windsurf
 

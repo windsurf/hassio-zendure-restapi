@@ -74,6 +74,9 @@ class ZendureMember:
         available = bool(data) and c.coordinator.last_update_success is not False \
             and not c._unloaded and self.taking_part()
         full, empty = _soc_bounds(data) if data else (False, False)
+        # Held past the device's flag until minSoc/socSet ± 5 points (v1.7.5).
+        full = full or c._full_latch
+        empty = empty or c._empty_latch
         capacity = c.measure.usable_capacity
         if not capacity:
             total = 0.0

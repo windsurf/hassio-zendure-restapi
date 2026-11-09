@@ -8,7 +8,7 @@
           "zendure": "Zendure-batterij — begin hier (ook een Zendure P1-meter)",
           "external_meter": "Externe netmeter via IP — het snelst (HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM)",
           "ha_meter": "Externe netmeter uit Home Assistant (Shelly, DSMR, SMA, Huawei, …)",
-          "price_control": "Prijssturing — laden als stroom goedkoop is, ontladen als hij duur is (Nord Pool, EPEX Spot, Zonneplan, Tibber, …)",
+          "price_control": "Prijssturing — laden als stroom goedkoop is, ontladen als hij duur is (Nord Pool, EPEX Spot, Zonneplan, …)",
           "battery_cluster": "Batterijcluster — tot zes batterijen, op elke fase, als één systeem",
           "virtual_cluster": "Virtueel cluster (gesimuleerd) — kopieën van een batterij onder een cluster, schrijft niets echt"
         }
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
-          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie of Energi Data Service."
+          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
-          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e, Frank Energie of Energi Data Service."
+          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie."
         }
       },
       "device": {
@@ -396,8 +396,6 @@
               "zonneplan": "Zonneplan",
               "entso_e": "ENTSO-e",
               "frank_energie": "Frank Energie",
-              "tibber": "Tibber",
-              "energi_data_service": "Energi Data Service",
               "other": "andere prijslijst"
             }
           },

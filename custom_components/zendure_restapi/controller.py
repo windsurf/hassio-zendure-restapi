@@ -70,6 +70,9 @@ from .const import (
     AC_MODE_CHARGE,
     AC_MODE_DISCHARGE,
     CONTROL_DEADBAND,
+    DEVICE_SELF_CHARGE_W,
+    RUN_FLOOR_W,
+    SOC_REARM_POINTS,
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
@@ -208,6 +211,15 @@ CLUSTER_OWNER = "battery cluster"
 class ZendureController:
     """Turns an operation mode into device writes."""
 
+    # Held past the device's own SOC flags (v1.7.5), and SOC protection
+    # charging on to minSoc + SOC_REARM_POINTS. Class defaults, so a controller
+    # built without __init__ (tests) has them too.
+    _empty_latch = False
+    _full_latch = False
+    _protecting = False
+    # One mode cycle of "nothing to do" seen for a running direction.
+    _zero_once = False
+
     def __init__(
         self,
         coordinator: ZendureCoordinator,
@@ -314,7 +326,7 @@ class ZendureController:
         # never announces itself; the only trace it leaves is a setpoint this
         # controller did not write. Comparing the two is what makes it
         # measurable on the same yardstick as the loops here.
-        self.trace = ZendureTrace(coordinator.hass)
+        self.trace = ZendureTrace(coordinator.hass, prefix=self._trace_prefix)
         self._write_source = "none"
         # The last few values written per key, newest first, not just the
         # newest one. The device's report lags a write by a sample or two, so
@@ -790,6 +802,12 @@ class ZendureController:
         )
         if floor > 0 and target < floor:
             target = int(min(floor, self._cap(data, charging)))
+        # The trim loop does not end a direction either (v1.7.5): ending is
+        # the mode loop's, after two cycles in a row with nothing to do, or the
+        # stop rule's. Seen after short peaks: a trim step on a lagging reading
+        # took the limit to 0 and the next demand needed a new start.
+        if current > 0 and target < min(RUN_FLOOR_W, current):
+            target = min(RUN_FLOOR_W, current)
 
         delta = target - current
         # Adjustments only. This loop never opens a direction — it is entered
@@ -849,10 +867,12 @@ class ZendureController:
     # ── Safety ───────────────────────────────────────────────────────────
 
     async def _handle_soc_protection(self, data: dict[str, Any], mode: str) -> bool:
-        """Charge back to the lower SOC bound. Returns True when it acted."""
+        """Charge from under the lower SOC bound to that bound + SOC_REARM_POINTS. Returns True when it acted."""
         if not self.settings.get_bool(OPT_SOC_PROTECTION):
+            self._protecting = False
             return False
         if getattr(self.settings, "coordinated", False):
+            self._protecting = False
             # In a battery cluster the group decides (v1.7.0): a battery
             # under its floor stops discharging there (see _bounds) instead of
             # charging from the grid on its own while the others discharge —
@@ -860,31 +880,38 @@ class ZendureController:
             return False
         if mode in (MODE_QUICK_DISCHARGE, MODE_MANUAL):
             # Explicit user intent; protection would fight the operator.
+            self._protecting = False
             return False
         if mode == MODE_STANDBY:
             # Standby means hands off, and a protection that still writes would
             # make that a lie. The device guards its own floor regardless.
+            self._protecting = False
             return False
 
-        soc = data.get("electricLevel")
-        floor = data.get("minSoc")
+        soc = _soc_percent(data, "electricLevel", 1.0)
+        floor = _soc_percent(data, "minSoc", 0.1)  # minSoc is stored in tenths
         if soc is None or floor is None:
+            self._protecting = False
             return False
-        try:
-            # minSoc is stored in tenths of a percent.
-            if float(soc) >= float(floor) / 10.0:
-                return False
-        except (TypeError, ValueError):
+        # Charge from under the floor to the floor + SOC_REARM_POINTS (v1.7.5):
+        # stopping at the floor itself left the battery on the edge, where it
+        # swings across it. The planner does the same with a quarter at full
+        # power. A start needs the battery under the floor; once charging it
+        # carries on to the margin.
+        target = floor + SOC_REARM_POINTS
+        if soc >= target or (not self._protecting and soc >= floor):
+            self._protecting = False
             return False
 
         if await self._reverse_guard(data, "charge"):
             return True
 
+        self._protecting = True
         limit = self._cap(data, charging=True)
         await self._write_direction(data, AC_MODE_CHARGE, limit)
         self._set_state(
             "protecting",
-            f"SOC {soc}% below floor {float(floor) / 10.0}%",
+            f"SOC {soc:g}% under {target:g}% (floor {floor:g}% + {SOC_REARM_POINTS}), charging",
             target=limit,
             direction="charge",
         )
@@ -898,9 +925,51 @@ class ZendureController:
         protection stands down there, so the floor is held by not discharging.
         """
         full, empty = _soc_bounds(data)
+        # Kept past the device's own flag (v1.7.5): empty until minSoc +
+        # SOC_REARM_POINTS, full until socSet − SOC_REARM_POINTS. The device
+        # reopens a direction one point away from its bound, and the battery
+        # then swings across it every few seconds.
+        soc = _soc_percent(data, "electricLevel", 1.0)
+        floor = _soc_percent(data, "minSoc", 0.1)
+        ceiling = _soc_percent(data, "socSet", 0.1)
+        if empty:
+            self._empty_latch = True
+        elif self._empty_latch and soc is not None and floor is not None and soc >= floor + SOC_REARM_POINTS:
+            self._empty_latch = False
+        if full:
+            self._full_latch = True
+        elif self._full_latch and soc is not None and ceiling is not None and soc <= ceiling - SOC_REARM_POINTS:
+            self._full_latch = False
+        full = full or self._full_latch
+        empty = empty or self._empty_latch
         if getattr(self.settings, "coordinated", False) and _below_floor(data):
             empty = True
         return full, empty
+
+    def _blocked(self, direction: str) -> str:
+        """Why a direction is closed, with where it opens again while held past the device."""
+        text = SOC_BLOCKED[direction]
+        data = self.coordinator.data or {}
+        if direction == "discharge" and self._empty_latch:
+            floor = _soc_percent(data, "minSoc", 0.1)
+            if floor is not None:
+                text += f", discharges again from {floor + SOC_REARM_POINTS:g} %"
+        if direction == "charge" and self._full_latch:
+            ceiling = _soc_percent(data, "socSet", 0.1)
+            if ceiling is not None:
+                text += f", charges again below {ceiling - SOC_REARM_POINTS:g} %"
+        return text
+
+    def _rest_limits(self, data: dict[str, Any], direction: str = "none") -> list[tuple[str, int]]:
+        """Both limits to 0, except a small charge limit the device set itself
+        at its lower bound (its own SOC protection): writing 0 against it every
+        cycle only fights the device (v1.7.5)."""
+        items = [("inputLimit", 0), ("outputLimit", 0)]
+        if direction != "charge" and _soc_bounds(data)[1]:
+            held = _as_int(data.get("inputLimit")) or 0
+            if 0 < held <= DEVICE_SELF_CHARGE_W:
+                items = [("outputLimit", 0)]
+        return items
 
     # ── Modes ────────────────────────────────────────────────────────────
 
@@ -1033,12 +1102,12 @@ class ZendureController:
         full, empty = self._bounds(data)
         closed = (charging and full) or (direction == "discharge" and empty)
         if direction not in ("charge", "discharge") or limit <= 0 or closed:
-            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
+            await self._write_many(self._rest_limits(data), data)
             self._owns_limits = False
             self._last_direction = "none"
             reason = f"held at 0 W by {group}"
             if closed:
-                reason = f"{SOC_BLOCKED[direction]}, held at 0 W"
+                reason = f"{self._blocked(direction)}, held at 0 W"
             self._set_state("secondary", reason)
             return
         if await self._reverse_guard(data, direction):
@@ -1166,13 +1235,13 @@ class ZendureController:
             or (self._last_direction == "charge" and not allow_charge)
         )
         if forbidden:
-            await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
+            await self._write_many(self._rest_limits(data), data)
             self._owns_limits = False
             released = self._last_direction
             self._last_direction = "none"
             mode_allows = mode_charge if released == "charge" else mode_discharge
             reason = (
-                f"{SOC_BLOCKED[released]}, limits cleared" if mode_allows
+                f"{self._blocked(released)}, limits cleared" if mode_allows
                 else f"{released} is not allowed in {mode}, limits cleared"
             )
             self._set_state("released", reason, direction="none")
@@ -1249,12 +1318,12 @@ class ZendureController:
             # 5 W start threshold, in smart_discharge_only.
             if grid > start_discharge and not allow_discharge:
                 reason = (
-                    f"grid {grid:.0f} W, {SOC_BLOCKED['discharge']}" if mode_discharge
+                    f"grid {grid:.0f} W, {self._blocked('discharge')}" if mode_discharge
                     else f"grid {grid:.0f} W, discharging not allowed in {mode}"
                 )
             elif grid < start_charge and not allow_charge:
                 reason = (
-                    f"grid {grid:.0f} W, {SOC_BLOCKED['charge']}" if mode_charge
+                    f"grid {grid:.0f} W, {self._blocked('charge')}" if mode_charge
                     else f"grid {grid:.0f} W, charging not allowed in {mode}"
                 )
             else:
@@ -1568,6 +1637,20 @@ class ZendureController:
             current_val = int(current)
         except (TypeError, ValueError):
             current_val = -1
+
+        # A running direction is not ended by one cycle with nothing to do
+        # (v1.7.5): right after a short peak the grid shows the export of
+        # a battery still ramping down while its measured power lags a sample,
+        # and the target comes out at 0 although the house still takes its base
+        # load. The first such cycle keeps RUN_FLOOR_W running; a second one in
+        # a row, or the stop rule, ends it. A real change to the other
+        # direction is so one mode cycle later.
+        if not starting and current_val > 0 and target <= 0:
+            if not self._zero_once:
+                self._zero_once = True
+                target = min(RUN_FLOOR_W, current_val)
+        else:
+            self._zero_once = False
 
         if abs(target - current_val) < self._mode_threshold() and not starting:
             # Settled, which is precisely the state in which the trim loop is
@@ -2056,6 +2139,12 @@ class ZendureController:
 
     # ── Trace recording ──────────────────────────────────────────────────
 
+    def _trace_prefix(self) -> str:
+        """trace_<last four of the serial number>, so two batteries' files differ (v1.7.5)."""
+        serial = str(getattr(self.coordinator, "device_id", "") or "")
+        tail = "".join(ch for ch in serial[-4:] if ch.isalnum())
+        return f"trace_{tail}" if tail else "trace"
+
     async def _record(self) -> None:
         """Write one trace row. Records, never steers.
 
@@ -2088,6 +2177,7 @@ class ZendureController:
         # fail-safe fires, the difference between them is the evidence for why.
         grid = self._meter_power()
         pack, pack_state = self._pack_power(data)
+        coordinated = bool(getattr(self.settings, "coordinated", False))
 
         await self.trace.async_sample({
             "ts": dt_util.now().isoformat(timespec="milliseconds"),
@@ -2120,6 +2210,9 @@ class ZendureController:
                 self.external.recent_power(METER_FALLBACK_AGE)
                 if self.external is not None else None
             ),
+            # In a cluster only (v1.7.5): the role and the limit it gave.
+            "role": (getattr(self.settings, "role", None) or "") if coordinated else "",
+            "cluster_limit_w": int(self.follow_limit) if coordinated else "",
         })
 
     def _pack_power(self, data: dict[str, Any]) -> tuple[int | str, int | str]:
@@ -2573,6 +2666,10 @@ class ZendureController:
             "meter_active": self._source_used,
             "trace_file": self.trace.path,
         }
+        # A copy of a Virtual cluster has no entities for Skipped peaks and
+        # Relay switches; its status carries them instead (v1.7.5).
+        if self.virtual:
+            self.state.attributes.update(self.measure.switching_summary(_today(dt_util.utcnow())))
         # Battery cluster (v1.7.0): only while the battery takes part.
         role = getattr(self.settings, "role", None)
         if role is not None and getattr(self.settings, "group", None) is not None:
@@ -2616,6 +2713,14 @@ def _soc_bounds(data: dict[str, Any]) -> tuple[bool, bool]:
     except (TypeError, ValueError):
         return False, False
     return flag == SOC_LIMIT_UPPER, flag == SOC_LIMIT_LOWER
+
+
+def _soc_percent(data: dict[str, Any], key: str, scale: float) -> float | None:
+    """A state of charge in percent: electricLevel as is, minSoc and socSet in tenths."""
+    try:
+        return float(data.get(key)) * scale
+    except (TypeError, ValueError):
+        return None
 
 
 def _below_floor(data: dict[str, Any]) -> bool:

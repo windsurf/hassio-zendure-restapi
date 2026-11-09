@@ -212,6 +212,7 @@ class VirtualCluster:
         self.clones: list[Clone] = []
         self.group = GroupView(self.settings, self.mode)
         self.cluster = ClusterCoordinator(hass, self.group_settings, self._on_decision)
+        self.cluster.trace_virtual = self._trace_columns
         self.meter: VirtualMeter | None = None
         self._unsubs: list[Any] = []
         # How the copies started (v1.7.2): the real SoC, the centring and the shift.
@@ -277,6 +278,21 @@ class VirtualCluster:
             return max(1.0, min(3.0, float(self.settings.get(OPT_LOAD_FACTOR))))
         except (TypeError, ValueError):
             return 1.0
+
+    def _trace_columns(self) -> dict[str, Any]:
+        """The Virtual cluster's own trace columns (v1.7.5).
+
+        house_w is the real house load (real meter plus the real battery);
+        the copies see it times the Load factor, minus what they deliver, as
+        virtual_p1_w.
+        """
+        data = (self.meter.data or {}) if self.meter is not None else {}
+        return {
+            "house_w": data.get("house", ""),
+            "real_grid_w": data.get("real_grid", ""),
+            "virtual_p1_w": data.get("power", ""),
+            "load_factor": self.load_factor(),
+        }
 
     def clone_count(self) -> int:
         try:

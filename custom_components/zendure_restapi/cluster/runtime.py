@@ -3,7 +3,8 @@
 Reads every member, asks group.Distributor what each one should be, gives the
 roles, and writes the batteries whose role or limit changed straight away,
 one at a time with a short pause, so the meter sees each step on its own.
-Home Assistant is used for the clock and nothing else of the integration.
+Home Assistant is used for the clock; of the integration only the trace
+recorder (v1.7.5), which writes one row per decision while it is on.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from ..trace import ZendureTrace, cluster_columns
 from .contract import NONE, ROLE_SECONDARY, SMART, GroupSettings, Member, Reading
 from .group import Decision, Distributor
 
@@ -47,6 +49,15 @@ class ClusterCoordinator:
         self.grid: float | None = None
         self._unsub: Any = None
         self._busy = False
+        # Trace recording of the cluster (v1.7.5): off until switched on,
+        # also after a restart. A Virtual cluster sets trace_virtual to add the
+        # house load and both meters.
+        self.trace_virtual: Callable[[], dict[str, Any]] | None = None
+        self.trace = ZendureTrace(
+            hass,
+            prefix=lambda: "trace_cluster",
+            columns=lambda: cluster_columns(len(self.members), self.trace_virtual is not None),
+        )
 
     # ── Life cycle ───────────────────────────────────────────────────────
 
@@ -61,6 +72,8 @@ class ClusterCoordinator:
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
+        if self.trace.active:
+            self.hass.async_create_task(self.trace.async_close())
 
     @callback
     def _tick(self, _now: Any = None) -> None:
@@ -124,7 +137,71 @@ class ClusterCoordinator:
             _LOGGER.exception("Battery cluster: evaluation failed")
         finally:
             self._busy = False
+        await self._record()
         self._on_update()
+
+    # ── Trace recording (v1.7.5) ─────────────────────────────────────
+
+    async def _record(self) -> None:
+        """One trace row for this decision. Records, never steers, never raises.
+
+        The device limits, power and state of charge are as read for this
+        decision, before its writes; role, direction and cluster limit are what
+        it decided; the status of each battery is its own controller's, so a
+        primary that stops or waits shows here as well.
+        """
+        if not self.trace.wanted:
+            if self.trace.active:
+                await self.trace.async_close()
+            return
+        try:
+            await self.trace.async_sample(self.trace_row())
+        except Exception:  # noqa: BLE001 - a recorder must not stop the cluster
+            _LOGGER.exception("Battery cluster: trace row failed")
+
+    def trace_row(self) -> dict[str, Any]:
+        """The values of one row, by column name."""
+        decision = self.decision
+        try:
+            mode = self._settings().mode
+        except Exception:  # noqa: BLE001 - settings unreadable: leave the column empty
+            mode = ""
+        primary = self.members.get(decision.primary or "") if decision is not None else None
+        row: dict[str, Any] = {
+            "ts": dt_util.now().isoformat(timespec="milliseconds"),
+            "mode": mode,
+            "status": self.status,
+            "reason": decision.reason if decision is not None else "",
+            "grid_w": "" if self.grid is None else round(self.grid),
+            "primary": primary.name if primary is not None else "",
+            "group_power_w": _blank(self.group_power),
+            "group_soc": _blank(self.group_soc),
+        }
+        readings = {r.key: r for r in self.readings}
+        for n, member in enumerate(self.members.values(), start=1):
+            reading = readings.get(member.key)
+            role = decision.roles.get(member.key) if decision is not None else None
+            state = getattr(getattr(member, "controller", None), "state", None)
+            b = f"b{n}_"
+            row.update({
+                b + "name": member.name,
+                b + "available": "" if reading is None else int(reading.available),
+                b + "role": role.role if role is not None else "",
+                b + "direction": role.direction if role is not None else "",
+                b + "cluster_limit_w": role.limit if role is not None else "",
+                b + "input_limit": "" if reading is None else reading.charge_limit,
+                b + "output_limit": "" if reading is None else reading.discharge_limit,
+                b + "power_w": "" if reading is None else round(reading.power),
+                b + "soc": "" if reading is None else _blank(reading.soc),
+                b + "status": getattr(state, "status", "") or "",
+                b + "reason": getattr(state, "reason", "") or "",
+            })
+        if self.trace_virtual is not None:
+            try:
+                row.update(self.trace_virtual())
+            except Exception:  # noqa: BLE001 - the virtual columns stay empty
+                _LOGGER.debug("Virtual cluster: trace columns unavailable", exc_info=True)
+        return row
 
     @property
     def steers(self) -> bool:
@@ -175,3 +252,8 @@ class ClusterCoordinator:
     def soc_spread(self) -> float | None:
         socs = [r.soc for r in self.readings if r.soc is not None]
         return round(max(socs) - min(socs), 1) if len(socs) > 1 else None
+
+
+def _blank(value: Any) -> Any:
+    """A number for the trace, or empty when there is none."""
+    return "" if value is None else value
