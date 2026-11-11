@@ -94,7 +94,7 @@ Removing the cluster returns every battery to its own settings, in standby.
 
 **A secondary at its SOC bound** stops at once; its share goes to the others at the next split.
 
-**SOC protection in the group.** On a single battery a pack below its own floor (*Minimum SoC*) is charged from the grid until it is above it again. In the group the cluster decides instead: a battery below its floor does not discharge and is not primary in a discharge, but it is not charged from the grid on its own either — that would be one battery charging while the others discharge, on the same connection. It charges with the group when there is surplus. **A primary that cannot serve** the direction needed — full while there is surplus, empty while the house asks — hands over to a battery that can.
+**SOC protection in the group.** On a single battery a pack below its own floor (*Minimum SoC*) is charged from the grid until it is above it again. In the group the cluster decides instead: a battery below its floor does not discharge and is not primary in a discharge, but it is not charged from the grid on its own either — that would be one battery charging while the others discharge, on the same connection. It charges with the group when there is surplus. Once every battery taking part is under its floor, none discharges and the cluster charges them all from the grid, each to its floor + 5 points, with its own *SOC protection* select (`direct` by default, v1.7.6); the cluster status then reads `protecting`. **A primary that cannot serve** the direction needed — full while there is surplus, empty while the house asks — hands over to a battery that can.
 
 ## Entities
 
@@ -164,6 +164,7 @@ entities:
 | *Take part* off | the battery goes to standby and is left out, also when it had just started |
 | no battery takes part | the cluster steers nothing; a battery outside the group in a smart mode steers on its own |
 | a battery below its own floor | no discharge, no grid charging against the group; charges with the group's surplus |
+| every battery below its own floor | *SOC protection* of the cluster (`direct` by default, v1.7.6): all charge from the grid at full power, each to its floor + 5; status `protecting` |
 | another controller writes as well | the *Second controller* warning per battery, as in v1.6.2 |
 
 ## Limits of this version

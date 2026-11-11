@@ -49,10 +49,10 @@ So of the three: always on drains the battery at its worst efficiency, hysteresi
 | `Stop after` | 30 s | how long the demand stays under the limit before the battery stops (on a cluster 10–120 s) |
 | `Start after` | 30 s | how long the demand stays above the threshold before the battery starts (on a cluster 10–120 s) |
 
-- The threshold for a start is always the larger of the start threshold (`Start discharging at import`, `Start charging at export`) and the stop limit: a start below the stop limit would only stop again. That also holds after a restart of Home Assistant, when the controller knows of no stop of its own.
+- The threshold for a start is always the larger of the start threshold (`Start discharging at import`, `Start charging at export`) and the stop limit plus a gap: a start below the stop limit would only stop again. The gap (v1.7.6) is a fifth of the stop limit, at least 20 W, so 50 W stops and 70 W starts: a load hovering just above the stop limit no longer starts and stops the battery in turn. That also holds after a restart of Home Assistant, when the controller knows of no stop of its own. With a stop limit of 150 W the battery starts again only above 180 W, so a night base load of 120–150 W stays on the grid until the demand has been above 180 W for `Start after`.
 - A stop writes both limits to 0 in one request; the battery then rests at about 5 W.
 - Only the smart modes (`smart_matching`, `smart_charge_only`, `smart_discharge_only`). Manual, quick, standby and Price Control's day plan ignore it.
-- In a cluster the primary stops, and only while it works alone below `Concentrate below`; the cluster's own `Start after` also holds the secondaries back on a short peak. See [docs/cluster.md](cluster.md#how-it-regulates).
+- In a cluster the primary stops, and only while it works alone below `Concentrate below`; the cluster's own `Start after` also holds the secondaries back on a short peak. The stop limit is capped at `Concentrate below`, and the gap at the start is taken from the capped limit: a stop limit of 250 W with `Concentrate below` at 200 W stops below 200 W and starts above 240 W. See [docs/cluster.md](cluster.md#how-it-regulates).
 - Hysteresis is the same settings with both timers at 0, for example stop below 80 W and start at 120 W. That works in a house without short peaks.
 - All at 0 is how it worked before v1.7.4.
 

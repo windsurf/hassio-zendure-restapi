@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Werkmodus"
+      },
+      "soc_protection": {
+        "name": "SOC-bescherming",
+        "state": {
+          "off": "Uit",
+          "direct": "Direct",
+          "price_control": "Price Control (goedkoopst binnen 6 u)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Eén batterij",
           "reversing": "Omkeren",
           "quick": "Vol vermogen",
-          "meter_stale": "Geen meterwaarde"
+          "meter_stale": "Geen meterwaarde",
+          "protecting": "Beschermen"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Flash-schrijven overslaan"
-      },
-      "soc_protection": {
-        "name": "SOC-bescherming"
       },
       "trace_recording": {
         "name": "Trace opnemen"

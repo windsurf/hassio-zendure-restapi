@@ -222,6 +222,8 @@ class PriceControl:
         self._held: list[Period] = []
         self._held_format: str | None = None
         self.prices_held = False
+        # The price list of the last evaluation, for SOC protection (v1.7.6).
+        self._periods: list[Period] = []
         self._generation = 0
         # Decision and Net metering as last seen; None until the first update,
         # so a restart never overwrites the modes.
@@ -455,6 +457,7 @@ class PriceControl:
             current = next((p for p in self._held if p.start <= now < p.end), None)
             if current is not None:
                 self.price = round(current.value, 6)
+        self._periods = periods
         tariff = self.tariff()
         if self.price is None:
             self.import_price = self.export_value = None
@@ -500,6 +503,18 @@ class PriceControl:
                 ACTION_DISCHARGE: PRICE_STATUS_EXPENSIVE,
             }.get(plan.action, PRICE_STATUS_BETWEEN),
         )
+
+    def import_periods(self) -> list[tuple[Any, Any, float]]:
+        """(start, end, import price) of the periods not yet over (v1.7.6).
+
+        For SOC protection with Price Control on the battery: whether or not
+        Price Control steers, as long as it has a price list.
+        """
+        tariff = self.tariff()
+        return [
+            (p.start, p.end, round(tariff.import_price(tariff.spot(p.value)), 5))
+            for p in ahead(self._periods, dt_util.now())
+        ]
 
     @callback
     def _apply(self, band: str) -> None:

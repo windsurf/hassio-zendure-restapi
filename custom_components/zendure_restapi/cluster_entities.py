@@ -34,6 +34,7 @@ from .const import (
     CLUSTER_DEVICE_NAME,
     CLUSTER_MODEL,
     CLUSTER_MODES,
+    CLUSTER_SOC_PROTECT_MODES,
     CLUSTER_STATUSES,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -44,6 +45,7 @@ from .const import (
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
     OPT_REDISTRIBUTE,
+    OPT_SOC_PROTECTION,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     OPT_START_AFTER,
@@ -110,6 +112,16 @@ CLUSTER_SELECTS: tuple[tuple[SelectEntityDescription, str], ...] = (
         key="meter_source", translation_key="meter_source", name="Meter source",
         options=list(METER_SOURCES), icon="mdi:meter-electric-outline", entity_category=EntityCategory.CONFIG,
     ), OPT_METER_SOURCE),
+    # SOC protection of the group (v1.7.6): the same key, and so the same name
+    # in every language, as on a battery. direct by default: with every battery
+    # under its lower SOC limit the cluster charges them all from the grid,
+    # each to its limit + 5. price_control comes with Price Control for a
+    # cluster (1.8).
+    (SelectEntityDescription(
+        key="soc_protection", translation_key="soc_protection", name="SOC protection",
+        options=list(CLUSTER_SOC_PROTECT_MODES), icon="mdi:battery-lock",
+        entity_category=EntityCategory.CONFIG,
+    ), OPT_SOC_PROTECTION),
 )
 
 STATUS_DESCRIPTION = SensorEntityDescription(
@@ -218,7 +230,10 @@ class ClusterSelect(_Setting, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        return self._settings.get(self._key)
+        value = self._settings.get(self._key)
+        options = self.entity_description.options or ()
+        # SOC protection: price_control is not offered on a cluster (v1.7.6).
+        return value if value in options or not options else options[-1]
 
     async def async_select_option(self, option: str) -> None:
         if option not in (self.entity_description.options or ()):

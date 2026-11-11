@@ -30,6 +30,7 @@ from .contract import (
     QUICK_DISCHARGE,
     ROLE_SECONDARY,
     ROLE_PRIMARY,
+    ROLE_PROTECT,
     ROLE_QUICK,
     ROLE_STANDBY,
     SMART,
@@ -58,6 +59,10 @@ QUICK_REACT_S = 10.0
 # 6 to 15 s to start from standstill, and a second redistribution inside that
 # would act on its ramp.
 MIN_GAP_S = 15.0
+# SOC protection of the group (v1.7.6) charges each battery to its floor plus
+# this many points, as a single battery does (SOC_REARM_POINTS in const.py;
+# this package imports nothing from the integration).
+PROTECT_REARM_POINTS = 5
 # The primary is "at its cap" within this of it, and "at nothing" below this.
 CAP_MARGIN_W = 50
 # Peaks (v1.7.4): the secondaries are added only once the demand has stayed
@@ -142,6 +147,8 @@ class Distributor:
         self.idle_since: float | None = None
         self.above_since: float | None = None
         self.demand: float = 0.0
+        # SOC protection of the group runs (v1.7.6).
+        self.protecting = False
 
     # ── Primary ───────────────────────────────────────────────────────────
 
@@ -180,6 +187,55 @@ class Distributor:
         candidates = [r for r in active if wanted == NONE or r.room(wanted) > 0] or active
         return min(candidates, key=lambda r: self._rank(r, wanted)).key
 
+    # ── SOC protection ───────────────────────────────────────────────────
+
+    def _protect(
+        self,
+        active: list[Reading],
+        s: GroupSettings,
+        roles: dict[str, Role],
+        readings: list[Reading],
+        grid: float | None,
+    ) -> Decision | None:
+        """Charge the group from the grid when every battery is under its floor (v1.7.6).
+
+        Only then: while one battery still has charge, a battery under its
+        floor that charges from the grid takes what the other discharges —
+        measured in v1.7.0 as 2400 W from one battery into the other for 55 s.
+        With all of them under their floor none discharges, and each charges
+        at its own cap to its floor + PROTECT_REARM_POINTS; one that is there
+        stands still until the last is. Only in the smart modes: standby means
+        hands off, and the quick modes are the operator's. Direct, without
+        looking at the price; protection with Price Control on the cluster
+        follows with cluster Price Control (1.8). None when it does not act.
+        """
+        if not s.soc_protection:
+            self.protecting = False
+            return None
+        if not self.protecting:
+            if not all(r.below_floor for r in active):
+                return None
+            self.protecting = True
+
+        def short(r: Reading) -> bool:
+            return r.soc is not None and r.floor is not None and r.soc < r.floor + PROTECT_REARM_POINTS
+
+        charging = [r for r in active if short(r) and not r.full]
+        if not charging:
+            self.protecting = False
+            return None
+        for r in charging:
+            roles[r.key] = Role(ROLE_PROTECT, CHARGE, r.cap(CHARGE))
+        self.primary = None
+        self.last_split = None
+        self.at_cap_since = None
+        self.idle_since = None
+        self.above_since = None
+        names = ", ".join(f"{r.name} to {r.floor + PROTECT_REARM_POINTS:g} %" for r in charging)
+        return self._finish(
+            roles, "protecting", f"every battery under its SOC floor; charging {names}", readings, grid,
+        )
+
     # ── Decision ─────────────────────────────────────────────────────────
 
     def decide(
@@ -208,7 +264,12 @@ class Distributor:
             return self._finish(roles, "quick", f"all batteries {label} at their maximum", readings, grid)
 
         if s.mode not in SMART:
+            self.protecting = False
             return self._finish(roles, "idle", f"unknown mode {s.mode}", readings, grid)
+
+        protected = self._protect(active, s, roles, readings, grid)
+        if protected is not None:
+            return protected
 
         wanted = self._wanted(active, s, grid)
         previous = self.primary

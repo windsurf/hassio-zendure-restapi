@@ -354,6 +354,9 @@ def cluster_view(
             # v1.7.3: the meter source of a battery cluster, as on a battery.
             _tile(group.get("meter_source"), icon="mdi:meter-electric-outline", features_position="bottom",
                   features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
+            # v1.7.6: SOC protection of the group.
+            _tile(group.get("soc_protection"), icon="mdi:battery-lock", features_position="bottom",
+                  features=[{"type": "select-options"}], grid_options={"columns": 12, "rows": 2}),
             _control(group.get("clones"), icon="mdi:content-copy"),
             _control(group.get("load_factor"), icon="mdi:multiplication"),
             *(_control(group.get(k)) for k in (
@@ -472,6 +475,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         "meter_source": _entity(registry, "select", f"{eid}_meter_source"),
         # v1.7.5: Trace recording of the cluster.
         "trace": _entity(registry, "switch", f"{eid}_trace_recording"),
+        # v1.7.6: SOC protection of the group.
+        "soc_protection": _entity(registry, "select", f"{eid}_soc_protection"),
     }
     for key in ("clones", "load_factor", "soc_offset_1", "soc_offset_2", "soc_offset_3",
                 "response_offset_1", "response_offset_2", "response_offset_3",

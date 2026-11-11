@@ -281,11 +281,18 @@ class ZendureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "before": {key: before.get(key) for key in RESTART_KEYS},
             "after": {key: after.get(key) for key in RESTART_KEYS},
         })
+        gap = f", unreachable for {unreachable} s" if unreachable is not None else ""
+        if self.device_type == DEVICE_TYPE_METER:
+            # A meter has no control state (v1.7.6): listing acMode, the
+            # limits and smartMode as None read as if they had been lost.
+            _LOGGER.warning(
+                "Zendure device %s restarted (%s%s)", self.title or self.device_id, cause, gap,
+            )
+            return
         _LOGGER.warning(
             "Zendure device %s restarted (%s%s); it reports acMode %s, inputLimit %s, "
             "outputLimit %s, smartMode %s",
-            self.title or self.device_id, cause,
-            f", unreachable for {unreachable} s" if unreachable is not None else "",
+            self.title or self.device_id, cause, gap,
             after.get("acMode"), after.get("inputLimit"), after.get("outputLimit"),
             after.get("smartMode"),
         )

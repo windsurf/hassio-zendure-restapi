@@ -250,7 +250,8 @@ def test_without_a_stop_of_its_own_a_start_still_waits_for_the_stop_limit(monkey
     c, _ = controller(monkeypatch, **{C.OPT_STOP_DISCHARGE_BELOW: 100, C.OPT_START_AFTER: 0})
     assert c._stopped is None
     assert run(c._hold_start(80, C.MODE_SMART_MATCHING, 5, -5, True, True)) is True
-    assert "under the stop limit 100 W" in c._set_state.call_args.args[1]
+    # v1.7.6: the start lies a fifth above the stop limit, 100 -> 120 W
+    assert "under the start threshold 120 W" in c._set_state.call_args.args[1]
     assert run(c._hold_start(150, C.MODE_SMART_MATCHING, 5, -5, True, True)) is False
     # the charge side has no stop limit: it starts as before
     assert run(c._hold_start(-50, C.MODE_SMART_MATCHING, 5, -5, True, True)) is False

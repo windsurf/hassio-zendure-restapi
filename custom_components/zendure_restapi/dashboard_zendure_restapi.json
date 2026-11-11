@@ -49,6 +49,14 @@
             },
             {
               "type": "tile",
+              "entity": "switch.zendure_solarflow_3000_mix_ac_skip_flash_write",
+              "icon": "mdi:flash-off",
+              "icon_tap_action": {
+                "action": "more-info"
+              }
+            },
+            {
+              "type": "tile",
               "entity": "sensor.zendure_solarflow_3000_mix_ac_soc_limit_status",
               "icon": "mdi:battery-alert-variant-outline"
             },
@@ -326,24 +334,33 @@
             },
             {
               "type": "tile",
-              "entity": "switch.zendure_solarflow_3000_mix_ac_skip_flash_write",
-              "icon": "mdi:flash-off",
+              "entity": "select.zendure_solarflow_3000_mix_ac_meter_source",
+              "icon": "mdi:meter-electric-outline",
               "features_position": "bottom",
               "features": [
                 {
-                  "type": "toggle"
+                  "type": "select-options"
                 }
-              ]
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
             },
             {
               "type": "tile",
-              "entity": "switch.zendure_solarflow_3000_mix_ac_soc_protection",
+              "entity": "select.zendure_solarflow_3000_mix_ac_soc_protection",
+              "icon": "mdi:battery-lock",
               "features_position": "bottom",
               "features": [
                 {
-                  "type": "toggle"
+                  "type": "select-options"
                 }
-              ]
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
             },
             {
               "type": "tile",
@@ -392,21 +409,6 @@
                   "style": "slider"
                 }
               ]
-            },
-            {
-              "type": "tile",
-              "entity": "select.zendure_solarflow_3000_mix_ac_meter_source",
-              "icon": "mdi:meter-electric-outline",
-              "features_position": "bottom",
-              "features": [
-                {
-                  "type": "select-options"
-                }
-              ],
-              "grid_options": {
-                "columns": 12,
-                "rows": 2
-              }
             },
             {
               "type": "tile",

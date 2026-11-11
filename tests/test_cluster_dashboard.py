@@ -32,6 +32,7 @@ def group() -> dict:
         "reset": "button.virtual_cluster_reset",
         "rebuild": "button.virtual_cluster_rebuild_dashboard",
         "trace": "switch.virtual_cluster_trace_recording",
+        "soc_protection": "select.virtual_cluster_soc_protection",
     }
     # The group's own settings, as Home Assistant has them.
     for key, object_id in (("clones", "copies"), ("load_factor", "load_factor"), ("charge_buffer", "charge_buffer"),
@@ -186,9 +187,14 @@ def test_copy_sliders_are_six_columns_wide():
 def test_settings_are_sliders():
     cluster = virtual_views()[0]
     settings = next(s for s in cluster["sections"] if s["cards"][0].get("heading") == "Cluster settings")
-    styles = {c["entity"]: c["features"][0]["style"] for c in settings["cards"][1:]}
+    numbers = [c for c in settings["cards"][1:] if c["entity"].startswith("number.")]
+    styles = {c["entity"]: c["features"][0]["style"] for c in numbers}
     assert "number.virtual_cluster_copies" in styles and "number.virtual_cluster_load_factor" in styles
     assert set(styles.values()) == {"slider"}
+    # SOC protection of the group (v1.7.6): a select, 12 wide, with its options.
+    protection = next(c for c in settings["cards"] if c.get("entity") == "select.virtual_cluster_soc_protection")
+    assert protection["features"] == [{"type": "select-options"}]
+    assert protection["grid_options"] == {"columns": 12, "rows": 2}
 
 
 def test_gauges_as_on_the_battery_dashboard():

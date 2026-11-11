@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Betriebsmodus"
+      },
+      "soc_protection": {
+        "name": "SOC-Schutz",
+        "state": {
+          "off": "Aus",
+          "direct": "Direkt",
+          "price_control": "Price Control (günstigste binnen 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Eine Batterie",
           "reversing": "Richtungswechsel",
           "quick": "Volle Leistung",
-          "meter_stale": "Kein Zählerwert"
+          "meter_stale": "Kein Zählerwert",
+          "protecting": "Schützen"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Flash-Schreiben überspringen"
-      },
-      "soc_protection": {
-        "name": "SOC-Schutz"
       },
       "trace_recording": {
         "name": "Trace-Aufzeichnung"

@@ -49,6 +49,14 @@ nothing higher, and a higher value from a service call is refused. While the
 device has not reported a value, no write goes out at all: without it a raise
 cannot be told from a lowering.
 
+**The Charge power limit likewise (v1.7.6).** ``chargeMaxLimit`` is the other
+half of the Safe power setting. The Zendure app blocks raising it per battery
+type, and a battery out of the box has both at 800 W, while its slider here
+still ran to 5000 W. It now behaves as the
+Inverter power limit: its maximum is the reported value, a higher value is
+refused with the same pointer to the app, and nothing is written before the
+battery has reported it.
+
 **A setting the device keeps is read back (v1.7.3).** After a write of
 ``inverseMaxPower``, ``chargeMaxLimit``, ``socSet`` or ``minSoc`` the reports
 are watched until the device holds the new value, and the outcome goes to the
@@ -113,6 +121,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # The device's ceiling for feeding into the grid (v1.6.10).
 INVERTER_LIMIT_KEY = "inverseMaxPower"
+CHARGE_LIMIT_KEY = "chargeMaxLimit"
+# The two ceilings of the Safe power setting in the Zendure app: lowered from
+# Home Assistant, never raised (Inverter power limit v1.6.10, Charge power limit
+# v1.7.6). The app blocks a raise per battery type; a new battery has both at 800 W.
+APP_CEILING_KEYS = (INVERTER_LIMIT_KEY, CHARGE_LIMIT_KEY)
 # Settings the device keeps across a restart: a write is read back and logged.
 PERSISTENT_KEYS = (INVERTER_LIMIT_KEY, "chargeMaxLimit", "socSet", "minSoc")
 # How long to watch the reports for the new value: at least this, and at least
@@ -270,10 +283,10 @@ class ZendureNumber(ZendureEntity, NumberEntity):
     def native_max_value(self) -> float:
         """Ceiling published by the device, falling back to the static value.
 
-        The Inverter power limit is its own ceiling: never raised from here
-        (v1.6.10).
+        The Inverter power limit and the Charge power limit are their own
+        ceiling: never raised from here (v1.6.10; v1.7.6).
         """
-        if self.entity_description.key == INVERTER_LIMIT_KEY:
+        if self.entity_description.key in APP_CEILING_KEYS:
             current = self.native_value
             if current is not None and current > 0:
                 return current
@@ -305,10 +318,16 @@ class ZendureNumber(ZendureEntity, NumberEntity):
         before = self.native_value
         # Without a reported value it cannot be checked whether this raises it:
         # nothing is written then (v1.6.10).
-        if key == INVERTER_LIMIT_KEY and (before is None or value > before):
-            raise HomeAssistantError(
+        if key in APP_CEILING_KEYS and (before is None or value > before):
+            what = (
                 "The Inverter power limit is the battery's ceiling for feeding into the grid, set by the "
                 "grid code and your registration with the grid operator. "
+                if key == INVERTER_LIMIT_KEY else
+                "The Charge power limit is the battery's ceiling for charging; the Zendure app allows "
+                "per battery type how high it may go. "
+            )
+            raise HomeAssistantError(
+                what
                 + ("The battery has not reported it yet, so a change cannot be checked; try again once it has. "
                    if before is None else f"It can be lowered here, not raised above {before:g} W: ")
                 + "Raise it in the Zendure app (Safe power setting)."

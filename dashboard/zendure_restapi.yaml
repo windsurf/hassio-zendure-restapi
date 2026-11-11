@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.7.5
+# ZENDURE RESTAPI DASHBOARD - v1.7.6
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -32,12 +32,14 @@
 #   three-dot menu -> Raw configuration editor, and replace its
 #   content with everything below this comment block.
 #
-# INVERTER POWER LIMIT (v1.6.10; read-back v1.7.3):
-#   The battery's ceiling for feeding into the grid. Its slider
-#   under Configuration goes up to the value the battery
-#   reports: Home Assistant can lower it, raising it is done in
-#   the Zendure app (Safe power setting). Every change is read
-#   back and noted in the logbook.
+# INVERTER AND CHARGE POWER LIMIT (v1.6.10 and v1.7.6;
+# read-back v1.7.3):
+#   The battery's ceilings for feeding into the grid and for
+#   charging. Their sliders under Configuration go up to the
+#   value the battery reports: Home Assistant can lower them,
+#   raising them is done in the Zendure app (Safe power
+#   setting). Every change is read back and noted in the
+#   logbook.
 #
 # ENTITY IDS:
 #   Battery  - sensor./number./select./switch./binary_sensor.
@@ -152,6 +154,13 @@ views:
       name:
         type: entity
       icon: mdi:battery-sync
+    - type: tile
+      entity: switch.zendure_solarflow_3000_mix_ac_skip_flash_write
+      name:
+        type: entity
+      icon: mdi:flash-off
+      icon_tap_action:
+        action: more-info
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_soc_limit_status
       name:
@@ -381,20 +390,27 @@ views:
         columns: 12
         rows: 2
     - type: tile
-      entity: switch.zendure_solarflow_3000_mix_ac_skip_flash_write
+      entity: select.zendure_solarflow_3000_mix_ac_meter_source
       name:
         type: entity
-      icon: mdi:flash-off
+      icon: mdi:meter-electric-outline
       features_position: bottom
       features:
-      - type: toggle
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
     - type: tile
-      entity: switch.zendure_solarflow_3000_mix_ac_soc_protection
+      entity: select.zendure_solarflow_3000_mix_ac_soc_protection
       name:
         type: entity
+      icon: mdi:battery-lock
       features_position: bottom
       features:
-      - type: toggle
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
     - type: tile
       entity: number.zendure_solarflow_3000_mix_ac_lower_soc_limit
       name:
@@ -431,17 +447,6 @@ views:
       features:
       - type: numeric-input
         style: slider
-    - type: tile
-      entity: select.zendure_solarflow_3000_mix_ac_meter_source
-      name:
-        type: entity
-      icon: mdi:meter-electric-outline
-      features_position: bottom
-      features:
-      - type: select-options
-      grid_options:
-        columns: 12
-        rows: 2
     - type: tile
       entity: number.zendure_solarflow_3000_mix_ac_manual_power
       name:

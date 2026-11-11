@@ -73,6 +73,11 @@ from .const import (
     DEVICE_SELF_CHARGE_W,
     RUN_FLOOR_W,
     SOC_REARM_POINTS,
+    SOC_PROTECT_HARD_POINTS,
+    SOC_PROTECT_PRICE,
+    SOC_PROTECT_WINDOW_H,
+    START_GAP_MIN_W,
+    START_GAP_SHARE,
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
     CONTROL_MIN_STEP,
@@ -103,6 +108,8 @@ from .const import (
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
     OPT_SOC_PROTECTION,
+    SOC_PROTECT_OFF,
+    soc_protection_choice,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     OPT_START_AFTER,
@@ -117,7 +124,7 @@ from .coordinator import RESTART_KEYS, ZendureCoordinator
 from .measure import BatteryMeasure, Sample
 from .p1meter import ExternalMeter
 from .registry import pack_model
-from .settings import SettingsView, ZendureSettings
+from .settings import ROLE_PROTECT, SettingsView, ZendureSettings
 from .trace import ZendureTrace
 
 _LOGGER = logging.getLogger(__name__)
@@ -217,6 +224,11 @@ class ZendureController:
     _empty_latch = False
     _full_latch = False
     _protecting = False
+    # SOC protection with Price Control (v1.7.6): when the battery fell
+    # under its floor, why it charges now, and what it waits for.
+    _protect_since: datetime | None = None
+    _protect_why: str | None = None
+    protect_note: str | None = None
     # One mode cycle of "nothing to do" seen for a running direction.
     _zero_once = False
 
@@ -868,30 +880,34 @@ class ZendureController:
 
     async def _handle_soc_protection(self, data: dict[str, Any], mode: str) -> bool:
         """Charge from under the lower SOC bound to that bound + SOC_REARM_POINTS. Returns True when it acted."""
-        if not self.settings.get_bool(OPT_SOC_PROTECTION):
-            self._protecting = False
-            return False
         if getattr(self.settings, "coordinated", False):
-            self._protecting = False
+            self._stand_down()
+            if getattr(self.settings, "role", None) == ROLE_PROTECT:
+                return await self._protect_for_group(data)
             # In a battery cluster the group decides (v1.7.0): a battery
             # under its floor stops discharging there (see _bounds) instead of
             # charging from the grid on its own while the others discharge —
             # measured as 2400 W from one battery into the other for 55 s.
+            # With every battery under its floor the cluster charges them all
+            # (v1.7.6, role protect).
+            return False
+        if self._soc_protection() == SOC_PROTECT_OFF:
+            self._stand_down()
             return False
         if mode in (MODE_QUICK_DISCHARGE, MODE_MANUAL):
             # Explicit user intent; protection would fight the operator.
-            self._protecting = False
+            self._stand_down()
             return False
         if mode == MODE_STANDBY:
             # Standby means hands off, and a protection that still writes would
             # make that a lie. The device guards its own floor regardless.
-            self._protecting = False
+            self._stand_down()
             return False
 
         soc = _soc_percent(data, "electricLevel", 1.0)
         floor = _soc_percent(data, "minSoc", 0.1)  # minSoc is stored in tenths
         if soc is None or floor is None:
-            self._protecting = False
+            self._stand_down()
             return False
         # Charge from under the floor to the floor + SOC_REARM_POINTS (v1.7.5):
         # stopping at the floor itself left the battery on the edge, where it
@@ -900,18 +916,110 @@ class ZendureController:
         # carries on to the margin.
         target = floor + SOC_REARM_POINTS
         if soc >= target or (not self._protecting and soc >= floor):
-            self._protecting = False
+            self._stand_down()
             return False
+
+        if not self._protecting:
+            # With Price Control (v1.7.6) the start may wait for the
+            # cheapest quarter; once charging it carries on to the margin.
+            self.protect_note = self._protect_waits(data, soc, floor)
+            if self.protect_note is not None:
+                return False
 
         if await self._reverse_guard(data, "charge"):
             return True
 
         self._protecting = True
+        self.protect_note = None
         limit = self._cap(data, charging=True)
         await self._write_direction(data, AC_MODE_CHARGE, limit)
         self._set_state(
             "protecting",
-            f"SOC {soc:g}% under {target:g}% (floor {floor:g}% + {SOC_REARM_POINTS}), charging",
+            f"SOC {soc:g}% under {target:g}% (floor {floor:g}% + {SOC_REARM_POINTS}), charging"
+            + (f"; {self._protect_why}" if self._protect_why else ""),
+            target=limit,
+            direction="charge",
+        )
+        return True
+
+    def _soc_protection(self) -> str:
+        """off, direct or price_control (v1.7.6); a stored switch value reads as before."""
+        return soc_protection_choice(self.settings.get(OPT_SOC_PROTECTION))
+
+    def _stand_down(self) -> None:
+        """SOC protection does not act: forget a run and a wait."""
+        self._protecting = False
+        self._protect_since = None
+        self._protect_why = None
+        self.protect_note = None
+
+    def _protect_waits(self, data: dict[str, Any], soc: float, floor: float) -> str | None:
+        """With Price Control: why the charge waits, or None to charge now (v1.7.6).
+
+        The battery waits for the cheapest period of the Price Control price
+        list within SOC_PROTECT_WINDOW_H of the moment it fell under its
+        floor. One period is enough: from just under the floor to 5 points
+        above it is a few minutes at full power. Meanwhile it charges from
+        surplus as usual and the device keeps it from discharging. Direct,
+        with the reason in the status, when there is no Price Control or no
+        price list, when the window is over, or when the battery sits
+        SOC_PROTECT_HARD_POINTS or more under its floor.
+        """
+        self._protect_why = None
+        if self._soc_protection() != SOC_PROTECT_PRICE:
+            return None
+        now = dt_util.utcnow()
+        if self._protect_since is None:
+            self._protect_since = now
+        if soc <= floor - SOC_PROTECT_HARD_POINTS:
+            self._protect_why = f"direct: {SOC_PROTECT_HARD_POINTS} points or more under the floor"
+            return None
+        deadline = self._protect_since + timedelta(hours=SOC_PROTECT_WINDOW_H)
+        if now >= deadline:
+            self._protect_why = f"direct: waited {SOC_PROTECT_WINDOW_H} h"
+            return None
+        periods = [p for p in self._import_periods() if p[0] < deadline and p[1] > now]
+        if not periods:
+            self._protect_why = "direct: no prices from Price Control"
+            return None
+        # The cheapest, and of equal ones the first.
+        best = min(periods, key=lambda p: (round(p[2], 5), p[0]))
+        if best[0] <= now:
+            self._protect_why = f"cheapest price within {SOC_PROTECT_WINDOW_H} h: {best[2]:g} per kWh"
+            return None
+        current = next((p for p in periods if p[0] <= now < p[1]), None)
+        at = dt_util.as_local(best[0]).strftime("%H:%M")
+        text = f"SOC {soc:g}% under the floor {floor:g}%: charges at {at}, {best[2]:g} per kWh"
+        if current is not None:
+            text += f" (now {current[2]:g})"
+        return text
+
+    def _import_periods(self) -> list[tuple[datetime, datetime, float]]:
+        """(start, end, import price) ahead, from the Price Control entry of this battery."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        if entry is None:
+            return []
+        for item in self.coordinator.hass.data.get(DOMAIN, {}).values():
+            if getattr(item, "battery_entry_id", None) == entry.entry_id and hasattr(item, "import_periods"):
+                try:
+                    return list(item.import_periods())
+                except Exception:  # noqa: BLE001 - a price list must not stop protection
+                    _LOGGER.debug("No import periods from price control", exc_info=True)
+                    return []
+        return []
+
+    async def _protect_for_group(self, data: dict[str, Any]) -> bool:
+        """The cluster has every battery under its floor and charges them (v1.7.6)."""
+        if await self._reverse_guard(data, "charge"):
+            return True
+        limit = self._cap(data, charging=True)
+        await self._write_direction(data, AC_MODE_CHARGE, limit)
+        soc = _soc_percent(data, "electricLevel", 1.0)
+        floor = _soc_percent(data, "minSoc", 0.1)
+        to = f" to {floor + SOC_REARM_POINTS:g}%" if floor is not None else ""
+        self._set_state(
+            "protecting",
+            f"cluster: every battery under its SOC floor, SOC {soc if soc is not None else '?'}%, charging{to}",
             target=limit,
             direction="charge",
         )
@@ -1803,7 +1911,8 @@ class ZendureController:
         Only called while no direction runs (since v1.7.4 also not for one
         that runs under the deadband: that one is balanced, see _apply_smart).
         The threshold of a direction is
-        the larger of its start threshold and its stop limit, always (v1.7.4):
+        the larger of its start threshold and its stop limit plus a gap
+        (v1.7.6, _start_threshold), always (v1.7.4):
         a start below the stop limit would only stop again after Stop after.
         Until then this applied only after a stop of its own, which the
         controller keeps in memory alone, so after a restart of Home Assistant,
@@ -1817,8 +1926,8 @@ class ZendureController:
         if stopped is not None:
             if self._stop_limit(stopped == "charge") <= 0 or self._stopped_mode != mode:
                 stopped = self._stopped = None
-        discharge_at = max(start_discharge, self._stop_limit(False))
-        charge_at = max(-start_charge, self._stop_limit(True))
+        discharge_at = self._start_threshold(False, start_discharge)
+        charge_at = self._start_threshold(True, -start_charge)
         if grid > discharge_at and allow_discharge:
             wanted, demand, threshold = "discharge", grid, discharge_at
         elif -grid > charge_at and allow_charge:
@@ -1839,7 +1948,7 @@ class ZendureController:
                     return False
                 self._set_state(
                     "tracking",
-                    f"{waiting} waits: demand {demand:.0f} W under the stop limit {limit} W",
+                    f"{waiting} waits: demand {demand:.0f} W under the start threshold {limit} W",
                 )
                 return True
             limit = discharge_at if stopped == "discharge" else charge_at
@@ -1872,6 +1981,21 @@ class ZendureController:
             f"{wanted} waits: demand {demand:.0f} W above {threshold} W for {waited:.0f} of {after} s",
         )
         return True
+
+    def _start_threshold(self, charging: bool, start: int) -> int:
+        """Where a direction starts: its start threshold, or past its stop limit (v1.7.6).
+
+        With a stop limit set the start lies START_GAP_SHARE above it, at least
+        START_GAP_MIN_W: 50 W stops, 70 W starts; 80 W stops, 100 W starts.
+        Until v1.7.5 the start lay at the stop limit itself, and a load that
+        hovered there, 55 W on a 50 W limit, started the battery and stopped it
+        again after Stop after, and again. With the stop limit at 0 nothing
+        changes.
+        """
+        stop = self._stop_limit(charging)
+        if stop <= 0:
+            return start
+        return max(start, stop + max(START_GAP_MIN_W, round(stop * START_GAP_SHARE)))
 
     def _skipped_peak(self) -> None:
         """File a start that Start after held back and that never came (v1.7.4)."""
@@ -2665,6 +2789,8 @@ class ZendureController:
             "meter_source": self.settings.get(OPT_METER_SOURCE),
             "meter_active": self._source_used,
             "trace_file": self.trace.path,
+            # SOC protection with Price Control waits for a cheaper quarter (v1.7.6).
+            "soc_protection_waits": self.protect_note,
         }
         # A copy of a Virtual cluster has no entities for Skipped peaks and
         # Relay switches; its status carries them instead (v1.7.5).

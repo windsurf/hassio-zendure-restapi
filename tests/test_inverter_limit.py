@@ -1,7 +1,8 @@
 """The Inverter power limit and the settings the device keeps (v1.7.3).
 
 inverseMaxPower is the battery's ceiling for feeding into the grid. From Home
-Assistant it can be lowered, never raised: that is for the Zendure app. A write of it,
+Assistant it can be lowered, never raised: that is for the Zendure app. Since
+v1.7.6 the same holds for chargeMaxLimit, the Charge power limit. A write of it,
 of chargeMaxLimit, socSet or minSoc is read back from the reports, and the
 outcome goes to the logbook.
 """
@@ -84,8 +85,33 @@ def test_lowering_is_allowed_and_confirmed_in_the_logbook():
     assert context.user_id == "tester"
 
 
-def test_the_other_ceiling_keeps_its_range():
-    number, *_ = entity("chargeMaxLimit", 1000)
+def test_the_charge_power_limit_is_not_raised_either():
+    # v1.7.6: the Zendure app blocks a raise per battery type (800 W out of the box).
+    number, events, tasks, written = entity("chargeMaxLimit", 1000)
+    assert number.native_max_value == 1000
+    with pytest.raises(HomeAssistantError, match="Charge power limit"):
+        asyncio.run(number.async_set_native_value(1200))
+    assert written == [] and events == []
+
+
+def test_the_charge_power_limit_is_lowered_and_confirmed():
+    number, events, tasks, written = entity("chargeMaxLimit", 1000)
+    run(number, 800, tasks)
+    assert written == [("chargeMaxLimit", 800)]
+    assert events[0][1]["message"] == "changed from 1000 to 800 W, confirmed by the battery"
+
+
+def test_nothing_is_written_before_the_battery_reports_the_charge_power_limit():
+    number, events, tasks, written = entity("chargeMaxLimit", 1000)
+    number.coordinator.data["chargeMaxLimit"] = None
+    with pytest.raises(HomeAssistantError, match="not reported it yet"):
+        asyncio.run(number.async_set_native_value(800))
+    assert written == []
+
+
+def test_the_other_numbers_keep_their_range():
+    number, *_ = entity("inputLimit", 0)
+    number.coordinator.data["chargeMaxLimit"] = None
     assert number.native_max_value == N.POWER_CEILING
 
 

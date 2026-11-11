@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Driftläge"
+      },
+      "soc_protection": {
+        "name": "SOC-skydd",
+        "state": {
+          "off": "Av",
+          "direct": "Direkt",
+          "price_control": "Price Control (billigast inom 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Ett batteri",
           "reversing": "Byter riktning",
           "quick": "Full effekt",
-          "meter_stale": "Inget mätarvärde"
+          "meter_stale": "Inget mätarvärde",
+          "protecting": "Skyddar"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Hoppa över flashskrivning"
-      },
-      "soc_protection": {
-        "name": "SOC-skydd"
       },
       "trace_recording": {
         "name": "Spårinspelning"

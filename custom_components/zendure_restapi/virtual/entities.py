@@ -41,6 +41,7 @@ from ..const import (
     OPT_MAX_SHARE_CLONES,
     MAX_SHARE_LIMIT,
     OPT_OPERATION_MODE,
+    OPT_SOC_PROTECTION,
     OPT_SOC_OFFSET_1,
     OPT_SOC_OFFSET_2,
     OPT_SOC_OFFSET_3,
@@ -58,6 +59,7 @@ from ..cluster_entities import (
     POWER_DESCRIPTION,
     SOC_DESCRIPTION,
     STATUS_DESCRIPTION,
+    CLUSTER_SELECTS,
     TRACE_DESCRIPTION,
     ClusterEntity,
     ClusterNumber,
@@ -163,6 +165,9 @@ def virtual_entities(platform: Platform, hass: HomeAssistant, entry: ConfigEntry
     entities: list[Any] = []
     if platform == Platform.SELECT:
         entities = [ClusterSelect(entry, vc, MODE_DESCRIPTION, vc.settings, OPT_OPERATION_MODE)]
+        # SOC protection of the group, as on a battery cluster (v1.7.6).
+        entities += [ClusterSelect(entry, vc, d, vc.settings, key) for d, key in CLUSTER_SELECTS
+                     if key == OPT_SOC_PROTECTION]
     elif platform == Platform.NUMBER:
         entities = [ClusterNumber(entry, vc, d, vc.settings, key) for d, key in CLUSTER_NUMBERS]
         for description, key in TEST_NUMBERS:

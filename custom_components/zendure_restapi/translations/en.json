@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Operation mode"
+      },
+      "soc_protection": {
+        "name": "SOC protection",
+        "state": {
+          "off": "Off",
+          "direct": "Direct",
+          "price_control": "Price Control (cheapest within 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "One battery",
           "reversing": "Reversing",
           "quick": "Full power",
-          "meter_stale": "No meter reading"
+          "meter_stale": "No meter reading",
+          "protecting": "Protecting"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Skip flash write"
-      },
-      "soc_protection": {
-        "name": "SOC protection"
       },
       "trace_recording": {
         "name": "Trace recording"

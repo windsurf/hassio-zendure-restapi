@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Modo de funcionamento"
+      },
+      "soc_protection": {
+        "name": "Proteção SOC",
+        "state": {
+          "off": "Desligada",
+          "direct": "Direta",
+          "price_control": "Price Control (mais barato em 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Uma bateria",
           "reversing": "A inverter",
           "quick": "Potência máxima",
-          "meter_stale": "Sem leitura do contador"
+          "meter_stale": "Sem leitura do contador",
+          "protecting": "A proteger"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Ignorar escrita em flash"
-      },
-      "soc_protection": {
-        "name": "Proteção SOC"
       },
       "trace_recording": {
         "name": "Gravação de rastreio"

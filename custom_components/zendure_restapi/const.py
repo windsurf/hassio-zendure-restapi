@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.5"
+INTEGRATION_VERSION = "1.7.6"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -222,7 +222,28 @@ OPT_MIN_CHARGE_POWER = "min_charge_power"
 OPT_MIN_DISCHARGE_POWER = "min_discharge_power"
 OPT_CHARGE_BUFFER = "charge_buffer"
 OPT_DISCHARGE_BUFFER = "discharge_buffer"
+# SOC protection (v1.7.6: a choice, until v1.7.5 a switch on or off):
+# off; direct, at once; or price_control, in the cheapest period within
+# SOC_PROTECT_WINDOW_H from the prices of the battery's Price Control entry,
+# directly without them. A cluster offers off and direct (price_control with
+# Price Control for a cluster in 1.8). A stored True or False of the switch
+# reads as direct or off (soc_protection_choice).
 OPT_SOC_PROTECTION = "soc_protection"
+SOC_PROTECT_OFF = "off"
+SOC_PROTECT_DIRECT = "direct"
+SOC_PROTECT_PRICE = "price_control"
+SOC_PROTECT_MODES = (SOC_PROTECT_OFF, SOC_PROTECT_DIRECT, SOC_PROTECT_PRICE)
+CLUSTER_SOC_PROTECT_MODES = (SOC_PROTECT_OFF, SOC_PROTECT_DIRECT)
+
+
+def soc_protection_choice(value: object) -> str:
+    """The SOC protection choice of a stored value: the switch of v1.7.5 and
+    earlier stored True or False; anything unknown is the default, direct."""
+    if value is True:
+        return SOC_PROTECT_DIRECT
+    if value is False:
+        return SOC_PROTECT_OFF
+    return value if value in SOC_PROTECT_MODES else SOC_PROTECT_DIRECT
 OPT_TRIM_FACTOR = "trim_factor"
 OPT_METER_SOURCE = "meter_source"
 # The entry_id of the external meter a battery uses, or EXTERNAL_NONE.
@@ -299,7 +320,12 @@ SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 # "Grid power (in control)" of v1.6.5 duplicated a meter's reading under a new
 # entity without its history; the dashboard now names the meter's own sensor
 # (v1.6.6).
-RETIRED_BATTERY_ENTITIES: tuple[tuple[str, str], ...] = (("sensor", "grid_power_in_control"),)
+# SOC protection was a switch until v1.7.5; since v1.7.6 a select with the
+# same key (select.…_soc_protection).
+RETIRED_BATTERY_ENTITIES: tuple[tuple[str, str], ...] = (
+    ("sensor", "grid_power_in_control"),
+    ("switch", "soc_protection"),
+)
 # "Telegram age" of an external meter wrote a row with every telegram, a figure
 # the timestamp of each power reading already holds (v1.6.7). Still in the
 # diagnostics download as telegram_age_s.
@@ -352,6 +378,7 @@ MODE_FOLLOW = "follow"
 MODE_COORDINATED = "coordinated"
 CLUSTER_STATUSES = (
     "standby", "idle", "regulating", "concentrated", "reversing", "quick", "meter_stale",
+    "protecting",
 )
 SIGNAL_CLUSTER = f"{DOMAIN}_cluster_update"
 # Where the cluster entry sits in hass.data[DOMAIN] while it is set up.
@@ -500,7 +527,7 @@ DEFAULTS = {
     OPT_MIN_DISCHARGE_POWER: 0,         # floor in every smart mode, 0 = off
     OPT_CHARGE_BUFFER: 5,               # W of import to aim for while charging
     OPT_DISCHARGE_BUFFER: 5,            # W of import to aim for while discharging
-    OPT_SOC_PROTECTION: True,
+    OPT_SOC_PROTECTION: SOC_PROTECT_DIRECT,
     OPT_TRIM_FACTOR: 80,                # % of the remaining error per sample
     OPT_METER_SOURCE: METER_SOURCE_AUTO,
     OPT_EXTERNAL_METER: "",
@@ -585,6 +612,19 @@ DEVICE_SELF_CHARGE_W = 50
 # new start. Now the first such cycle leaves this much running; only a second
 # cycle in a row with nothing to do ends it (or the stop rule does).
 RUN_FLOOR_W = 30
+
+# SOC protection with Price Control (v1.7.6): wait at most this long for
+# the cheapest quarter, and never while the battery sits this many points
+# under its floor: then it charges at once.
+SOC_PROTECT_WINDOW_H = 6
+SOC_PROTECT_HARD_POINTS = 2
+
+# Hysteresis at a start (v1.7.6): with a stop limit set, a direction starts
+# only past the stop limit plus this share of it, at least START_GAP_MIN_W.
+# Starting just past the stop limit left a load that hovers there to start
+# and stop again after Stop after.
+START_GAP_SHARE = 0.20
+START_GAP_MIN_W = 20
 
 # Ignore adjustments smaller than this, to avoid pointless writes. The value
 # lives in DEFAULTS[OPT_MODE_THRESHOLD]; this is the floor used before the

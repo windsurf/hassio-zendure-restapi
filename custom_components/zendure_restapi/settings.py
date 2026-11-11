@@ -21,6 +21,7 @@ from .const import (
     DEVICE_TYPE_CLUSTER,
     DEVICE_TYPE_VIRTUAL,
     MODE_FOLLOW,
+    MODE_QUICK_CHARGE,
     MODE_STANDBY,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
@@ -33,6 +34,8 @@ from .const import (
     PRICE_CONTAINS_OPTIONS,
     PRICE_DECISIONS,
     PRICE_MODE_OPTIONS,
+    OPT_SOC_PROTECTION,
+    soc_protection_choice,
 )
 
 # Settings with a fixed set of values: a stored value outside it falls back
@@ -69,6 +72,9 @@ class ZendureSettings:
                 value, DEFAULTS[key],
             )
             return DEFAULTS[key]
+        if key == OPT_SOC_PROTECTION:
+            # The switch of v1.7.5 and earlier stored True or False (v1.7.6).
+            return soc_protection_choice(value)
         if key in CHOICES and value not in CHOICES[key]:
             return DEFAULTS[key]
         return value
@@ -124,6 +130,7 @@ ROLE_PRIMARY = "primary"
 ROLE_SECONDARY = "secondary"
 ROLE_QUICK = "quick"
 ROLE_STANDBY = "standby"
+ROLE_PROTECT = "protect"
 
 
 class SettingsView:
@@ -161,6 +168,10 @@ class SettingsView:
                     return self.group.get(OPT_OPERATION_MODE)
                 if self.role == ROLE_SECONDARY:
                     return MODE_FOLLOW
+                if self.role == ROLE_PROTECT:
+                    # The controller charges before it reads the mode (v1.7.6);
+                    # quick_charge keeps every other path in line with that.
+                    return MODE_QUICK_CHARGE
                 return MODE_STANDBY
             if key in COORDINATED_KEYS:
                 return self.group.get(key)

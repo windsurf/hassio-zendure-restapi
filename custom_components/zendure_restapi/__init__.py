@@ -108,6 +108,9 @@ from .const import (
     OPT_OPERATION_MODE,
     OPT_REDISTRIBUTE,
     OPT_START_AFTER,
+    OPT_SOC_PROTECTION,
+    SOC_PROTECT_OFF,
+    soc_protection_choice,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     SIGNAL_CLUSTER,
@@ -314,6 +317,7 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             concentrate_below=settings.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=settings.get_int(OPT_REDISTRIBUTE),
             start_after=settings.get_int(OPT_START_AFTER),
+            soc_protection=soc_protection_choice(settings.get(OPT_SOC_PROTECTION)) != SOC_PROTECT_OFF,
         )
 
     signal = f"{SIGNAL_CLUSTER}_{entry.entry_id}"

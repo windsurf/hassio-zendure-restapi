@@ -12,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import ZendureApiError
-from .const import CONF_MODEL, DOMAIN, OPT_SOC_PROTECTION, OPT_TAKE_PART
+from .const import CONF_MODEL, DOMAIN, OPT_TAKE_PART
 from .controller import ZendureController
 from .coordinator import ZendureCoordinator
 from .entity import ZendureEntity
@@ -131,14 +131,9 @@ class ZendureSwitch(ZendureEntity, SwitchEntity):
 
 # ── Controller settings ──────────────────────────────────────────────────
 
-SETTING_SWITCHES: tuple[tuple[SwitchEntityDescription, str], ...] = (
-    (SwitchEntityDescription(
-        key="soc_protection",
-        name="SOC protection",
-        icon="mdi:shield-battery-outline",
-        entity_category=EntityCategory.CONFIG,
-    ), OPT_SOC_PROTECTION),
-)
+# SOC protection was the only one until v1.7.5; since v1.7.6 it is a select
+# (select.py). Kept for a setting that is on or off.
+SETTING_SWITCHES: tuple[tuple[SwitchEntityDescription, str], ...] = ()
 
 
 # Off takes the battery out of the battery cluster's group for a while,

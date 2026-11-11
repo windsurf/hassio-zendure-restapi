@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .const import CONF_MAX_SHARE, CONF_PHASE, CONF_PRIORITY, DEFAULT_PRIORITY, OPT_TAKE_PART, PACK_PREFIX
-from .controller import ZendureController, _as_int, _below_floor, _soc_bounds
+from .controller import ZendureController, _as_int, _below_floor, _soc_bounds, _soc_percent
 from .cluster.contract import NONE, ROLE_PRIMARY, Reading
 from .registry import pack_model
 from .settings import SettingsView, ZendureSettings
@@ -103,6 +103,7 @@ class ZendureMember:
             response_s=c.measure.response_time,
             waiting_for=c.waiting_for,
             below_floor=_below_floor(data) if data else False,
+            floor=_soc_percent(data, "minSoc", 0.1) if data else None,
         )
 
     def grid(self) -> float | None:

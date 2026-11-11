@@ -31,6 +31,7 @@ ROLE_PRIMARY = "primary"          # runs its own loop on the group's grid and se
 ROLE_SECONDARY = "secondary"      # holds the limit it is given, writes nothing else
 ROLE_QUICK = "quick"            # the group's quick mode, at its own cap
 ROLE_STANDBY = "standby"        # stopped once, then hands off
+ROLE_PROTECT = "protect"        # SOC protection of the group: charges at its own cap (v1.7.6)
 
 
 def allowed(mode: str, direction: str) -> bool:
@@ -66,6 +67,8 @@ class Reading:
     waiting_for: str = NONE
     # Under its own lower SOC limit: it may charge, but not discharge (v1.7.0).
     below_floor: bool = False
+    # The lower SOC limit in %, None when unknown (v1.7.6).
+    floor: float | None = None
 
     def cap(self, direction: str) -> int:
         return self.charge_cap if direction == CHARGE else self.discharge_cap
@@ -114,6 +117,9 @@ class GroupSettings:
     # Seconds the demand stays above Concentrate below before a secondary is
     # added (v1.7.4); 0 adds them at the first split, as before.
     start_after: int = 0
+    # SOC protection of the group (v1.7.6): with every battery under its floor
+    # they charge from the grid to their floor + 5. Off unless set.
+    soc_protection: bool = False
 
 
 class Member(Protocol):

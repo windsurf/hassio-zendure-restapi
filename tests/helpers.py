@@ -40,6 +40,7 @@ def make_coordinator() -> CO.ZendureCoordinator:
     co.data = {}
     co.api = MagicMock()
     co.pack_count = 0
+    co.device_type = "battery"
     return co
 
 

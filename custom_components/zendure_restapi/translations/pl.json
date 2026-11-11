@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Tryb pracy"
+      },
+      "soc_protection": {
+        "name": "Ochrona SOC",
+        "state": {
+          "off": "Wyłączona",
+          "direct": "Bezpośrednio",
+          "price_control": "Price Control (najtaniej w ciągu 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Jeden akumulator",
           "reversing": "Zmiana kierunku",
           "quick": "Pełna moc",
-          "meter_stale": "Brak odczytu licznika"
+          "meter_stale": "Brak odczytu licznika",
+          "protecting": "Ochrona"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Pomiń zapis do flash"
-      },
-      "soc_protection": {
-        "name": "Ochrona SOC"
       },
       "trace_recording": {
         "name": "Zapis śladu"

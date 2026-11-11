@@ -1,5 +1,5 @@
 # ============================================================
-# VIRTUAL CLUSTER DASHBOARD - v1.7.5
+# VIRTUAL CLUSTER DASHBOARD - v1.7.6
 # ============================================================
 #
 # The dashboard "Virtual Cluster" as the integration builds it
@@ -187,6 +187,17 @@ views:
       heading: Cluster settings
       heading_style: title
       icon: mdi:tune
+    - type: tile
+      entity: select.virtual_cluster_soc_protection
+      icon: mdi:battery-lock
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+      name:
+        type: entity
     - type: tile
       entity: number.virtual_cluster_copies
       features_position: bottom

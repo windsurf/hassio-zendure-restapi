@@ -275,6 +275,14 @@
       },
       "operation_mode": {
         "name": "Provozní režim"
+      },
+      "soc_protection": {
+        "name": "Ochrana SOC",
+        "state": {
+          "off": "Vypnuto",
+          "direct": "Přímo",
+          "price_control": "Price Control (nejlevněji do 6 h)"
+        }
       }
     },
     "sensor": {
@@ -709,7 +717,8 @@
           "concentrated": "Jedna baterie",
           "reversing": "Změna směru",
           "quick": "Plný výkon",
-          "meter_stale": "Žádný údaj měřiče"
+          "meter_stale": "Žádný údaj měřiče",
+          "protecting": "Ochrana"
         }
       }
     },
@@ -894,9 +903,6 @@
       },
       "smart_mode": {
         "name": "Přeskočit zápis do flash"
-      },
-      "soc_protection": {
-        "name": "Ochrana SOC"
       },
       "trace_recording": {
         "name": "Záznam trasování"

@@ -22,6 +22,8 @@ from .const import (
     SIGNAL_EXTERNALS_CHANGED,
     OPERATION_MODES,
     OPT_METER_SOURCE,
+    OPT_SOC_PROTECTION,
+    SOC_PROTECT_MODES,
     OPT_OPERATION_MODE,
     MODE_COORDINATED,
 )
@@ -144,6 +146,12 @@ async def async_setup_entry(
         entities.append(
             ZendureMeterSource(
                 coordinator, METER_SOURCE_DESCRIPTION, device_id, model,
+                runtime["settings"],
+            )
+        )
+        entities.append(
+            ZendureSocProtectionMode(
+                coordinator, SOC_PROTECTION_MODE_DESCRIPTION, device_id, model,
                 runtime["settings"],
             )
         )
@@ -282,6 +290,43 @@ class ZendureMeterSource(ZendureOperationMode):
             _LOGGER.error("Unknown meter source %s", option)
             return
         self._settings.set(OPT_METER_SOURCE, option)
+        self.async_write_ha_state()
+
+
+SOC_PROTECTION_MODE_DESCRIPTION = SelectEntityDescription(
+    key="soc_protection",
+    translation_key="soc_protection",
+    name="SOC protection",
+    options=list(SOC_PROTECT_MODES),
+    icon="mdi:battery-lock",
+    entity_category=EntityCategory.CONFIG,
+)
+
+
+class ZendureSocProtectionMode(ZendureOperationMode):
+    """SOC protection of this battery (v1.7.6; until v1.7.5 a switch).
+
+    `off` never charges from under the lower SOC limit. `direct` charges as
+    soon as the battery is under it, as the switch did when on.
+    `price_control` waits for the cheapest period within 6 hours from the
+    price list of this battery's Price Control, and falls back to direct
+    without one. Only for a battery on its own: in a battery cluster the
+    cluster's SOC protection decides.
+    """
+
+    @property
+    def options(self) -> list[str]:
+        return list(SOC_PROTECT_MODES)
+
+    @property
+    def current_option(self) -> str | None:
+        return self._settings.get(OPT_SOC_PROTECTION)
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in SOC_PROTECT_MODES:
+            _LOGGER.error("Unknown SOC protection mode %s", option)
+            return
+        self._settings.set(OPT_SOC_PROTECTION, option)
         self.async_write_ha_state()
 
 
