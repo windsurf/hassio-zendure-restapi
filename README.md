@@ -101,7 +101,7 @@ Or by hand: on Home Assistant 2026.11 or later, **Settings → Marketplace**, se
 
 **One controller only.** Switch off whatever else steers the battery: Zendure's own control in the app (ZENKI — *Add to HEMS* off, or *Custom Mode* without rules), another integration, or a Home Assistant automation that sets the battery's mode or limits. Two controllers on one battery undo each other; the integration warns you with the *Second controller* sensor. See [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: **External grid meter from Home Assistant**. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
+**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: add it with **Add integration → Zendure RestAPI → External grid meter from Home Assistant**; then `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
