@@ -31,6 +31,17 @@ the decision changes; it is not taken back every quarter of an hour. Off by
 default: an automation or planner that already steers the Operation mode
 stays the only one that does.
 
+Since v1.8.0 the entry may steer a battery cluster or a Virtual cluster
+instead of one battery. The day plan then plans for the group: the
+usable and stored energy of every battery taking part added up, and the
+charge and discharge power each may run (its own ceiling and Max share)
+added up. The Operation mode it writes is the cluster's; the cluster divides
+it over its batteries as it does a mode chosen by hand. The conversion
+losses, the house load and the tariff are the entry's own, as for a battery.
+A Virtual cluster leaves Follow source the moment Price Control writes a mode,
+and returns to it when Price Control is switched off: off, the copies follow
+the real battery again.
+
 Without a usable price, or a day plan without a price list or battery data,
 the target is the in-between mode. A price list once read is held when the
 sensor drops out or shrinks (v1.6.9): the plan and the current price carry on
@@ -60,6 +71,7 @@ from .const import (
     price_presets,
     DECISION_PLAN,
     DOMAIN,
+    MODE_FOLLOW_SOURCE,
     MODE_QUICK_CHARGE,
     MODE_QUICK_DISCHARGE,
     MODE_STANDBY,
@@ -183,8 +195,45 @@ def battery_state(
     )
 
 
+def group_state(members: list[Any]) -> tuple[float, float, float, float] | None:
+    """Usable and stored kWh, charge and discharge kW of a cluster (v1.8.0).
+
+    The sum over the batteries that take part and report: energy as
+    battery_state reads it from each battery's last poll, power as the cluster
+    itself may ask of each, the lower of its own ceiling and its Max share. A
+    battery that does not take part, or has not reported, adds nothing; with
+    none left there is no plan.
+    """
+    usable = stored = charge_kw = discharge_kw = 0.0
+    counted = 0
+    for member in members:
+        try:
+            reading = member.reading()
+        except Exception:  # noqa: BLE001 - one battery must not stop the plan
+            _LOGGER.debug("Price Control: no reading of %s", getattr(member, "name", "?"), exc_info=True)
+            continue
+        if not reading.available:
+            continue
+        controller = getattr(member, "controller", None)
+        coordinator = getattr(controller, "coordinator", None)
+        data = getattr(coordinator, "data", None)
+        if not data:
+            continue
+        state = battery_state(data, getattr(coordinator, "pack_count", 0), member.own)
+        if state is None:
+            continue
+        usable += state[0]
+        stored += state[1]
+        charge_kw += max(0, reading.charge_cap) / 1000
+        discharge_kw += max(0, reading.discharge_cap) / 1000
+        counted += 1
+    if not counted or usable <= 0:
+        return None
+    return usable, stored, charge_kw, discharge_kw
+
+
 class PriceControl:
-    """Sets the Operation mode of one battery from a price sensor."""
+    """Sets the Operation mode of one battery, or of a cluster, from a price sensor."""
 
     def __init__(
         self,
@@ -193,12 +242,19 @@ class PriceControl:
         settings: ZendureSettings,
         battery: ZendureSettings,
         battery_entry_id: str,
+        group: bool = False,
+        virtual: bool = False,
     ) -> None:
         self.hass = hass
         self._entry = entry
         self._settings = settings
+        # The settings that hold the Operation mode it writes: the battery's,
+        # or since v1.8.0 the cluster's.
         self._battery = battery
         self._battery_entry_id = battery_entry_id
+        self.group = group
+        # A Virtual cluster goes back to Follow source when switched off (v1.8.0).
+        self.virtual = virtual
         self._signal = SIGNAL_PRICE_CHANGED.format(entry.entry_id)
         self._unsub_price: Any = None
         self._unsub_timer: Any = None
@@ -248,9 +304,23 @@ class PriceControl:
     @property
     def battery_controller(self) -> Any:
         """The battery's controller as it is now: a reload of the battery
-        replaces it, without reloading price control."""
+        replaces it, without reloading price control. None for a cluster."""
+        if self.group:
+            return None
         runtime = self.hass.data.get(DOMAIN, {}).get(f"{self._battery_entry_id}_runtime")
         return runtime["controller"] if runtime else None
+
+    def group_members(self) -> list[Any]:
+        """The batteries of the cluster it steers, as they are now (v1.8.0).
+
+        Looked up on every call: a reload of the cluster replaces its runtime
+        without reloading price control. A battery cluster keeps its members
+        itself; a Virtual cluster keeps them in its cluster.
+        """
+        runtime = self.hass.data.get(DOMAIN, {}).get(self._battery_entry_id)
+        cluster = getattr(runtime, "cluster", runtime)
+        members = getattr(cluster, "members", None)
+        return list(members.values()) if isinstance(members, dict) else []
 
     @property
     def measure(self) -> BatteryMeasure | None:
@@ -312,7 +382,10 @@ class PriceControl:
         self._stand = stand
         enabled = self._settings.get_bool(OPT_PRICE_CONTROL)
         switched_on = enabled and not self._enabled
+        switched_off = self._enabled and not enabled
         self._enabled = enabled
+        if switched_off:
+            self._release()
         if switched_on:
             # Apply the current target now, even if it equals the last one.
             self._last_target = None
@@ -376,11 +449,14 @@ class PriceControl:
         )
 
     def _battery_input(self) -> Battery | None:
-        coordinator = self.hass.data.get(DOMAIN, {}).get(self._battery_entry_id)
-        data = getattr(coordinator, "data", None)
-        if not data:
-            return None
-        state = battery_state(data, getattr(coordinator, "pack_count", 0), self._battery)
+        if self.group:
+            state = group_state(self.group_members())
+        else:
+            coordinator = self.hass.data.get(DOMAIN, {}).get(self._battery_entry_id)
+            data = getattr(coordinator, "data", None)
+            if not data:
+                return None
+            state = battery_state(data, getattr(coordinator, "pack_count", 0), self._battery)
         if state is None:
             return None
         usable, stored, charge_kw, discharge_kw = state
@@ -504,6 +580,17 @@ class PriceControl:
             }.get(plan.action, PRICE_STATUS_BETWEEN),
         )
 
+    def _release(self) -> None:
+        """Switched off: a Virtual cluster follows the real battery again (v1.8.0).
+
+        Only on the switch going off, not at a restart or a reload, and only
+        for a Virtual cluster: a battery or a battery cluster keeps the mode it
+        has, as before, since nothing else would steer it.
+        """
+        if self.virtual and self._battery_present():
+            _LOGGER.debug("Price control off: the Virtual cluster follows its source again")
+            self._battery.set(OPT_OPERATION_MODE, MODE_FOLLOW_SOURCE)
+
     def import_periods(self) -> list[tuple[Any, Any, float]]:
         """(start, end, import price) of the periods not yet over (v1.7.6).
 
@@ -551,7 +638,9 @@ class PriceControl:
         async_dispatcher_send(self.hass, self._signal)
 
     def _coordinated(self) -> bool:
-        """Whether the battery takes part in the battery cluster."""
+        """Whether the battery takes part in the battery cluster; never for a cluster."""
+        if self.group:
+            return False
         runtime = self.hass.data.get(DOMAIN, {}).get(f"{self._battery_entry_id}_runtime")
         view = runtime.get("view") if isinstance(runtime, dict) else None
         return view is not None and view.coordinated
@@ -568,6 +657,8 @@ class PriceControl:
             "price_name": self._price_name(),
             "price_format": self.price_format,
             "decision": self._settings.get(OPT_PRICE_DECISION),
+            # What it steers: one battery, or a cluster (v1.8.0).
+            "steers": "cluster" if self.group else "battery",
             "target_mode": self.target,
             "operation_mode": self._battery.get(OPT_OPERATION_MODE),
             "cheap_price": self._settings.get_float(OPT_PRICE_CHEAP),

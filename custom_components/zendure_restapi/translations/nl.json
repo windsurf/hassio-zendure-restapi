@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Prijssturing",
-        "description": "Zet de werkmodus van een batterij op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan, …). Hij staat uit tot je hem aanzet.",
+        "description": "Zet de werkmodus van een batterij op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan, …). Hij staat uit tot je hem aanzet. Je kunt ook een batterijcluster of het virtuele cluster kiezen: het dagplan rekent dan voor zijn batterijen samen en zet de werkmodus van het cluster.",
         "data": {
-          "battery_entry": "Batterij",
+          "battery_entry": "Batterij of cluster",
           "price_entity": "Prijssensor (prijs per kWh)",
           "price_contains": "De prijssensor bevat"
         },

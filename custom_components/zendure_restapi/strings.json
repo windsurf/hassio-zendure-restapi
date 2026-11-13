@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Price control",
-        "description": "Sets the Operation mode of a battery from the electricity price: with two fixed prices, or with a day plan over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan, …). It is off until you switch it on.",
+        "description": "Sets the Operation mode of a battery from the electricity price: with two fixed prices, or with a day plan over the prices of today and tomorrow (Nord Pool, EPEX Spot, Zonneplan, …). It is off until you switch it on. You can also choose a battery cluster or a Virtual cluster: the day plan then plans for its batteries together and sets the Operation mode of the cluster.",
         "data": {
-          "battery_entry": "Battery",
+          "battery_entry": "Battery or cluster",
           "price_entity": "Price sensor (price per kWh)",
           "price_contains": "The price sensor holds"
         },

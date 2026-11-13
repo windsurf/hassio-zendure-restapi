@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Prisstyring",
-        "description": "Indstiller et batteris driftstilstand efter elprisen: med to faste priser eller med en dagsplan over priserne for i dag og i morgen (Nord Pool, EPEX Spot, Zonneplan, …). Den er slukket, indtil du tænder den.",
+        "description": "Indstiller et batteris driftstilstand efter elprisen: med to faste priser eller med en dagsplan over priserne for i dag og i morgen (Nord Pool, EPEX Spot, Zonneplan, …). Den er slukket, indtil du tænder den. Du kan også vælge en batteriklynge eller Virtual cluster: dagsplanen planlægger så for dens batterier samlet og indstiller klyngens driftstilstand.",
         "data": {
-          "battery_entry": "Batteri",
+          "battery_entry": "Batteri eller klynge",
           "price_entity": "Prissensor (pris pr. kWh)",
           "price_contains": "Prissensoren indeholder"
         },

@@ -2,7 +2,7 @@
 
 *The short version with installation in three steps is in [README.md](README.md) — 🇳🇱 [Nederlands](README.nl.md) · 🇩🇪 [Deutsch](README.de.md). This page is the full reference: how the controller works, what was measured, every entity, and the changelog. Questions and experiences: the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076).*
 
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases) [![Validate](https://img.shields.io/github/actions/workflow/status/windsurf/hassio-zendure-restapi/validate.yml?label=validate)](https://github.com/windsurf/hassio-zendure-restapi/actions/workflows/validate.yml) [![License](https://img.shields.io/github/license/windsurf/hassio-zendure-restapi)](https://github.com/windsurf/hassio-zendure-restapi/blob/main/LICENSE)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz) [![GitHub Release](https://img.shields.io/github/release/windsurf/hassio-zendure-restapi.svg)](https://github.com/windsurf/hassio-zendure-restapi/releases)
 
 > **Disclaimer:** This software is not affiliated with or endorsed by Zendure in any way. It is provided "as-is" without warranty or support, for the educational use of developers and enthusiasts. Use at your own risk.
 
@@ -33,17 +33,19 @@ Beyond reading the device, the integration runs an **operation-mode controller**
 
 ## 📌 Supported products
 
-Every SolarFlow on the local zenSDK API speaks the same protocol, so every model below can be installed and read out. What differs is how much of the control loop has been proven on it. Only the 3000 Mix AC+ has been run by the author; everything else rests on the shared protocol, Zendure's property documentation and Zendure's own Home Assistant integration, which drives these models over the same local API.
+Every SolarFlow on the local zenSDK API speaks the same protocol, so every model below can be installed and read out. What differs is how much of the control loop has been proven on it. Only the 3000 Mix AC+ has been run by the author; everything else rests on the shared protocol, Zendure's property documentation and Zendure's own Home Assistant integration, which drives these models over the same local API. Models without DC solar inputs are AC-coupled: their panels sit behind an external inverter. Models with MPPT inputs can also take panels directly; that is the part of the control loop that has not been proven yet, hence *experimental*.
 
-| Model | PV on the device | Confidence | Basis |
+| Model | DC solar inputs (MPPT) | Confidence | Basis |
 |---|---|---|---|
-| SolarFlow 3000 Mix AC+ | no | **reference** | developed and measured on it |
-| SolarFlow 4000 Mix AC+ | no | **high** | same platform and internal 8 kWh pack (`packType` 70); driven locally by Zendure's integration |
-| SolarFlow 2400 AC | no | **tested** | user report: read-out complete, `smart_matching` with a Shelly Pro 3EM, follows limit writes within ~2 s |
-| SolarFlow 2400 AC+ | no | **tested** | user report: read-out complete with a Smart Meter 3CT, one pack (issue #7) |
-| SolarFlow 1600 AC+ | no | **high** | listed by zenSDK; same AC-coupled layout as the 2400 AC |
-| SolarFlow 800, 800 Plus, 800 Pro, 800 Pro 2, 2400 Pro | yes | **experimental** | same protocol, but the control loop has only run on a device without PV of its own — see [Device support](#device-support) |
-| SolarFlow 4000 Mix Pro | yes | **experimental** | as above, and not yet in Zendure's own integration either |
+| SolarFlow 3000 Mix AC+ | none (AC-coupled) | **reference** | developed and measured on it, with an external inverter and AC-coupled PV |
+| SolarFlow 4000 Mix AC+ | none (AC-coupled) | **high** | same platform and internal 8 kWh pack (`packType` 70); driven locally by Zendure's integration |
+| SolarFlow 2400 AC | none (AC-coupled) | **tested** | user report: read-out complete, `smart_matching` with a Shelly Pro 3EM, follows limit writes within ~2 s |
+| SolarFlow 2400 AC+ | none (AC-coupled) | **tested** | user reports: read-out complete with a Smart Meter 3CT (one pack) and with a Zendure P1 meter (one pack, four extra packs) |
+| SolarFlow 1600 AC+ | none (AC-coupled) | **high** | listed by zenSDK; same AC-coupled layout as the 2400 AC |
+| SolarFlow 800 Plus | 2 (750 W each) | **experimental** | user report: two devices run as a cluster, AC-coupled, with no panels on their own inputs; the control loop has not run with panels connected to the device |
+| SolarFlow 800, 800 Pro, 800 Pro 2 | yes | **experimental** | same protocol, but the control loop has only run on devices without panels on their own inputs — see [Device support](#device-support) |
+| SolarFlow 2400 Pro | 4 (3 kW DC) | **experimental** | user report: panels on the device, firmware 2.0.4, Shelly Pro 3EM; PV pass-through at the SOC limits is still being examined — see [Device support](#device-support) |
+| SolarFlow 4000 Mix Pro | 2 (4 kW each) | **experimental** | as above, and not yet in Zendure's own integration either |
 | Zendure P1 meter | – | **reference** | the grid meter this integration was built on |
 | YouLess LS120 (external grid meter) | – | **high** | measured against the Zendure meter, 0.4–1.1 s faster |
 | HomeWizard P1 meter, API v1 (external grid meter) | – | **high** | documented local API, read every second |
@@ -61,6 +63,11 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 | SolarFlow 3000 Mix AC+ | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
 | SolarFlow 2400 AC, two packs | 2.0.3 (local API 3), pack 4109 | Shelly Pro 3EM | 2026.10 | user report (issue #4) |
 | SolarFlow 2400 AC+, one pack | 2.0.2, pack 4355 | Zendure Smart Meter 3CT (V1.0.1) | 2026.10 | user report (issue #7) |
+| SolarFlow 2400 AC+, one pack | 2.0.4 | Zendure P1 meter | – | user report (issue #15), runs daily; the device sits at the edge of the Wi-Fi range |
+| SolarFlow 2400 AC+, four extra packs | – | – | – | user report (issue #18), runs with dynamic prices |
+| SolarFlow 800 Plus, two devices, AC-coupled, one phase | – | Zendure P1 meter (the smart meter behind it updates every 10 s) | – | user report (issue #8), runs as a cluster |
+| SolarFlow 3000 Mix AC+ | – | – | – | user report (discussion #11), Wi-Fi, Enphase micro-inverters |
+| SolarFlow 2400 Pro, panels on the device | 2.0.4 | Shelly Pro 3EM | – | two user reports (issues #17, #9), **experimental**: behaviour at the SOC limits is still being worked out |
 
 Running it on another setup? Add yours in the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) or with a model report.
 
@@ -201,7 +208,7 @@ Every power axis, the day plan chart on *Price Control* included, follows the da
 
 **Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the battery's **Configure**, *Rebuild dashboard* makes it again if it is gone. It is an ordinary dashboard, editable like any other. Before saving it, the integration fits the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges up to the battery's own AC limit, and no cards for entities your model does not report; a section whose entities are all missing goes with its text. Without a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An existing dashboard at `/zendure-restapi` is left as it is. To rebuild it, tick *Rebuild dashboard* under the battery's **Configure** (since v1.6.6; one tick since v1.7.4, until then together with *Create the Zendure RestAPI dashboard*): it gets a fresh configuration, and your own changes to it are lost. A notification says what happened.
 
-**Solar from outside the battery** (since v1.6.6). A micro inverter on a smart plug, or a second inverter, is not seen by the battery. Control does not need it: your grid meter already sees that power. To see it in the charts, choose its power sensor (W) and, for the daily totals, its energy sensor (kWh) under the battery's **Configure**, and tick *Rebuild dashboard*. The PV series of every chart then show it: instead of the battery's own PV while that has produced nothing, or beside it as *PV external* when the battery has panels of its own. *Battery and grid* on the Price Control tab gets a tile for it, next to the battery power.
+**Solar from outside the battery** (since v1.6.6). A micro inverter on a smart plug, or a second inverter, is not seen by the battery. Control does not need it: your grid meter already sees that power. To see it in the charts, choose its power sensor (W) and, for the daily totals, its energy sensor (kWh) under the battery's **Configure**, and tick *Rebuild dashboard*. The PV series of every chart then show it: instead of the battery's own PV while that has produced nothing, or beside it as *PV external* when the battery has panels of its own. *Battery and grid* on the Price Control tab gets a tile for it, next to the battery power. The charts of a battery cluster or a Virtual cluster take the PV from the same source (v1.8.0).
 
 Home Assistant has no public call for an integration to add a dashboard. The integration uses the same route the frontend uses when you create one; should that route ever be missing, the notification gives the manual route instead and nothing else changes.
 
@@ -268,7 +275,7 @@ With net metering, catching solar earns nothing, and covering the house in betwe
 
 ### Setting it up
 
-Price control is a device of its own, linked to one battery — this integration's own steering, not a Zendure product, so it is simply called **Price Control**. Add it under **Add integration → Zendure RestAPI → Price control**, choose the battery, the price sensor and what that sensor holds; both can be changed later under its **Configure**. Then switch it on. Everything else is an entity of the device, editable live and shown in the *Price Control* tab of the dashboard. Entity IDs start with `price_control`; a second Price Control, for a second battery, carries that battery in its name and IDs.
+Price control is a device of its own, linked to one battery or, since v1.8.0, to a battery cluster or a Virtual cluster — this integration's own steering, not a Zendure product, so it is simply called **Price Control**. Add it under **Add integration → Zendure RestAPI → Price control**, choose the battery or cluster, the price sensor and what that sensor holds; both can be changed later under its **Configure**. Then switch it on. Everything else is an entity of the device, editable live and shown in the *Price Control* tab of the dashboard. Entity IDs start with `price_control`; a second Price Control, for a second battery or a cluster, carries its name in its name and IDs, such as `price_control_battery_cluster` or `price_control_virtual_cluster`.
 
 | Entity | What it does | Default |
 |---|---|---|
@@ -303,6 +310,16 @@ Every period can charge, discharge or do neither, as far as the modes allow: wit
     value × discharge efficiency − import price ÷ charge efficiency − wear ≥ minimum margin
 
 with value the import price for the expected house load, and the export price for the rest. An amount per kWh, not a percentage: a percentage of a price near zero or below means nothing. The plan is made again every quarter of an hour, on every price change and when a setting changes, each time from the actual state of charge, and runs outside the event loop.
+
+### For a battery cluster or a Virtual cluster
+
+Since v1.8.0 Price control can steer a [battery cluster](docs/cluster.md) or a [Virtual cluster](docs/virtual_cluster.md) instead of one battery: choose the cluster when you add it. It works as for a battery, with three differences.
+
+- **It plans for the group.** The day plan adds up what the batteries taking part hold: the usable and the stored energy, each between its own lower and upper SOC limit, and the power the cluster may ask of each, its own ceiling or its *Max share*, whichever is lower. A battery with *Take part* off, or one that does not report, adds nothing; with none left there is no plan (`no_plan`). Conversion losses, *Expected house load*, wear and the tariff are the Price Control's own entities, as for a battery: set them for the group as a whole, the house load for the whole house.
+- **It writes the cluster's Operation mode.** The cluster divides the mode over its batteries as it does a mode chosen by hand: `quick_charge` and `quick_discharge` on every battery at its own maximum, the smart modes through the primary and its secondaries. A Price Control of a battery in the group still pauses (`paused`): the cluster is the one that steers.
+- **A Virtual cluster leaves *Follow source*.** Once Price control writes a mode, the copies run the plan of the cluster instead of your battery's mode. That is a test of a day plan for two or three batteries you do not own; your real battery is not touched. Switching Price control off sets the Virtual cluster back to `follow_source`, so the copies follow your battery again.
+
+The cluster dashboard gets a *Price Control* tab, the same as on the battery dashboard but for the cluster: the switch, the decision, the day plan, the bands and the tariff, and a chart of the grid, the cluster charging and discharging, its state of charge and its plan. The *Cluster* tab shows the plan in its chart too: *Plan*, or on a Virtual cluster *Plan (cluster)* in grey next to *Plan (real battery)* in light grey, dashed. The *Cluster* tab also shows its status in the top row, as *Price Control*. Adding or removing the cluster's Price control brings a notification offering *Rebuild dashboard*.
 
 ### A cherry picker, not a whole-house battery
 
@@ -502,7 +519,7 @@ The formula is the same everywhere: the bare spot price of your price area, time
 
 Add up the amounts per kWh **incl. VAT**. An amount listed without VAT: multiply it by the import factor first. Amounts per month or per year (standing charges, metering) are left out: they do not change a plan per quarter.
 
-**Example, Germany 2026.** Averages for a household from the [BDEW electricity price analysis](https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf), in ct per kWh excl. VAT: grid fee 9.24, electricity tax 2.05, concession fee 1.67, special grid use levy 1.56, offshore grid levy 0.94, CHP levy 0.45; together 15.90, or **0.1892 €/kWh incl. VAT**. Add your supplier's fee per kWh incl. VAT, and set *Import factor* 1.19 and *Import surcharge* 0.1892 + that fee. Your own figure differs: the grid fee depends on your postcode, the concession fee on the size of your municipality, and the average includes part of the standing charge. Take the *Arbeitspreis* from your grid operator's *Preisblatt* for the exact value.
+**Example, Germany 2026.** Averages for a household from the [BDEW electricity price analysis](https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf), in ct per kWh excl. VAT: grid fee 9.24, electricity tax 2.05, concession fee 1.67, special grid use levy 1.56, offshore grid levy 0.94, CHP levy 0.45; together 15.91, or **0.1893 €/kWh incl. VAT**. Add your supplier's fee per kWh incl. VAT, and set *Import factor* 1.19 and *Import surcharge* 0.1893 + that fee. Your own figure differs: the grid fee depends on your postcode, the concession fee on the size of your municipality, and the average includes part of the standing charge. Take the *Arbeitspreis* from your grid operator's *Preisblatt* for the exact value.
 
 The United Kingdom bills per half hour, in pounds, with regional network charges; no UK price list has been tested with the day plan. VAT rates as of 2026; your invoice decides.
 
@@ -698,7 +715,7 @@ Everything about it — setting up, how it regulates, its entities, its status a
 
 *v1.7.1.* A **Virtual cluster** shows what a cluster would do in your house without a second battery: up to three copies of one of your batteries under a cluster of their own, steering on a virtual P1 meter — a device of its own: the house load times a *Load factor*, minus what the copies deliver. Each copy runs this integration's own controller on a model of the device, with the real battery's tuning. Nothing is written to the real battery and it is never `blocked`; the test costs only computing power. Add it under *Add integration → Zendure RestAPI → Virtual cluster (simulated)*. Guide: **[docs/virtual_cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/virtual_cluster.md)**.
 
-The cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster`): a *Cluster* tab in the layout of the battery dashboard (v1.7.2) — tiles, one status text, gauges, the distribution over primary and secondaries, the group's settings as sliders and a chart of today and tomorrow — and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets a dashboard of its own, **Virtual Cluster** (`/virtual-cluster/virtual-cluster`, v1.7.3), with a tab per copy (*Virtual copy 1, 2, 3*) and none for the real battery, which keeps its own. The tabs carry an icon, numbered for the batteries and copies. Each is made once; after a change in the group a notification offers *Rebuild dashboard*, which touches only that kind's dashboard. The file `dashboard/virtual_cluster.yaml` (since v1.7.4) is the Virtual Cluster dashboard as the integration builds it for three copies, with the default entity ids: a reference of the layout, or to paste into the raw configuration editor by hand.
+The cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster`): a *Cluster* tab in the layout of the battery dashboard (v1.7.2) — tiles, one status text, gauges, the distribution over primary and secondaries, the group's settings as sliders and a chart of today and tomorrow — and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets a dashboard of its own, **Virtual Cluster** (`/virtual-cluster/virtual-cluster`, v1.7.3), with a tab per copy (*Virtual copy 1, 2, 3*) and none for the real battery, which keeps its own. The tabs carry an icon, numbered for the batteries and copies. Each is made once; after a change in the group a notification offers *Rebuild dashboard*, which touches only that kind's dashboard. Two sample files show both dashboards as the integration builds them, with the default entity ids and each with its *Price Control* tab: `dashboard/battery_cluster.yaml` for a battery cluster of one SolarFlow 3000 Mix AC+ (since v1.8.0) and `dashboard/virtual_cluster.yaml` (since v1.7.4) for three copies. A reference of the layout, or to paste into the raw configuration editor by hand; `scripts/build_dashboard_yaml.py` generates them with the integration's own code.
 
 <a id="how-the-controller-works"></a>
 
@@ -908,7 +925,7 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 - **`price_control`**: waits for the cheapest period within 6 hours of the moment the battery fell under *minSoc*, from the price list of this battery's [Price control](#price-control) — whether or not Price control steers the Operation mode. One period is enough: from just under the bound to 5 points above it takes a few minutes at full power. Once it charges, it carries on to *minSoc* + 5 whatever the price. While it waits, the device keeps the battery from discharging and the smart modes still charge it from surplus; the *Controller status* carries `soc_protection_waits` (`SOC 9% under the floor 10%: charges at 03:15, 0.21 per kWh (now 0.34)`).
 - **Falls back to `direct`**, with the reason in the status, when there is no Price control or no price list, when the 6 hours are over, or when the battery sits 2 points or more under *minSoc*. A battery at its lower bound is a battery in need, not a trade.
 
-**A battery cluster: when every battery is under its bound.** The cluster has a *SOC protection* select of its own, `off` or `direct` (default); `price_control` comes with Price control for a cluster. While at least one battery still has charge, nothing changes: a battery under its bound gets no discharging share and is not charged from the grid, because it would take what the other discharges (measured in v1.7.0: 2,400 W from one battery into the other for 55 s). Once every battery taking part is under its *minSoc*, none discharges, and the cluster charges them all from the grid at full power, each to its own *minSoc* + 5; one that is there stands still until the last one is. The cluster status reads `protecting`, the batteries' status `protecting` with `cluster: every battery under its SOC floor`. Only in the smart modes: not in `standby` or the quick modes. Direct, without looking at the price; protection at the cheapest price on a cluster comes with Price control for a cluster. Without it, all batteries empty means the house runs on the grid until the sun, `quick_charge` or a planner fills them, and the device's own small charge at its bound is all that happens. A Virtual cluster has the same select.
+**A battery cluster: when every battery is under its bound.** The cluster has a *SOC protection* select of its own, `off` or `direct` (default); `price_control` follows in v1.8.1, now that a cluster can have a [Price control](#for-a-battery-cluster-or-a-virtual-cluster) of its own (v1.8.0). While at least one battery still has charge, nothing changes: a battery under its bound gets no discharging share and is not charged from the grid, because it would take what the other discharges (measured in v1.7.0: 2,400 W from one battery into the other for 55 s). Once every battery taking part is under its *minSoc*, none discharges, and the cluster charges them all from the grid at full power, each to its own *minSoc* + 5; one that is there stands still until the last one is. The cluster status reads `protecting`, the batteries' status `protecting` with `cluster: every battery under its SOC floor`. Only in the smart modes: not in `standby` or the quick modes. Direct, without looking at the price; protection at the cheapest price on a cluster comes with Price control for a cluster. Without it, all batteries empty means the house runs on the grid until the sun, `quick_charge` or a planner fills them, and the device's own small charge at its bound is all that happens. A Virtual cluster has the same select.
 
 **From the switch to the select.** On updating, a switch that was on reads as `direct`, one that was off as `off`; nothing to set. The entity changes domain: `switch.…_soc_protection` is removed, `select.…_soc_protection` takes its place. An automation that switched it on or off now uses `select.select_option` with `off` or `direct`.
 
@@ -1149,7 +1166,7 @@ The sensors sit on the battery device as diagnostics; *Realized margin* sits on 
 | Grid tracking error | median distance between the grid and the buffer while a smart mode balances, last 24 hours, by time | only while the battery can still follow: not at its ceiling, not with the limit at zero | *Trim strength*, thresholds |
 | Lost writes | limit writes the device did not keep, with the checked and lost counts by the time since the command before it: under 1.3 s, 1.3 to 2 s, 2 s or more | every limit write the next report can confirm; a direction the device closes at its SOC bound does not count, nor a 0 over the small charge limit the device sets itself at its lower bound (v1.7.5) | how fast the controller may write (see below) |
 | Skipped peaks | starts that *Start after* held back and that never came, because the demand fell back in time; today per direction, the energy the grid gave meanwhile and the longest, and the total (v1.7.4) | a smart mode with *Start after* above 0 |
-| Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4). Counted from what the integration writes, not heard: whether a relay clicks each time is not reported by the device, so the count is an upper limit and the figure to compare between settings | every direction write |
+| Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4). Counted from what the integration writes, not heard: whether a relay clicks each time is not reported by the device and differs per model, and what the device switches by itself is not counted, so the count is an upper limit and the figure to compare between settings | every direction write |
 | Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
 
 **Blocks and cycles.** A block is a stretch of charging or discharging; a pause of up to two minutes does not end it. A SOC bound counts when the device flags it (*SOC limit status*) or when the battery stands still at its lower or upper SOC limit. The day plan stops at the lower limit itself, so the device never flags it there.
@@ -1381,6 +1398,8 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **Peaks in a cluster** (v1.7.4): a 10 s peak above `Concentrate below` takes no secondary; demand that stays above it brings them after `Start after`, at once at that moment rather than a split later; a primary at its maximum gets them at once; `Start after` 0 adds them at the first split.
 - **Secondaries at low load** (v1.7.4): with the primary at nothing the secondaries together stay within the demand rounded down to 50 W, and a small step down counts while they deliver too much; with a running primary rounding and step stay as they were.
 - **Stopping at low demand** (v1.7.4): 50 W charging and discharging, `Stop after` and `Start after` 30 s on a battery and on a cluster, `Stop after` and `Start after` on a cluster 10–120 s; `Start after` holds a start from stand-still and after a stop, per direction, and at 0 s starts at once; a stop only after `Stop after` seconds under the limit, with both limits in one request; demand back above the limit starts the time again; after a stop a short peak does not start it again, the demand above the larger threshold for the time does; the other direction starts as always; a changed mode or a limit at 0 ends the stop; in a cluster the limit is capped at `Concentrate below`.
+- **Price control for a cluster** (v1.8.0): the day plan adds up the energy and the power of the batteries taking part, leaves out one that does not take part or report, and has no plan without any; it writes the cluster's Operation mode, never pauses for a cluster, finds the copies of a Virtual cluster, switched off it sets a Virtual cluster back to *Follow source* and leaves a battery cluster's mode alone; the cluster dashboard gets a *Price Control* tab with the cluster's own chart, its plan in the *Cluster* tab and its status under *Operation mode*, and is unchanged without one.
+- **Sample dashboards** (v1.8.0): the three files in `dashboard/` are what the integration's own code builds, each with the version of the manifest, and both clusters have their *Price Control* tab.
 
 Run them from the root of the repository:
 
@@ -1466,6 +1485,24 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.8.0 — Price control for a cluster
+
+**Price control can steer a battery cluster or a Virtual cluster: one day plan for all its batteries together.** Nothing changes for a battery that has its own Price control.
+
+- **Price control for a cluster:** when you add Price control you can choose a battery cluster or a Virtual cluster as well as a battery. The day plan adds up the usable and stored energy of the batteries taking part and the power the cluster may ask of each, and Price control writes the cluster's Operation mode; the cluster divides it over its batteries. On a Virtual cluster this gives a day plan for batteries you do not own; it leaves *Follow source* the moment Price control writes a mode. See [For a battery cluster or a Virtual cluster](#for-a-battery-cluster-or-a-virtual-cluster).
+- **PV on the cluster dashboard:** the chart of today and tomorrow shows the solar power as the amber *PV* series of the battery dashboard, from the source each battery uses there: the solar sensor chosen under its **Configure**, otherwise its own PV once that has produced something. A Virtual cluster shows the PV of your battery; the copies have none. Display only. Tick *Rebuild dashboard* on the cluster.
+- **Docs: in the HACS default list.** Install by searching for *Zendure RestAPI* in the Marketplace (Home Assistant 2026.11 or later) or in HACS; no custom repository needed.
+- **Disclaimer:** spelled out: what the integration writes to the battery, that a written limit keeps running when Home Assistant stops, and who is responsible for the installation and its settings.
+- **Docs: supported products and tested setups.** The DC solar inputs per model, the 800 Plus and the 2400 Pro on a line of their own, and the setups users reported since.
+- **Cluster dashboard:** a *Price Control* tab after the *Cluster* tab, when the cluster has a Price control of its own, and the cluster's plan in the chart of the *Cluster* tab (*Plan*, or *Plan (cluster)* on a Virtual cluster). Tick *Rebuild dashboard* on the cluster.
+- **Price Control status:** a new attribute `steers`, `battery` or `cluster`.
+- **Back to *Follow source*:** switching the Price control of a Virtual cluster off sets the Virtual cluster back to `follow_source`, so the copies follow your battery again. A battery or a battery cluster keeps the mode it has, as before.
+- **Who sets the mode:** the *Cluster* tab shows the status of the cluster's own Price control in its top row, as *Price Control*.
+- **Rebuild offered:** when a cluster gets a Price control of its own, or loses it, a notification offers *Rebuild dashboard* for its tab and its plan, once.
+- **Relay switches:** the description says that whether a switch is a click differs per model, and that what the device switches by itself is not counted.
+- **Sample dashboards, generated:** `dashboard/` holds three samples, each generated by `scripts/build_dashboard_yaml.py` with the integration's own code, so they follow every version: `zendure_restapi.yaml` (one battery), `battery_cluster.yaml` (new: a battery cluster of one SolarFlow 3000 Mix AC+) and `virtual_cluster.yaml` (three copies), both clusters with their *Price Control* tab. A test keeps each file equal to what the code builds. You do not need them: the integration makes its dashboards itself.
+- **Seven decimals:** a price or surcharge entered as 0.1308481 is kept as such; it was rounded to five decimals (0.13085) on entry.
+
 ### v1.7.6 — SOC protection at the cheapest price, a cluster that protects, and a gap at the start
 
 **SOC protection can wait for the cheapest price, a battery cluster charges its batteries when all of them are empty, and a battery starts a little above where it stops.** Nothing to set: the defaults keep the behaviour of v1.7.5, apart from the gap at the start and the cluster that protects.
@@ -1477,7 +1514,6 @@ Recent releases are listed in full. Earlier ones are grouped by minor version, k
 - **A meter restart is logged as a meter:** a Zendure P1 meter that restarts is logged as *restarted (messageId, unreachable for 4 s)*, without the control state of a battery; until now the warning listed acMode, inputLimit, outputLimit and smartMode as None, as if they had been lost.
 - **A gap at the start:** with a stop limit set, a direction starts only a fifth above it, at least 20 W: 50 W stops, 70 W starts; 80 W stops, 100 W starts. A load hovering just above the stop limit no longer starts and stops the battery again and again. With the stop limits at 0 nothing changes. See [Stopping at low demand](#stopping-at-low-demand).
 - **Defaults and docs, republished:** the tariff defaults follow a Dutch dynamic contract exactly: *Import surcharge* 0.1308481 (0.02 supplier fee + 0.1108481 energy tax 2026, both incl. VAT) and *Export factor* 1.00 (from 2027 export = spot + 0.02, no VAT; contract bonuses stay out of the plan); both surcharges take seven decimals; *Discharge efficiency* 95 % by default, like charging; *Stop charging below* 50 W by default, like discharging (was 80 W). A value you set yourself stays. Docs: EPEX Spot *Market price* as the recommended price sensor, Nord Pool set up bare (no VAT, 7 decimals), the purchase cost per Dutch supplier, other countries, and fixed-price contracts; `dashboard/zendure_restapi.yaml` matches what *Rebuild dashboard* builds.
-- **Docs: in the HACS default list.** Install by searching for *Zendure RestAPI* in the Marketplace (Home Assistant 2026.11 or later) or in HACS; no custom repository needed.
 
 ### v1.7.5 — A trace of the cluster, distance from the SOC bounds, and any dynamic contract
 
@@ -1731,90 +1767,17 @@ No change to the control loop. Builds on v1.5.6: the day plan, the history of pr
 - *Tested setups* moved from the short READMEs to [Supported products](#-supported-products).
 - The options screen of a battery is titled *Options* now that it holds more than the polling interval.
 
-### v1.5.6 — Names in eleven languages, a dashboard on request, and Price Control *(not released on its own, part of v1.6.0)*
+### v1.5.0–v1.5.6 — An external meter, several meters, eleven languages and the SOC bounds
 
-No change to the control loop: it is the loop of v1.5.4.
-
-- **Entity names in eleven languages**, the languages of the setup screens: 133 names, such as `Laadtoestand`, `Ladezustand`, `État de charge`. Battery packs read as `Accu 1 temperatuur`, `Batterie 1 Temperatur`. The operation modes keep their technical names.
-- **Entity IDs stay English.** On a system in another language Home Assistant would build new IDs from the translated name (`sensor.laadtoestand`); they are built from the English name, so dashboards, documentation and automations match everywhere. Existing IDs are untouched.
-- **The dashboard, on request.** Tick *Create the Zendure RestAPI dashboard* when adding the battery, or later under **Configure** (the options screen is now titled *Options*). It is made for your own devices — entity IDs, gauge ranges up to the Inverter power limit, sections left out when their entities are missing — and an existing one is never overwritten. File `dashboard/zendure_restapi.yaml`; `dashboard/zendure.yaml` is gone.
-- **Price Control**, a device of its own: **Add integration → Zendure RestAPI → Price control**, choose the battery and a price sensor. A cheap and an expensive price with a mode per band, off by default; it writes the Operation mode only when the band changes, so a mode set by hand stays until the next boundary.
-
-### v1.5.5 — Documentation
-
-No change to the integration: the code is the v1.5.4 code, only the version number moved.
-
-- **[zenSDK and this integration](#zensdk-and-this-integration)**: what Zendure's SDK documents and lists, when it last changed, and which models and corrections this integration adds.
-- **The two P1 meters measured again**, now both read by this integration: the YouLess sees a load step 0.9 s earlier on average, and the Zendure meter repeats its previous value in 28 % of the seconds. See [Why](#why).
-- **[Keeping the status in the history](#keeping-the-status-in-the-history)**: a recorder exclude glob on `sensor.zendure_*` also drops the controller status; how to keep it.
-- **The short READMEs** (English, Dutch, German) list more of what the integration does, each with the measurement behind it: standby draw, flash wear, a full battery left alone, efficiency sensors, any Home Assistant power sensor as meter, and replays before every release.
-- **Validation runs no longer pile up**: a new push cancels a run that is still running for the same branch or tag.
-
-Since then, documentation only and without a new version: a forum topic, a table of tested setups and the key measurements in the short READMEs.
-
-### v1.5.4 — The SOC bounds in the control loop
-
-The last change to the control loop in the 1.5 series. One change to how the battery is steered, plus one line; everything else in the loop is unchanged, and a replay of nine runs without a SOC bound gives identical writes.
-
-- **The smart modes respect the device's SOC bounds.** At `upper_limit` charging is not opened, at `lower_limit` discharging is not; a running direction is cleared once; the other direction stays open. The trim loop does not adjust a direction the device has closed. Replayed over an hour with the device refusing one side: limit writes 309 → 130 (full, `smart_matching`), 177 → 0 (full, `smart_charge_only`), 437 → 76 (empty, `smart_matching`), 366 → 0 (empty, `smart_discharge_only`), and nothing ordered into the closed side any more. The grid is the same in every run, because the device refused that energy anyway.
-- **The status says so**: `charging blocked: battery full (upper limit)` instead of `within 10 W`. In `quick` and `manual`, which keep their order, the reason adds `refused by device: battery full (upper limit)` or `… empty (lower limit)`.
-- **`manual` at 0 W clears the direction record**, so the rest state can take effect there too.
-- A test keeps the version in `const.py` and `manifest.json` the same.
-- **README.de.md**, a German version of the short README.
-
-### v1.5.3 — Several external meters, and any Home Assistant sensor as one
-
-No change to the control loop: `controller.py` is the v1.5.2 one, and the replay of nine runs gives identical writes.
-
-- **Several external meters.** Each battery gets an **External meter** select that picks which one it uses. With one external meter nothing changes; with several and none chosen, none is used until one is. See [Several external meters](#several-external-meters).
-- **A Home Assistant sensor as external meter**, for meters without an adapter here: Zonneplan, DSMR, the Home Assistant YouLess integration. Optional separate export sensor. See [A meter from Home Assistant](#a-meter-from-home-assistant).
-- **Device names stay apart.** The first external meter is *External P1 meter*, later ones carry their type, so their entity IDs do not collide.
-- **Dashboard rebuilt** after the author's own: a header row with the battery's state, an Operation mode section that says what the controller does and why, gauges for grid, state of charge, power and limits, and device control apart from the controller settings. The External meter select sits in the External P1 Meter section.
-- Translations for the new screens and the select, in all eleven languages.
-
-### v1.5.2 — The external meter as a device of its own, and eleven languages
-
-No change to the control loop: the controller is byte-for-byte the v1.5.1 one, and the replay of nine runs gives identical writes.
-
-- **The external P1 meter is an entry of its own**, added through **Add integration → Zendure RestAPI → External P1 meter**, with a device and sensors: power, status (`live`, `stale`, `unreachable`), telegram age, and for HomeWizard and YouLess the energy registers. Fixed entity IDs `sensor.external_p1_meter_*`, whatever the reader. Before, it lived in the battery's options and was visible only in the controller status and the trace.
-- **Migration.** A reader configured on the battery in v1.5.0 or v1.5.1 is moved into its own entry on the first start, with the same settings; the battery's options keep everything else.
-- **HomeWizard P1 meters are discovered.** Other HomeWizard products on the same service are ignored. If the local API is off, the confirmation says where to switch it on.
-- **The address is tried before saving.** A wrong address or a wrong reader type shows on the form instead of as a silent poller later.
-- **Adding a device starts with a choice**: a Zendure device, or an external P1 meter.
-- **Translations** for setup, options, errors and the states of selects and status sensors, in English, Dutch, German, French, Italian, Spanish, Portuguese, Polish, Czech, Swedish and Danish. Entity names and the operation modes stay English. See [Languages](#languages).
-- **Dashboard.** Shows an **External P1 Meter** section when one is configured.
-- **README.nl.md**, a Dutch version of the short README.
-- **Minimum Home Assistant version 2025.2.0** in `hacs.json`, corrected from 2024.10.0: the discovery code has imported `ZeroconfServiceInfo` from `helpers.service_info` since v1.4.3, which exists from 2025.2 on.
-- **Validation workflow** `.github/workflows/validate.yml`: the HACS action and hassfest on every push, pull request and daily, as HACS requires for its default list. Checked locally with hassfest from Home Assistant `master`: no errors.
-
-### v1.5.1 — Works with HomeWizard, more models, and one battery steering at a time
-
-No change to the control loop for a single battery.
-
-- **Works with HomeWizard.** New external meter types: HomeWizard P1 meter (local API v1), EcoTracker, Shelly Pro 3EM, and the Zendure P1 meter or Smart Meter 3CT read directly. A Zendure P1 meter is no longer needed for the smart modes. Readers without a telegram time are polled once a second.
-- **`Meter source` now defaults to `auto`.** Without an external meter configured that is exactly the old `zendure`, so existing installations are unchanged; with one configured it is used. Set `zendure` explicitly to keep the Zendure meter while an external one is configured. The meter type in the options form defaults to HomeWizard.
-- **Model names** for the SolarFlow 800 Pro 2, 4000 Mix AC+ and 4000 Mix Pro, under both spellings the 4000 AC+ is known by.
-- **Power entries run to 5,000 W** instead of 3,600, so the 4 kW and 5 kW Mix models are not cut off. The device's own ceiling still applies.
-- **Battery pack model and capacity**, derived from the serial number and `packType`: one `Model` sensor per pack.
-- **Supported devices** documented per model with a confidence level, in [Device support](#device-support).
-- **New model report** issue template asking for the diagnostics download.
-- `hacs.json` sets `hide_default_branch`, so HACS offers releases only and never an unreleased state of the main branch.
-- **An external meter counts as live only once its telegram time moves.** Found on the author's installation: a YouLess whose P1 cable had been out for 52 days kept answering with the same `tm` and a fixed −7 W. The freshness test already ignored it after the first telegram, but that first one was accepted, so for the first seconds after a restart a weeks-old reading could steer. Readers without a telegram time are unaffected.
-- **`external_w` in the trace is empty while the external meter has no current telegram**, by the same 5 s rule `auto` uses, instead of repeating the last value it ever saw.
-- `product` and `version` are no longer reported as unknown properties in the diagnostics; they are identity fields.
-- **A second battery in a smart mode now stands aside** with status `blocked`, instead of correcting the same deviation a second time. The first battery to enter a smart mode keeps steering until it leaves the smart modes.
-
-### v1.5.0 — An external P1 meter as the grid reading
-
-A second meter for both control loops; with the default setting nothing changes.
-
-- **New: external P1 reader**, configured on the battery entry under **Configure** — type, IP address, poll interval (100–1000 ms, default 250). Supported: YouLess LS120. Polled directly on `/e?f=j`; a sample is a new telegram, not a new request. See [An external P1 meter](#an-external-p1-meter).
-- **New: `Meter source` select** — `zendure` (default, unchanged behaviour), `external`, or `auto` with the Zendure meter as fallback after 5 s without a telegram.
-- **Controller status** gains `meter_source` and `meter_active`.
-- **The trace gains two columns**, `meter_source` and `external_w`, at the end: twenty-three in total. Reading by name needs no change, and the first twenty-one keep their positions.
-- **Diagnostics** include the external meter's counters; its address is redacted along with the device address. Entry options are now redacted too.
-- No change to the loops themselves: thresholds, bookkeeping, rest state and fail-safe are as in v1.4.3.
-- **The README is split in two.** `README.md` is the short version with supported products and three-step installation, shown by HACS; this page, `README2.md`, is the full technical reference.
+- **An external P1 meter as the grid reading (v1.5.0).** A second meter for both loops: YouLess LS120 first, read directly and counted per telegram rather than per request. A `Meter source` select — `zendure`, `external`, or `auto` with the Zendure meter as fallback after 5 s without a telegram (default `auto` since v1.5.1, which without an external meter is the old `zendure`). Controller status `meter_source` and `meter_active`; trace columns `meter_source` and `external_w`. The README split in two: the short `README.md` and this reference.
+- **More meters and models (v1.5.1).** HomeWizard P1 (local API v1), EcoTracker, Shelly Pro 3EM, and the Zendure P1 meter or Smart Meter 3CT read directly, so a Zendure P1 meter is no longer needed for the smart modes. Model names for the SolarFlow 800 Pro 2, 4000 Mix AC+ and 4000 Mix Pro; power entries up to 5,000 W; pack model and capacity from the serial number and `packType`.
+- **A stale meter does not steer (v1.5.1).** An external meter counts as live only once its telegram time moves: a YouLess with its P1 cable out for 52 days kept answering with the same time and −7 W, and its first telegram after a restart was accepted. `external_w` stays empty without a current telegram.
+- **One battery steers at a time (v1.5.1).** A second battery in a smart mode stands aside with status `blocked` instead of correcting the same deviation again; the first keeps steering until it leaves the smart modes.
+- **The external meter as a device of its own (v1.5.2)**, added under *Add integration*, with power, status (`live`, `stale`, `unreachable`), telegram age and, for HomeWizard and YouLess, the energy registers; a reader set on the battery in v1.5.0 or v1.5.1 moves into its own entry on the first start. HomeWizard P1 meters are discovered, the address is tried before saving. Translations of the setup screens in eleven languages; minimum Home Assistant 2025.2.0; validation with HACS and hassfest on every push.
+- **Several external meters (v1.5.3)**, each battery choosing one with its *External meter* select, and any Home Assistant sensor as an external meter, with an optional separate export sensor (Zonneplan, DSMR, the Home Assistant YouLess integration).
+- **The SOC bounds in the control loop (v1.5.4)**, the last change to the loop in the 1.5 series. At `upper_limit` charging is not opened, at `lower_limit` discharging is not; the other direction stays open and the trim loop leaves a closed direction alone. Replayed over an hour with the device refusing one side: limit writes 309 → 130 and 177 → 0 when full, 437 → 76 and 366 → 0 when empty, with the same grid, since the device refused that energy anyway. The status names it: `charging blocked: battery full (upper limit)`.
+- **Documentation (v1.5.5):** [zenSDK and this integration](#zensdk-and-this-integration), both P1 meters measured side by side (the YouLess sees a load step 0.9 s earlier; the Zendure meter repeats its previous value in 28 % of the seconds, see [Why](#why)), and [keeping the status in the history](#keeping-the-status-in-the-history).
+- **Names in eleven languages, a dashboard on request, and Price Control (v1.5.6, released as part of v1.6.0):** 133 entity names translated, entity IDs kept English; the dashboard made for your own devices on request and never overwritten; Price Control as a device of its own with a cheap and an expensive price and a mode per band, writing the Operation mode only when the band changes.
 
 ### v1.4.0–v1.4.3 — A rest state, no settling hold, and settings from measurement
 
@@ -1930,9 +1893,13 @@ The point at which every defect found against live hardware had been fixed and t
 
 ## ℹ️ Disclaimer
 
-This software is **not affiliated with or endorsed by Zendure** in any way. The Zendure name and product names are trademarks of Zendure.
+This integration is provided "as is", without warranty of any kind and without liability, as set out in sections 7 and 8 of the Apache License 2.0. Use it at your own risk.
 
-This integration writes directly to a grid-connected battery inverter. Provided **"as-is"** without warranty. The authors accept no liability for any damage, loss of data, or service disruption.
+- It writes to your battery over the local network: charge and discharge limits, the operation mode and the state of charge limits. A wrong setting can make the battery charge from or discharge to the grid when you did not mean it to, and that can cost money.
+- A limit that was written keeps running when Home Assistant stops: the battery has no watchdog of its own. Keep the ceilings at values you accept unattended.
+- You are responsible for a safe installation and for settings within what the manufacturer allows. The integration uses only what the device's local API offers and does not change its firmware.
+
+This project is not affiliated with or endorsed by Zendure. The Zendure name and product names are trademarks of Zendure.
 
 ---
 

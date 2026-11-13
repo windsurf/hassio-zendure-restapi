@@ -473,11 +473,20 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if e.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_BATTERY) == DEVICE_TYPE_BATTERY
         ]
 
+    def _price_targets(self) -> list[config_entries.ConfigEntry]:
+        """What Price Control can steer: a battery, or since v1.8.0 a battery
+        cluster or a Virtual cluster. The batteries first, as before."""
+        clusters = [
+            e for e in self._async_current_entries(include_ignore=False)
+            if e.data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL)
+        ]
+        return [*self._batteries(), *clusters]
+
     async def async_step_price_control(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Price control for one battery: which battery, which price sensor."""
-        batteries = self._batteries()
+        """Price control for one battery or a cluster: which one, which price sensor."""
+        batteries = self._price_targets()
         if not batteries:
             return self.async_abort(reason="no_battery")
         if user_input is not None:

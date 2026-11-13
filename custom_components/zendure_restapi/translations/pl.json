@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Sterowanie cenowe",
-        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach z dziś i jutra (Nord Pool, EPEX Spot, Zonneplan, …). Jest wyłączone, dopóki go nie włączysz.",
+        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach z dziś i jutra (Nord Pool, EPEX Spot, Zonneplan, …). Jest wyłączone, dopóki go nie włączysz. Możesz też wybrać klaster akumulatorów lub Virtual cluster: plan dzienny planuje wtedy dla wszystkich jego baterii razem i ustawia tryb pracy klastra.",
         "data": {
-          "battery_entry": "Bateria",
+          "battery_entry": "Bateria lub klaster",
           "price_entity": "Czujnik ceny (cena za kWh)",
           "price_contains": "Czujnik ceny zawiera"
         },

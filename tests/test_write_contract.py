@@ -59,7 +59,7 @@ def test_choosing_standby_again_resends_the_standby_command():
     assert sent(c) == [[("inputLimit", 0)]]
 
 
-# ── Standby at startup (v1.6.10, review) ─────────────────────────────────
+# ── Standby at startup (v1.6.10) ─────────────────────────────────────────
 
 def fresh(mode=C.MODE_STANDBY):
     c = make_controller(mode)

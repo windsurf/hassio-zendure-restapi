@@ -57,7 +57,7 @@ def test_a_disabled_entity_of_the_battery_part_stays_too():
 def test_only_the_meter_entry_is_looked_at(monkeypatch):
     """A battery cluster and a Virtual cluster have an operation mode of their own
     under their own entry: the clean-up only gets the entities of the meter entry
-    it runs for, so theirs are never touched (v1.7.x)."""
+    it runs for, so theirs are never touched."""
     meter_entry = SimpleNamespace(entry_id="meter", title="Zendure Meter")
     by_entry = {
         "meter": METER_LIVE + METER_OFF + BATTERY_ONLY,

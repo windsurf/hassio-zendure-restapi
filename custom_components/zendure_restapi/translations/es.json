@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Control por precio",
-        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: con dos precios fijos o con un plan diario sobre los precios de hoy y mañana (Nord Pool, EPEX Spot, Zonneplan, …). Está apagado hasta que lo actives.",
+        "description": "Ajusta el modo de funcionamiento de una batería según el precio de la electricidad: con dos precios fijos o con un plan diario sobre los precios de hoy y mañana (Nord Pool, EPEX Spot, Zonneplan, …). Está apagado hasta que lo actives. También puede elegir un clúster de baterías o el Virtual cluster: el plan diario planifica entonces para sus baterías juntas y ajusta el modo de funcionamiento del clúster.",
         "data": {
-          "battery_entry": "Batería",
+          "battery_entry": "Batería o clúster",
           "price_entity": "Sensor de precio (precio por kWh)",
           "price_contains": "El sensor de precio contiene"
         },

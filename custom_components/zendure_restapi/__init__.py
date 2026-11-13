@@ -82,6 +82,7 @@ from .const import (
     CONF_MODEL,
     CONF_BATTERY_ENTRY,
     DEVICE_TYPE_PRICE,
+    PRICE_DASHBOARD_NOTED,
     OPT_CREATE_DASHBOARD,
     OPT_REBUILD_DASHBOARD,
     OPT_SOLAR_ENERGY,
@@ -245,15 +246,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Price control for one battery: its own device, writing the battery's mode."""
+    """Price control for one battery, or for a cluster (v1.8.0): its own device,
+    writing the Operation mode of what it steers."""
     battery_id = entry.data[CONF_BATTERY_ENTRY]
-    runtime = hass.data.get(DOMAIN, {}).get(f"{battery_id}{RUNTIME_SUFFIX}")
-    if runtime is None:
-        # Set up after its battery; Home Assistant retries until it is there.
-        raise ConfigEntryNotReady("the battery for price control is not set up yet")
-    price = PriceControl(
-        hass, entry, ZendureSettings(hass, entry), runtime["settings"], battery_id
-    )
+    target = hass.config_entries.async_get_entry(battery_id)
+    if target is not None and target.data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
+        group = hass.data.get(DOMAIN, {}).get(battery_id)
+        if group is None:
+            # Set up after its cluster; Home Assistant retries until it is there.
+            raise ConfigEntryNotReady("the cluster for price control is not set up yet")
+        price = PriceControl(
+            hass, entry, ZendureSettings(hass, entry), group.settings, battery_id, group=True,
+            virtual=target.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_VIRTUAL,
+        )
+        if not entry.options.get(PRICE_DASHBOARD_NOTED):
+            # Its tab and its plan come with a rebuild of the cluster dashboard:
+            # say so once, never rebuild silently (v1.8.0).
+            from .cluster_dashboard import notify_changed
+
+            notify_changed(hass, target, f"**{target.title}** has a Price Control of its own now.")
+            hass.config_entries.async_update_entry(
+                entry, options={**entry.options, PRICE_DASHBOARD_NOTED: True}
+            )
+    else:
+        runtime = hass.data.get(DOMAIN, {}).get(f"{battery_id}{RUNTIME_SUFFIX}")
+        if runtime is None:
+            # Set up after its battery; Home Assistant retries until it is there.
+            raise ConfigEntryNotReady("the battery for price control is not set up yet")
+        price = PriceControl(
+            hass, entry, ZendureSettings(hass, entry), runtime["settings"], battery_id
+        )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = price
     _remove_retired(hass, entry.entry_id, RETIRED_PRICE_ENTITIES)
     await hass.config_entries.async_forward_entry_setups(entry, PRICE_PLATFORMS)
@@ -834,6 +856,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     one was added.
     """
     kind = entry.data.get(CONF_DEVICE_TYPE)
+    if kind == DEVICE_TYPE_PRICE:
+        # The Price Control of a cluster gone: its tab goes with a rebuild (v1.8.0).
+        target = hass.config_entries.async_get_entry(str(entry.data.get(CONF_BATTERY_ENTRY) or ""))
+        if target is not None and target.data.get(CONF_DEVICE_TYPE) in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
+            from .cluster_dashboard import notify_changed
+
+            notify_changed(hass, target, f"**{target.title}** no longer has a Price Control of its own.")
+        return
     if kind not in (DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL):
         return
     others = [

@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Preissteuerung",
-        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit zwei festen Preisen oder mit einem Tagesplan über die Preise von heute und morgen (Nord Pool, EPEX Spot, Zonneplan, …). Sie ist aus, bis du sie einschaltest.",
+        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit zwei festen Preisen oder mit einem Tagesplan über die Preise von heute und morgen (Nord Pool, EPEX Spot, Zonneplan, …). Sie ist aus, bis du sie einschaltest. Du kannst auch einen Batterie-Cluster oder den virtuellen Cluster wählen: Der Tagesplan rechnet dann für seine Batterien zusammen und setzt den Betriebsmodus des Clusters.",
         "data": {
-          "battery_entry": "Batterie",
+          "battery_entry": "Batterie oder Cluster",
           "price_entity": "Preissensor (Preis pro kWh)",
           "price_contains": "Der Preissensor enthält"
         },

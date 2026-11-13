@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Řízení podle ceny",
-        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: se dvěma pevnými cenami, nebo s denním plánem nad cenami na dnešek a zítřek (Nord Pool, EPEX Spot, Zonneplan, …). Je vypnuto, dokud ho nezapnete.",
+        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: se dvěma pevnými cenami, nebo s denním plánem nad cenami na dnešek a zítřek (Nord Pool, EPEX Spot, Zonneplan, …). Je vypnuto, dokud ho nezapnete. Můžete zvolit i bateriový cluster nebo Virtual cluster: denní plán pak plánuje pro všechny jeho baterie společně a nastavuje provozní režim clusteru.",
         "data": {
-          "battery_entry": "Baterie",
+          "battery_entry": "Baterie nebo cluster",
           "price_entity": "Cenový senzor (cena za kWh)",
           "price_contains": "Cenový senzor obsahuje"
         },

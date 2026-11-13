@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.7.6"
+INTEGRATION_VERSION = "1.8.0"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -282,6 +282,9 @@ OWN_PV_MIN_KWH = 0.5
 # the only one that does.
 DEVICE_TYPE_PRICE = "price_control"
 CONF_BATTERY_ENTRY = "battery_entry"
+# Set once a Price Control of a cluster has offered the rebuild of the cluster
+# dashboard, so a restart does not offer it again (v1.8.0).
+PRICE_DASHBOARD_NOTED = "cluster_dashboard_noted"
 # Our own steering, not a Zendure product: no Zendure in the name.
 PRICE_DEVICE_NAME = "Price Control"
 PRICE_MODEL = "Dynamic tariffs"

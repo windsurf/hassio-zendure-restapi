@@ -4,7 +4,7 @@ A limit written moments ago may not be in the last poll yet. When the
 controller set the limits itself, standby sends the stop for both limits even
 if the poll already reads 0, so a battery that has just started stops (a
 primary leaving the cluster right after it started). smartMode 0 stays last in
-the same request: with smartMode 1 before it, the limits go to RAM, as in 1.6.x.
+the same request: with smartMode 1 before it, the limits go to RAM, as before.
 """
 
 import asyncio

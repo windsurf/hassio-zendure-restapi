@@ -49,13 +49,18 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
 from .const import (
-    CONF_BATTERY_ENTRY, CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_VIRTUAL, DOMAIN, SUBENTRY_BATTERY,
+    CONF_BATTERY_ENTRY, CONF_DEVICE_TYPE, DEVICE_TYPE_CLUSTER, DEVICE_TYPE_PRICE, DEVICE_TYPE_VIRTUAL, DOMAIN,
+    SUBENTRY_BATTERY,
 )
 from .dashboard import (
     CARD_NAMING,
     CREATED,
     EXISTS,
+    EXTERNAL_PV_DASH,
+    EXTERNAL_PV_NAME,
     FAILED,
+    PV_ENERGY,
+    PV_POWER,
     REPLACED,
     _collection,
     _custom_cards,
@@ -232,12 +237,98 @@ def _series(entity_id: str, name: str, color: str, kind: str = "line", axis: str
     return serie
 
 
+PLAN_GENERATOR = (
+    "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n"
+    "[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n"
+    "  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n"
+    "  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\n"
+    "if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\n"
+    "pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n"
+)
+# The day plan of the cluster's own Price Control (v1.8.0): grey and solid,
+# as the plan on the battery dashboard, so it shows on a dark theme as well.
+# Next to it the real battery's plan behind a Virtual cluster turns light grey
+# and dashed, so the two can be told apart.
+GROUP_PLAN_COLOR = "#757575"
+REAL_PLAN_COLOR = "#BDBDBD"
+REAL_PLAN_DASH = 4
+
+
+def _plan_series(entity_id: str, name: str, color: str, dash: int | None = None) -> dict[str, Any]:
+    serie: dict[str, Any] = {
+        "entity": entity_id, "name": name, "type": "line", "unit": "W", "stroke_width": 1.5,
+        "curve": "stepline", "float_precision": 0, "color": color,
+        "show": {"in_header": False, "legend_value": False}, "yaxis_id": "power",
+        "data_generator": PLAN_GENERATOR,
+    }
+    if dash:
+        serie["stroke_dash"] = dash
+    return serie
+
+
+# The solar power in the cluster's charts (v1.8.0), in the colour and shape of
+# the battery dashboard's PV series. One entry per source: a battery's own PV,
+# or the external solar sensor chosen under Configure for that battery.
+PV_COLOR = "#FFB300"
+
+
+def solar_sources(name: str, prefix: str, args: dict[str, Any], known: set[str]) -> list[dict[str, Any]]:
+    """The solar sources of one battery, as on its own dashboard.
+
+    The external solar sensor when one is chosen; the device's own PV when it
+    has produced something. With both, the external one follows as a series
+    of its own. Without either, nothing.
+    """
+    sources: list[dict[str, Any]] = []
+    own = f"sensor.{prefix}{PV_POWER}"
+    if args.get("own_pv") and own in known:
+        energy = f"sensor.{prefix}{PV_ENERGY}"
+        sources.append({"power": own, "energy": energy if energy in known else None,
+                        "battery": name, "external": False})
+    if args.get("solar_power"):
+        sources.append({"power": args["solar_power"], "energy": args.get("solar_energy") or None,
+                        "battery": name, "external": True})
+    return sources
+
+
+def add_solar_sources(solars: list[dict[str, Any]], sources: list[dict[str, Any]]) -> None:
+    """Add a battery's sources; an external sensor chosen for more batteries shows once."""
+    for source in sources:
+        if all(s["power"] != source["power"] for s in solars):
+            solars.append(source)
+
+
+def _solar_name(source: dict[str, Any], solars: list[dict[str, Any]]) -> str:
+    """PV for a single source; with more, the battery's name, external ones marked."""
+    if len(solars) == 1:
+        return "PV"
+    if source["external"]:
+        externals = [s for s in solars if s["external"]]
+        return EXTERNAL_PV_NAME if len(externals) == 1 else f"{EXTERNAL_PV_NAME} {source['battery']}"
+    owns = [s for s in solars if not s["external"]]
+    return "PV" if len(owns) == 1 else f"PV {source['battery']}"
+
+
+def _solar_series(group: dict[str, Any]) -> list[dict[str, Any]]:
+    """A PV power series per source; an external one next to another source dashed."""
+    solars = group.get("solar") or []
+    series = []
+    for source in solars:
+        extra: dict[str, Any] = {}
+        if source["external"] and len(solars) > 1:
+            extra["stroke_dash"] = EXTERNAL_PV_DASH
+        series.append(_series(source["power"], _solar_name(source, solars), PV_COLOR, "area", **extra))
+    return series
+
+
 def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | None] | None,
-              plan: str | None, count: int) -> dict[str, Any]:
+              plan: str | None, count: int, group_plan: str | None = None) -> dict[str, Any]:
     """The chart of today and tomorrow, as the day plan chart of the battery
     dashboard: the grid, the cluster discharging and charging, its state of
     charge; for a Virtual cluster also the real battery and its plan. One grid
-    line per 500 W per battery, a label every second line (v1.7.2)."""
+    line per 500 W per battery, a label every second line (v1.7.2). Since
+    v1.8.0 also the day plan of the cluster's own Price Control and the solar
+    power."""
     step = STEP_W * max(1, count)
     series: list[dict[str, Any]] = []
     if grid:
@@ -245,22 +336,17 @@ def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | Non
     if group.get("power"):
         series.append(_series(group["power"], "Discharging", "#4CAF50", "area", transform="return x > 0 ? x : 0;"))
         series.append(_series(group["power"], "Charging", "#E53935", "area", transform="return x < 0 ? x : 0;"))
+    series.extend(_solar_series(group))
     if real and real.get("power"):
         series.append(_series(real["power"], "Real battery", "#757575"))
     if plan:
-        series.append({
-            "entity": plan, "name": "Plan (real battery)", "type": "line", "unit": "W", "stroke_width": 1.5,
-            "curve": "stepline", "float_precision": 0, "color": "#757575",
-            "show": {"in_header": False, "legend_value": False}, "yaxis_id": "power",
-            "data_generator": (
-                "const a = entity.attributes;\nconst now = Date.now();\nconst pts = [[now, 0, 0]];\n"
-                "[...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {\n"
-                "  pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);\n"
-                "  pts.push([new Date(r.end).getTime(), 0, 0]);\n});\n"
-                "if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);\n"
-                "pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);\nreturn pts.map(p => [p[0], p[1]]);\n"
-            ),
-        })
+        # Grey as before; light grey and dashed once the cluster has a plan of its own.
+        if group_plan:
+            series.append(_plan_series(plan, "Plan (real battery)", REAL_PLAN_COLOR, REAL_PLAN_DASH))
+        else:
+            series.append(_plan_series(plan, "Plan (real battery)", "#757575"))
+    if group_plan:
+        series.append(_plan_series(group_plan, "Plan (cluster)" if real else "Plan", GROUP_PLAN_COLOR))
     if group.get("soc"):
         series.append(_series(group["soc"], "SoC cluster", "#9575CD", axis="soc", stroke_width=2, stroke_dash=4))
     if real and real.get("soc"):
@@ -291,6 +377,7 @@ def cluster_view(
     clones: list[tuple[int, str]] | None = None,
     custom_cards: set[str] | None = None,
     plan: str | None = None,
+    group_plan: str | None = None,
 ) -> dict[str, Any]:
     """The Cluster tab, in the layout of the battery dashboard (v1.7.2): a row
     of tiles under the title, the operation mode with one status text, gauges,
@@ -302,7 +389,8 @@ def cluster_view(
     battery name, power and soc (a Virtual cluster's real battery first, named
     REAL), `grids` the grid sensors with their name, `clones` index and name of
     each virtual battery, `custom_cards` the custom cards installed (None: all),
-    `plan` the day plan of the real battery behind a Virtual cluster.
+    `plan` the day plan of the real battery behind a Virtual cluster,
+    `group_plan` the day plan of the cluster's own Price Control (v1.8.0).
     """
     clones = clones or []
     real = next((b for b in batteries if b.get("name") == REAL), None) if virtual else None
@@ -314,10 +402,11 @@ def cluster_view(
     cap = 3000 * max(1, count)
 
     if custom_cards is None or APEX in custom_cards:
-        chart: dict[str, Any] = day_chart(group, grid, real, plan if virtual else None, count)
+        chart: dict[str, Any] = day_chart(group, grid, real, plan if virtual else None, count, group_plan)
     else:
         chart = {"type": "history-graph", "hours_to_show": 24, "grid_options": {"columns": "full", "rows": 6},
-                 "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries)) if e]}
+                 "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries),
+                                                      *(s["power"] for s in group.get("solar") or [])) if e]}
 
     sections = [
         # A Virtual cluster says it is simulated, as its copies do (v1.7.3).
@@ -328,6 +417,8 @@ def cluster_view(
             _tile(grid, icon="mdi:transmission-tower"),
             _tile(group.get("house_load"), icon="mdi:home-lightning-bolt") if virtual else None,
             _tile(group.get("real_grid"), icon="mdi:transmission-tower-import") if virtual else None,
+            # v1.8.0: the cluster's own Price Control, so the top row shows who sets the mode.
+            _tile(group.get("price_status"), name="Price Control", icon="mdi:cash-clock"),
             # v1.7.3: which version runs, as on the battery dashboard.
             _tile(group.get("status"), name="Integration", icon="mdi:tag-outline",
                   state_content="integration_version"),
@@ -395,6 +486,52 @@ def battery_view(template: dict[str, Any], args: dict[str, Any], title: str, pat
     view["title"] = title
     view["path"] = path
     view["icon"] = tab_icon(index)
+    return view
+
+
+# The Price Control tab of the battery dashboard, the source of the cluster's
+# (v1.8.0), and a battery prefix that matches nothing: the battery's own
+# cards drop out of it by the usual rule for entities that do not exist.
+PRICE_PATH = "price-control"
+NO_BATTERY = "cluster_has_no_battery_"
+
+
+def price_view(template: dict[str, Any], price: str, group: dict[str, Any], known: set[str],
+               custom_cards: set[str] | None, grid: str | None, count: int, virtual: bool) -> dict[str, Any] | None:
+    """The Price Control tab of a cluster with a Price Control of its own (v1.8.0).
+
+    The tab of the battery dashboard, fitted by the same builder to the
+    cluster's Price Control (`price`, its entity id prefix): the switch, the
+    decision, the day plan, the bands and the tariff. The battery's own cards
+    and series drop out; the heading carries the cluster's Operation mode, and
+    the chart is the cluster's: the grid, the cluster charging and discharging,
+    its state of charge and its plan.
+    """
+    source = next((v for v in template.get("views", []) if v.get("path") == PRICE_PATH), None)
+    if source is None:
+        return None
+    config = build_config(
+        {"views": [copy.deepcopy(source)]}, known=known, battery=NO_BATTERY, meter=None, external=False,
+        ceiling=3000, price=price, custom_cards=custom_cards, card_naming=CARD_NAMING,
+    )
+    views = config.get("views") or []
+    if not views:
+        return None
+    view = views[0]
+    plan = f"sensor.{price}plan"
+    for section in view.get("sections", []):
+        cards = section.get("cards", [])
+        for index, card in enumerate(cards):
+            if card.get("type") == "heading" and card.get("heading") == "Price Control" and group.get("mode"):
+                card["badges"] = [*card.get("badges", []), {"type": "entity", "entity": group["mode"]}]
+            if card.get("type") == APEX:
+                chart = day_chart(group, grid, None, None, count, plan if plan in known else None)
+                if virtual and chart["series"] and chart["series"][0]["entity"] == grid:
+                    chart["series"][0]["name"] = "Virtual P1"
+                cards[index] = chart
+    view["title"] = "Price Control"
+    view["path"] = PRICE_PATH
+    view["icon"] = "mdi:cash-clock"
     return view
 
 
@@ -490,6 +627,9 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
     grids: list[dict[str, str | None]] = []
     clones: list[tuple[int, str]] = []
     plan: str | None = None
+    # The solar sources of the batteries, for the PV series.
+    solars: list[dict[str, Any]] = []
+    group["solar"] = solars
     store = hass.data.get(DOMAIN, {})
 
     def add_battery(battery_entry: ConfigEntry, name: str, grid_name: str | None) -> dict[str, Any]:
@@ -506,6 +646,8 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         })
         if args.get("grid") and all(g["entity"] != args["grid"] for g in grids):
             grids.append({"entity": args["grid"], "name": grid_name})
+        # The copies of a Virtual cluster have no PV: the real battery's is the cluster's.
+        add_solar_sources(solars, solar_sources(battery_entry.title if name == REAL else name, prefix, args, known))
         return args
 
     if virtual:
@@ -549,8 +691,33 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
             if view:
                 views.append(view)
 
-    cluster = cluster_view(group, batteries, grids, virtual, clones, custom_cards, plan)
-    return {"title": cluster_title(virtual), "views": [cluster, *views]}
+    # The cluster's own Price Control (v1.8.0): its plan in the chart, and a tab after Cluster.
+    price = group_price(hass, registry, eid)
+    group_plan = f"sensor.{price}plan" if price and f"sensor.{price}plan" in known else None
+    if price and f"sensor.{price}status" in known:
+        group["price_status"] = f"sensor.{price}status"
+    cluster = cluster_view(group, batteries, grids, virtual, clones, custom_cards, plan, group_plan)
+    tabs = [cluster]
+    if price:
+        count = len(clones) if virtual else len(batteries)
+        grid = group.get("virtual_grid") if virtual else next((g["entity"] for g in grids if g.get("entity")), None)
+        view = price_view(template, price, group, known, custom_cards, grid, count, virtual)
+        if view:
+            tabs.append(view)
+    return {"title": cluster_title(virtual), "views": [*tabs, *views]}
+
+
+def group_price(hass: HomeAssistant, registry: er.EntityRegistry, cluster_id: str) -> str | None:
+    """The entity id prefix of the Price Control that steers this cluster (v1.8.0), or None."""
+    for other in hass.config_entries.async_entries(DOMAIN):
+        if other.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_PRICE or other.data.get(CONF_BATTERY_ENTRY) != cluster_id:
+            continue
+        status = _entity(registry, "sensor", f"{other.entry_id}_price_control_status")
+        if status:
+            object_id = status.split(".", 1)[1]
+            if object_id.endswith("status"):
+                return object_id[: -len("status")]
+    return None
 
 
 async def _sync_title(collection: Any, title: str, url: str = CLUSTER_URL) -> None:
@@ -674,15 +841,21 @@ async def async_remove_cluster_dashboard(hass: HomeAssistant, virtual: bool = Fa
     return False
 
 
-def notify_changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """The group changed: offer the rebuild, never do it silently."""
+def notify_changed(hass: HomeAssistant, entry: ConfigEntry, what: str | None = None) -> None:
+    """The group changed: offer the rebuild, never do it silently.
+
+    `what` says what changed; by default the batteries. Since v1.8.0 also a
+    Price Control of the cluster's own that came or went: its tab and its plan
+    in the chart come with the rebuild.
+    """
     virtual = _is_virtual(entry)
     if not cluster_dashboard_exists(hass, virtual):
         return
     title = cluster_title(virtual)
+    what = what or f"The batteries of **{entry.title}** changed."
     persistent_notification.async_create(
         hass,
-        f"The batteries of **{entry.title}** changed. To bring the dashboard **{title}** up to date, "
+        f"{what} To bring the dashboard **{title}** up to date, "
         f"press *Rebuild dashboard* on {entry.title}; it replaces that dashboard, edits included.",
         title=title,
         notification_id=_notification(virtual),

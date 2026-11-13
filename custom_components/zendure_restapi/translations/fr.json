@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Pilotage par le prix",
-        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix d'aujourd'hui et de demain (Nord Pool, EPEX Spot, Zonneplan, …). Désactivé tant que vous ne l'activez pas.",
+        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix d'aujourd'hui et de demain (Nord Pool, EPEX Spot, Zonneplan, …). Désactivé tant que vous ne l'activez pas. Vous pouvez aussi choisir un cluster de batteries ou le Virtual cluster : le plan journalier planifie alors pour ses batteries ensemble et règle le mode de fonctionnement du cluster.",
         "data": {
-          "battery_entry": "Batterie",
+          "battery_entry": "Batterie ou cluster",
           "price_entity": "Capteur de prix (prix par kWh)",
           "price_contains": "Le capteur de prix contient"
         },

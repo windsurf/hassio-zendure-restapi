@@ -296,6 +296,8 @@ class PriceNumber(_Setting, NumberEntity):
         return self._settings.get_float(self._key)
 
     async def async_set_native_value(self, value: float) -> None:
+        # Seven decimals: an energy tax such as 0.1108481 is entered exactly
+        # (the step since v1.7.6; until then the value was rounded to five).
         self._settings.set(self._key, round(float(value), 7))
         self.async_write_ha_state()
 

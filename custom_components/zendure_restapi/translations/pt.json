@@ -53,9 +53,9 @@
       },
       "price_control": {
         "title": "Controlo por preço",
-        "description": "Define o modo de funcionamento de uma bateria pelo preço da eletricidade: com dois preços fixos ou com um plano diário sobre os preços de hoje e amanhã (Nord Pool, EPEX Spot, Zonneplan, …). Fica desligado até o ligar.",
+        "description": "Define o modo de funcionamento de uma bateria pelo preço da eletricidade: com dois preços fixos ou com um plano diário sobre os preços de hoje e amanhã (Nord Pool, EPEX Spot, Zonneplan, …). Fica desligado até o ligar. Também pode escolher um cluster de baterias ou o Virtual cluster: o plano diário planeia então para as suas baterias em conjunto e define o modo de funcionamento do cluster.",
         "data": {
-          "battery_entry": "Bateria",
+          "battery_entry": "Bateria ou cluster",
           "price_entity": "Sensor de preço (preço por kWh)",
           "price_contains": "O sensor de preço contém"
         },

@@ -249,14 +249,96 @@ def test_reset_and_rebuild_are_not_on_the_dashboard():
     assert "button.virtual_cluster_reset" not in body and "button.virtual_cluster_rebuild_dashboard" not in body
 
 
-def test_the_sample_file_is_what_the_integration_builds():
-    # dashboard/virtual_cluster.yaml (v1.7.4) is the reference of the layout: it
-    # must not drift from the code that builds the dashboard.
-    from pathlib import Path
+# The sample dashboard/virtual_cluster.yaml is checked in test_dashboard_yaml.py:
+# since the rebuild of 1/11 it is generated with cluster_config itself.
 
-    import yaml
 
-    path = Path(__file__).resolve().parent.parent / "dashboard" / "virtual_cluster.yaml"
-    sample = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert sample["title"] == CD.cluster_title(True)
-    assert sample["views"] == json.loads(json.dumps(virtual_views()))
+# ── Price Control on the cluster (v1.8.0) ────────────────────────────────
+
+GROUP_PRICE = "price_control_virtual_cluster_"
+
+
+def price_known() -> set:
+    """Every entity of the cluster's Price Control, as the template names them."""
+    pc = next(v for v in D._load_template()["views"] if v.get("path") == CD.PRICE_PATH)
+    found = set(re.findall(r"\b(?:sensor|switch|number|select)\.price_control\w*", json.dumps(pc)))
+    renamed = set()
+    for entity_id in found:
+        if entity_id == "switch.price_control":
+            renamed.add(f"switch.{GROUP_PRICE[:-1]}")
+        else:
+            renamed.add(entity_id.replace(".price_control_", f".{GROUP_PRICE}"))
+    return renamed
+
+
+def group_price_view() -> dict:
+    g = group()
+    return CD.price_view(D._load_template(), GROUP_PRICE, g, price_known() | known(), None,
+                         g["virtual_grid"], 3, True)
+
+
+def test_the_cluster_plan_in_the_chart_when_the_cluster_has_price_control():
+    batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
+    grids = [{"entity": "sensor.virtual_p1_meter_grid_power", "name": "Virtual P1"}]
+    view = CD.cluster_view(group(), batteries, grids, True, CLONES, None, "sensor.price_control_plan",
+                           f"sensor.{GROUP_PRICE}plan")
+    names = [s["name"] for s in chart(view)["series"]]
+    assert "Plan (real battery)" in names and "Plan (cluster)" in names
+    real = chart(CD.cluster_view(group(), [], [], False, None, None, None, "sensor.price_control_plan"))
+    assert "Plan" in [s["name"] for s in real["series"]]
+
+
+def test_the_price_control_tab_of_the_cluster():
+    view = group_price_view()
+    assert view["title"] == "Price Control" and view["path"] == "price-control" and view["icon"] == "mdi:cash-clock"
+    body = text(view)
+    # Its own Price Control, the cluster's mode, nothing of a battery.
+    assert f"switch.{GROUP_PRICE[:-1]}" in body and f"sensor.{GROUP_PRICE}plan" in body
+    assert "select.virtual_cluster_operation_mode" in body
+    assert "zendure_solarflow" not in body and CD.NO_BATTERY not in body
+    assert '"sensor.price_control_status"' not in body
+
+
+def test_the_price_control_tab_charts_the_cluster():
+    apex = [c for c in cards(group_price_view()) if c.get("type") == "custom:apexcharts-card"]
+    assert len(apex) == 1
+    names = [s["name"] for s in apex[0]["series"]]
+    assert names[0] == "Virtual P1" and "Plan" in names and "SoC cluster" in names
+    assert "Real battery" not in names and "Plan (real battery)" not in names
+
+
+def test_without_price_control_the_dashboard_is_as_before():
+    # No Price Control for the cluster: the same tabs as in v1.7.6.
+    assert [v["title"] for v in virtual_views()] == ["Cluster", "Virtual copy 1", "Virtual copy 2", "Virtual copy 3"]
+    assert "Plan (cluster)" not in [s["name"] for s in chart(virtual_views()[0])["series"]]
+
+
+def test_the_cluster_tab_shows_who_sets_the_mode():
+    # v1.8.0: in the top row, named Price Control, after the grid tiles and before Integration;
+    # not under Operation mode, neither as a tile nor as a badge.
+    g = {**group(), "price_status": f"sensor.{GROUP_PRICE}status"}
+    view = CD.cluster_view(g, [], [], True, CLONES)
+    top = view["sections"][0]["cards"]
+    tile = next(c for c in top if c.get("entity") == f"sensor.{GROUP_PRICE}status")
+    assert tile["name"] == "Price Control" and tile["icon"] == "mdi:cash-clock"
+    names = [c.get("name") for c in top]
+    assert names.index("Price Control") == names.index("Integration") - 1
+    section = next(s for s in view["sections"] if s["cards"][0].get("heading") == "Operation mode")
+    assert f"sensor.{GROUP_PRICE}status" not in [c.get("entity") for c in section["cards"]]
+    assert f"sensor.{GROUP_PRICE}status" not in [b["entity"] for b in section["cards"][0]["badges"]]
+    # Without a Price Control of its own: as before.
+    assert "price_control" not in text(virtual_views()[0])
+
+
+def test_the_cluster_plan_shows_on_a_dark_theme():
+    # v1.8.0: grey as on the battery dashboard, not near-black; the real battery's plan light grey and dashed next to it.
+    plan = next(s for s in chart(group_price_view())["series"] if s["name"] == "Plan")
+    assert plan["color"] == "#757575"
+    batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
+    view = CD.cluster_view(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan",
+                           f"sensor.{GROUP_PRICE}plan")
+    series = {s["name"]: s for s in chart(view)["series"]}
+    assert series["Plan (cluster)"]["color"] == "#757575"
+    assert series["Plan (real battery)"]["color"] == "#BDBDBD" and series["Plan (real battery)"]["stroke_dash"] == 4
+    alone = CD.cluster_view(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan")
+    assert next(s for s in chart(alone)["series"] if s["name"] == "Plan (real battery)")["color"] == "#757575"

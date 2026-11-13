@@ -180,7 +180,7 @@ SMART_RESET_GRACE_S = 60
 # above zero that its standby stop has not cleared yet, by entry (v1.6.10).
 # Standby that is already the stored mode at startup writes nothing: a user who
 # only watches the battery, or set its limits by hand in standby, keeps them
-# across a restart or a reload (review of the integration). The one
+# across a restart or a reload. The one
 # exception is a reload right after this integration wrote a limit itself — a
 # battery leaving a cluster returns to its own standby while the cluster's
 # limit still runs — and that is what this set remembers. It lives as long as
