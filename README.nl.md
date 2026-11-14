@@ -185,7 +185,7 @@ Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical referenc
 
 **De 1.8-reeks** gaat over **één dagplan** voor een heel cluster — echt of virtueel — met een eigen Price control; een vast contract dat op de **zon** stuurt; en een batterij die niet meer **achter korte pieken aanjaagt**, met een teller die dat laat zien. Ze bouwt voort op de clusters van de 1.7-reeks: *SOC protection* wacht op het goedkoopste kwartier of op de zon, de volste batterij werkt eerst, en het cluster krijgt een tabblad *History* met het zonnevermogen. De [changelog](./README2.md#-changelog) noemt wat er veranderde en de eerdere releases.
 
-**Laatste release – v1.8.0:** Price control kan een batterijcluster of het virtuele cluster sturen: één dagplan voor al zijn batterijen samen, de werkmodus van het cluster daaruit gezet, en een tab Price Control op het clusterdashboard; op het virtuele cluster een dagplan voor batterijen die je niet hebt.
+**Laatste release – v1.8.1:** een batterijcluster of het virtuele cluster met alle batterijen leeg kan wachten op het goedkoopste moment uit zijn eigen Price control voordat het ze laadt, zoals een losse batterij; de tab Cluster meldt een batterij met een fout of een tweede regelaar. **v1.8.0:** Price control kan een batterijcluster of het virtuele cluster sturen: één dagplan voor al zijn batterijen samen, de werkmodus van het cluster daaruit gezet, en een tab Price Control op het clusterdashboard; op het virtuele cluster een dagplan voor batterijen die je niet hebt.
 
 <a id="meer"></a>
 

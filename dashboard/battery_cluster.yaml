@@ -1,5 +1,5 @@
 # ============================================================
-# BATTERY CLUSTER DASHBOARD - v1.8.0
+# BATTERY CLUSTER DASHBOARD - v1.8.1
 # ============================================================
 #
 # The dashboard "Cluster" as the integration builds it for a
@@ -43,6 +43,22 @@ views:
         entity: sensor.battery_cluster_status
       - type: entity
         entity: select.battery_cluster_operation_mode
+      - type: entity
+        entity: binary_sensor.zendure_solarflow_3000_mix_ac_error
+        name: 'Zendure SolarFlow 3000 Mix AC+: Error'
+        color: red
+        visibility:
+        - condition: state
+          entity: binary_sensor.zendure_solarflow_3000_mix_ac_error
+          state: 'on'
+      - type: entity
+        entity: binary_sensor.zendure_solarflow_3000_mix_ac_second_controller
+        name: 'Zendure SolarFlow 3000 Mix AC+: Second controller'
+        color: red
+        visibility:
+        - condition: state
+          entity: binary_sensor.zendure_solarflow_3000_mix_ac_second_controller
+          state: 'on'
     - type: tile
       entity: sensor.battery_cluster_state_of_charge
       name:

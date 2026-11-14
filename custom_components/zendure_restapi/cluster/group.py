@@ -63,6 +63,11 @@ MIN_GAP_S = 15.0
 # this many points, as a single battery does (SOC_REARM_POINTS in const.py;
 # this package imports nothing from the integration).
 PROTECT_REARM_POINTS = 5
+# With Price Control (v1.8.1) the group waits at most this long for the
+# cheapest period, and not at all once a battery sits this many points under
+# its floor: SOC_PROTECT_WINDOW_H and SOC_PROTECT_HARD_POINTS in const.py.
+PROTECT_WINDOW_S = 6 * 3600
+PROTECT_HARD_POINTS = 2
 # The primary is "at its cap" within this of it, and "at nothing" below this.
 CAP_MARGIN_W = 50
 # Peaks (v1.7.4): the secondaries are added only once the demand has stayed
@@ -149,6 +154,11 @@ class Distributor:
         self.demand: float = 0.0
         # SOC protection of the group runs (v1.7.6).
         self.protecting = False
+        # With Price Control (v1.8.1): since when every battery is under its
+        # floor, what it waits for, and why it charges now.
+        self.protect_since: float | None = None
+        self.protect_waits: str | None = None
+        self.protect_why: str | None = None
 
     # ── Primary ───────────────────────────────────────────────────────────
 
@@ -196,6 +206,7 @@ class Distributor:
         roles: dict[str, Role],
         readings: list[Reading],
         grid: float | None,
+        now: float = 0.0,
     ) -> Decision | None:
         """Charge the group from the grid when every battery is under its floor (v1.7.6).
 
@@ -205,16 +216,26 @@ class Distributor:
         With all of them under their floor none discharges, and each charges
         at its own cap to its floor + PROTECT_REARM_POINTS; one that is there
         stands still until the last is. Only in the smart modes: standby means
-        hands off, and the quick modes are the operator's. Direct, without
-        looking at the price; protection with Price Control on the cluster
-        follows with cluster Price Control (1.8). None when it does not act.
+        hands off, and the quick modes are the operator's. With `price_control`
+        (v1.8.1) the start may wait for the cheapest period of the cluster's
+        Price Control (_protect_wait); once it charges it carries on whatever
+        the price. None when it does not act.
         """
         if not s.soc_protection:
             self.protecting = False
+            self._protect_reset()
             return None
         if not self.protecting:
             if not all(r.below_floor for r in active):
+                self._protect_reset()
                 return None
+            waits = self._protect_wait(active, s, now)
+            if waits is not None:
+                # Meanwhile the group runs as usual: discharging is closed for a
+                # battery under its floor, surplus still charges it.
+                self.protect_waits = waits
+                return None
+            self.protect_waits = None
             self.protecting = True
 
         def short(r: Reading) -> bool:
@@ -223,6 +244,7 @@ class Distributor:
         charging = [r for r in active if short(r) and not r.full]
         if not charging:
             self.protecting = False
+            self._protect_reset()
             return None
         for r in charging:
             roles[r.key] = Role(ROLE_PROTECT, CHARGE, r.cap(CHARGE))
@@ -232,9 +254,53 @@ class Distributor:
         self.idle_since = None
         self.above_since = None
         names = ", ".join(f"{r.name} to {r.floor + PROTECT_REARM_POINTS:g} %" for r in charging)
+        why = f"; {self.protect_why}" if self.protect_why else ""
         return self._finish(
-            roles, "protecting", f"every battery under its SOC floor; charging {names}", readings, grid,
+            roles, "protecting", f"every battery under its SOC floor; charging {names}{why}", readings, grid,
         )
+
+    def _protect_reset(self) -> None:
+        """Not every battery under its floor, or protection off: forget a wait."""
+        self.protect_since = None
+        self.protect_waits = None
+        self.protect_why = None
+
+    def _protect_wait(self, active: list[Reading], s: GroupSettings, now: float) -> str | None:
+        """With Price Control: what the group waits for, or None to charge now (v1.8.1).
+
+        As a single battery does (v1.7.6): the cheapest period of the cluster's
+        Price Control within PROTECT_WINDOW_S of the moment every battery was
+        under its floor, of equal ones the first. One period is enough: from
+        just under the floor to 5 points above it is minutes at full power.
+        Direct, with the reason in the status, without Price Control or a price
+        list, once the window is over, or with a battery PROTECT_HARD_POINTS or
+        more under its floor.
+        """
+        self.protect_why = None
+        if not s.soc_protection_price:
+            return None
+        if self.protect_since is None:
+            self.protect_since = now
+        if any(r.soc is not None and r.floor is not None and r.soc <= r.floor - PROTECT_HARD_POINTS for r in active):
+            self.protect_why = f"direct: {PROTECT_HARD_POINTS} points or more under the floor"
+            return None
+        deadline = self.protect_since + PROTECT_WINDOW_S
+        if now >= deadline:
+            self.protect_why = f"direct: waited {PROTECT_WINDOW_S // 3600} h"
+            return None
+        periods = [p for p in s.price_periods if p[0] < deadline and p[1] > now]
+        if not periods:
+            self.protect_why = "direct: no prices from Price Control"
+            return None
+        best = min(periods, key=lambda p: (round(p[2], 5), p[0]))
+        if best[0] <= now:
+            self.protect_why = f"cheapest price within {PROTECT_WINDOW_S // 3600} h: {best[2]:g} per kWh"
+            return None
+        current = next((p for p in periods if p[0] <= now < p[1]), None)
+        text = f"every battery under its SOC floor: charges at {best[3]}, {best[2]:g} per kWh"
+        if current is not None:
+            text += f" (now {current[2]:g})"
+        return text
 
     # ── Decision ─────────────────────────────────────────────────────────
 
@@ -249,6 +315,8 @@ class Distributor:
         roles: dict[str, Role] = {r.key: Role(ROLE_STANDBY) for r in readings}
 
         if s.mode == STANDBY or not active:
+            # Hands off: a wait for a cheaper period starts again afterwards (v1.8.1).
+            self._protect_reset()
             self.primary = None
             self.last_split = None
             status = "standby" if s.mode == STANDBY else "idle"
@@ -256,6 +324,7 @@ class Distributor:
             return self._finish(roles, status, reason, readings, grid)
 
         if s.mode in (QUICK_CHARGE, QUICK_DISCHARGE):
+            self._protect_reset()
             self.primary = None
             self.last_split = None
             for r in active:
@@ -265,9 +334,10 @@ class Distributor:
 
         if s.mode not in SMART:
             self.protecting = False
+            self._protect_reset()
             return self._finish(roles, "idle", f"unknown mode {s.mode}", readings, grid)
 
-        protected = self._protect(active, s, roles, readings, grid)
+        protected = self._protect(active, s, roles, readings, grid, now)
         if protected is not None:
             return protected
 
@@ -450,4 +520,7 @@ class Distributor:
                 for key, role in roles.items()
             },
         }
+        if self.protect_waits:
+            # SOC protection with Price Control waits for its period (v1.8.1).
+            attributes["soc_protection_waits"] = self.protect_waits
         return Decision(roles, self.primary, status, reason, changed, attributes)

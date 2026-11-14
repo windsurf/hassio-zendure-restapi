@@ -120,6 +120,11 @@ class GroupSettings:
     # SOC protection of the group (v1.7.6): with every battery under its floor
     # they charge from the grid to their floor + 5. Off unless set.
     soc_protection: bool = False
+    # Since v1.8.1 it may wait for the cheapest period of the cluster's own
+    # Price Control: (start, end, import price, start as HH:MM local) per
+    # period not yet over, start and end as epoch seconds. Empty without one.
+    soc_protection_price: bool = False
+    price_periods: tuple = ()
 
 
 class Member(Protocol):

@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.0"
+INTEGRATION_VERSION = "1.8.1"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -225,15 +225,16 @@ OPT_DISCHARGE_BUFFER = "discharge_buffer"
 # SOC protection (v1.7.6: a choice, until v1.7.5 a switch on or off):
 # off; direct, at once; or price_control, in the cheapest period within
 # SOC_PROTECT_WINDOW_H from the prices of the battery's Price Control entry,
-# directly without them. A cluster offers off and direct (price_control with
-# Price Control for a cluster in 1.8). A stored True or False of the switch
-# reads as direct or off (soc_protection_choice).
+# directly without them. A cluster offers the same three since v1.8.1, with
+# the prices of the cluster's own Price Control (until v1.8.0 off and direct).
+# A stored True or False of the switch reads as direct or off
+# (soc_protection_choice).
 OPT_SOC_PROTECTION = "soc_protection"
 SOC_PROTECT_OFF = "off"
 SOC_PROTECT_DIRECT = "direct"
 SOC_PROTECT_PRICE = "price_control"
 SOC_PROTECT_MODES = (SOC_PROTECT_OFF, SOC_PROTECT_DIRECT, SOC_PROTECT_PRICE)
-CLUSTER_SOC_PROTECT_MODES = (SOC_PROTECT_OFF, SOC_PROTECT_DIRECT)
+CLUSTER_SOC_PROTECT_MODES = SOC_PROTECT_MODES
 
 
 def soc_protection_choice(value: object) -> str:

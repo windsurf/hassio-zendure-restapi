@@ -132,14 +132,39 @@ def _tile(entity_id: str | None, **extra: Any) -> dict[str, Any] | None:
 
 
 def _section(heading: str, icon: str, cards: list[Any], span: int = 2,
-             badges: list[str] | None = None) -> dict[str, Any] | None:
+             badges: list[Any] | None = None) -> dict[str, Any] | None:
     cards = [c for c in cards if c]
     if not cards:
         return None
     head: dict[str, Any] = {"type": "heading", "heading": heading, "heading_style": "title", "icon": icon}
     if badges:
-        head["badges"] = [{"type": "entity", "entity": b} for b in badges]
+        # An entity id, or a badge of its own (v1.8.1: shown only on a fault).
+        head["badges"] = [b if isinstance(b, dict) else {"type": "entity", "entity": b} for b in badges]
     return {"type": "grid", "column_span": span, "cards": [head, *cards]}
+
+
+# The faults of a battery that the Cluster tab flags (v1.8.1): its Error and
+# its Second controller, as the battery dashboard has them in its headings.
+FAULTS = (("error", "Error"), ("second_controller", "Second controller"))
+
+
+def fault_badges(batteries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A badge per battery fault, visible only while it is on (v1.8.1).
+
+    For the batteries of a battery cluster; the copies of a Virtual cluster
+    have neither entity. Named after the battery, so the badge says which one.
+    """
+    badges = []
+    for battery in batteries:
+        for key, label in FAULTS:
+            entity = battery.get(key)
+            if entity:
+                badges.append({
+                    "type": "entity", "entity": entity, "name": f"{battery['name']}: {label}",
+                    "color": "red",
+                    "visibility": [{"condition": "state", "entity": entity, "state": "on"}],
+                })
+    return badges
 
 
 def _markdown(content: str) -> dict[str, Any]:
@@ -422,7 +447,11 @@ def cluster_view(
             # v1.7.3: which version runs, as on the battery dashboard.
             _tile(group.get("status"), name="Integration", icon="mdi:tag-outline",
                   state_content="integration_version"),
-        ], span=4, badges=[e for e in (group.get("soc"), group.get("status"), group.get("mode")) if e]),
+        ], span=4, badges=[
+            *(e for e in (group.get("soc"), group.get("status"), group.get("mode")) if e),
+            # v1.8.1: a battery of the group with a fault or a second controller.
+            *fault_badges(members),
+        ]),
         _section("Operation mode", "mdi:state-machine", [
             _markdown(status_text(group, virtual)) if group.get("status") else None,
             _tile(group.get("mode"), icon="mdi:state-machine", features_position="bottom",
@@ -644,6 +673,11 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
             "power": f"sensor.{prefix}battery_power" if f"sensor.{prefix}battery_power" in known else None,
             "soc": f"sensor.{prefix}state_of_charge" if f"sensor.{prefix}state_of_charge" in known else None,
         })
+        if name != REAL:
+            # v1.8.1: the faults of a member, flagged on the Cluster tab.
+            for key, _label in FAULTS:
+                entity = f"binary_sensor.{prefix}{key}"
+                batteries[-1][key] = entity if entity in known else None
         if args.get("grid") and all(g["entity"] != args["grid"] for g in grids):
             grids.append({"entity": args["grid"], "name": grid_name})
         # The copies of a Virtual cluster have no PV: the real battery's is the cluster's.

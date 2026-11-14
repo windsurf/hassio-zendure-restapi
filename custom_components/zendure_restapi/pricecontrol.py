@@ -195,6 +195,27 @@ def battery_state(
     )
 
 
+def group_price_periods(hass: HomeAssistant, cluster_id: str) -> tuple:
+    """The import prices of the cluster's own Price Control, for SOC protection (v1.8.1).
+
+    (start, end, import price, start as HH:MM local) per period not yet
+    over, start and end as epoch seconds: what the cluster package takes,
+    which knows nothing of Home Assistant. Empty without a Price Control for
+    this cluster, or without a price list; it need not steer.
+    """
+    for item in hass.data.get(DOMAIN, {}).values():
+        if isinstance(item, PriceControl) and item.group and item.battery_entry_id == cluster_id:
+            try:
+                return tuple(
+                    (start.timestamp(), end.timestamp(), price, dt_util.as_local(start).strftime("%H:%M"))
+                    for start, end, price in item.import_periods()
+                )
+            except Exception:  # noqa: BLE001 - a price list must not stop protection
+                _LOGGER.debug("No import periods from the cluster's price control", exc_info=True)
+                return ()
+    return ()
+
+
 def group_state(members: list[Any]) -> tuple[float, float, float, float] | None:
     """Usable and stored kWh, charge and discharge kW of a cluster (v1.8.0).
 
@@ -594,8 +615,9 @@ class PriceControl:
     def import_periods(self) -> list[tuple[Any, Any, float]]:
         """(start, end, import price) of the periods not yet over (v1.7.6).
 
-        For SOC protection with Price Control on the battery: whether or not
-        Price Control steers, as long as it has a price list.
+        For SOC protection with Price Control on the battery, and since v1.8.1
+        on the cluster: whether or not Price Control steers, as long as it has
+        a price list.
         """
         tariff = self.tariff()
         return [

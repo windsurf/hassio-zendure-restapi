@@ -342,3 +342,17 @@ def test_the_cluster_plan_shows_on_a_dark_theme():
     assert series["Plan (real battery)"]["color"] == "#BDBDBD" and series["Plan (real battery)"]["stroke_dash"] == 4
     alone = CD.cluster_view(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan")
     assert next(s for s in chart(alone)["series"] if s["name"] == "Plan (real battery)")["color"] == "#757575"
+
+
+def test_a_fault_of_a_battery_shows_on_the_cluster_tab():
+    # v1.8.1: a badge per battery for Error and Second controller, only while on.
+    members = [{"name": "Mix A", "power": None, "soc": None,
+                "error": "binary_sensor.mix_a_error", "second_controller": "binary_sensor.mix_a_second_controller"},
+               {"name": "Mix B", "power": None, "soc": None, "error": None, "second_controller": None}]
+    view = CD.cluster_view(group(), members, [], False)
+    badges = view["sections"][0]["cards"][0]["badges"]
+    faults = [b for b in badges if "visibility" in b]
+    assert [b["name"] for b in faults] == ["Mix A: Error", "Mix A: Second controller"]
+    assert faults[0]["visibility"] == [{"condition": "state", "entity": "binary_sensor.mix_a_error", "state": "on"}]
+    # A Virtual cluster: the copies have none, so nothing changes.
+    assert not any("visibility" in b for b in virtual_views()[0]["sections"][0]["cards"][0]["badges"])

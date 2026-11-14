@@ -185,7 +185,7 @@ Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical referenc
 
 **Die 1.8-Reihe** handelt von **einem Tagesplan** für einen ganzen Cluster — echt oder virtuell — mit eigener Price control; einem Festpreisvertrag, der nach der **Sonne** steuert; und einer Batterie, die kurzen Spitzen **nicht mehr hinterherläuft**, mit einem Zähler, der das zeigt. Sie baut auf den Clustern der 1.7-Reihe auf: *SOC protection* wartet auf die günstigste Viertelstunde oder die Sonne, die vollste Batterie arbeitet zuerst, und der Cluster bekommt einen Tab *History* mit der Solarleistung. Das [Changelog](./README2.md#-changelog) nennt, was sich geändert hat, und die früheren Versionen.
 
-**Neueste Version – v1.8.0:** Price control kann einen Batterie-Cluster oder den virtuellen Cluster steuern: ein Tagesplan für alle seine Batterien zusammen, der Betriebsmodus des Clusters daraus gesetzt, und ein Tab Price Control auf dem Cluster-Dashboard; auf dem virtuellen Cluster ein Tagesplan für Batterien, die du nicht besitzt.
+**Neueste Version – v1.8.1:** ein Batterie-Cluster oder der virtuelle Cluster mit allen Batterien leer kann auf den günstigsten Zeitraum aus seiner eigenen Price control warten, bevor er sie lädt, wie eine einzelne Batterie; der Tab Cluster meldet eine Batterie mit einem Fehler oder einem zweiten Regler. **v1.8.0:** Price control kann einen Batterie-Cluster oder den virtuellen Cluster steuern: ein Tagesplan für alle seine Batterien zusammen, der Betriebsmodus des Clusters daraus gesetzt, und ein Tab Price Control auf dem Cluster-Dashboard; auf dem virtuellen Cluster ein Tagesplan für Batterien, die du nicht besitzt.
 
 <a id="mehr"></a>
 

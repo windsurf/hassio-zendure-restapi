@@ -111,6 +111,7 @@ from .const import (
     OPT_START_AFTER,
     OPT_SOC_PROTECTION,
     SOC_PROTECT_OFF,
+    SOC_PROTECT_PRICE,
     soc_protection_choice,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
@@ -301,6 +302,24 @@ async def _async_setup_price(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # ── Battery cluster (v1.7.0) ─────────────────────────────────────────
 
 
+def protection_settings(hass: HomeAssistant, cluster_id: str, settings: Any) -> dict[str, Any]:
+    """SOC protection of a cluster for its GroupSettings (v1.7.6; price_control v1.8.1).
+
+    With price_control the prices of the cluster's own Price Control go
+    along; without one the list is empty and the cluster charges directly.
+    """
+    from .pricecontrol import group_price_periods
+
+    choice = soc_protection_choice(settings.get(OPT_SOC_PROTECTION))
+    price = choice == SOC_PROTECT_PRICE
+    return {
+        "soc_protection": choice != SOC_PROTECT_OFF,
+        "soc_protection_price": price,
+        "price_periods": group_price_periods(hass, cluster_id) if price else (),
+    }
+
+
+
 def _member_ids(entry: ConfigEntry) -> list[str]:
     """The battery entries under a cluster entry, in subentry order."""
     return [
@@ -339,7 +358,7 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             concentrate_below=settings.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=settings.get_int(OPT_REDISTRIBUTE),
             start_after=settings.get_int(OPT_START_AFTER),
-            soc_protection=soc_protection_choice(settings.get(OPT_SOC_PROTECTION)) != SOC_PROTECT_OFF,
+            **protection_settings(hass, entry.entry_id, settings),
         )
 
     signal = f"{SIGNAL_CLUSTER}_{entry.entry_id}"

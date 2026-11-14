@@ -101,7 +101,7 @@ Or by hand: on Home Assistant 2026.11 or later, **Settings → Marketplace**, se
 
 **One controller only.** Switch off whatever else steers the battery: Zendure's own control in the app (ZENKI — *Add to HEMS* off, or *Custom Mode* without rules), another integration, or a Home Assistant automation that sets the battery's mode or limits. Two controllers on one battery undo each other; the integration warns you with the *Second controller* sensor. See [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
 
-**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: add it with **Add integration → Zendure RestAPI → External grid meter from Home Assistant**; then `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
+**Your meter:** a HomeWizard P1 meter is offered under *Discovered*; click **Add**. Others: **Add integration → Zendure RestAPI → External grid meter over IP**, choose YouLess, EcoTracker, Shelly or Zendure and enter the IP address. A meter that is already in Home Assistant: **External grid meter from Home Assistant**. Done — `auto` picks it up. A Zendure P1 meter is found as a device of its own and needs nothing more.
 
 ---
 
@@ -185,7 +185,7 @@ Everything this page leaves out is in **[README2.md – Technical reference](htt
 
 **The 1.8 series** is about **one day plan** for a whole cluster — real or virtual — with its own Price control; a fixed-price contract steered by the **sun**; and a battery that **no longer chases** short peaks, with a counter that shows it. It builds on the clusters of the 1.7 series: SOC protection waits for the cheapest quarter or the sun, the fullest battery works first, and the cluster gets a *History* tab with the solar power. The [changelog](./README2.md#-changelog) lists what changed and the earlier releases.
 
-**Latest release – v1.8.0:** Price control can steer a battery cluster or a Virtual cluster: one day plan for all its batteries together, the cluster's Operation mode set from it, and a Price Control tab on the cluster dashboard; on a Virtual cluster a day plan for batteries you do not own.
+**Latest release – v1.8.1:** a battery cluster or a Virtual cluster with all its batteries empty can wait for the cheapest period of its own Price control before it charges them, as a single battery can; the Cluster tab flags a battery with a fault or a second controller. **v1.8.0:** Price control can steer a battery cluster or a Virtual cluster: one day plan for all its batteries together, the cluster's Operation mode set from it, and a Price Control tab on the cluster dashboard; on a Virtual cluster a day plan for batteries you do not own.
 
 <a id="more"></a>
 

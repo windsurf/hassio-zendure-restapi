@@ -115,8 +115,8 @@ CLUSTER_SELECTS: tuple[tuple[SelectEntityDescription, str], ...] = (
     # SOC protection of the group (v1.7.6): the same key, and so the same name
     # in every language, as on a battery. direct by default: with every battery
     # under its lower SOC limit the cluster charges them all from the grid,
-    # each to its limit + 5. price_control comes with Price Control for a
-    # cluster (1.8).
+    # each to its limit + 5. price_control since v1.8.1: in the cheapest period
+    # of the cluster's own Price Control, directly without one.
     (SelectEntityDescription(
         key="soc_protection", translation_key="soc_protection", name="SOC protection",
         options=list(CLUSTER_SOC_PROTECT_MODES), icon="mdi:battery-lock",
@@ -232,7 +232,7 @@ class ClusterSelect(_Setting, SelectEntity):
     def current_option(self) -> str | None:
         value = self._settings.get(self._key)
         options = self.entity_description.options or ()
-        # SOC protection: price_control is not offered on a cluster (v1.7.6).
+        # An option the select does not offer falls back to the last one.
         return value if value in options or not options else options[-1]
 
     async def async_select_option(self, option: str) -> None:

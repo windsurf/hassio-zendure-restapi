@@ -59,9 +59,6 @@ from ..const import (
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     OPT_START_AFTER,
-    OPT_SOC_PROTECTION,
-    SOC_PROTECT_OFF,
-    soc_protection_choice,
     OPT_STOP_AFTER,
     OPT_STOP_CHARGE_BELOW,
     OPT_STOP_DISCHARGE_BELOW,
@@ -274,8 +271,14 @@ class VirtualCluster:
             concentrate_below=s.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=s.get_int(OPT_REDISTRIBUTE),
             start_after=s.get_int(OPT_START_AFTER),
-            soc_protection=soc_protection_choice(s.get(OPT_SOC_PROTECTION)) != SOC_PROTECT_OFF,
+            **self._protection(),
         )
+
+    def _protection(self) -> dict[str, Any]:
+        """SOC protection of the group, with the prices of its own Price Control (v1.8.1)."""
+        from .. import protection_settings
+
+        return protection_settings(self.hass, self.entry.entry_id, self.settings)
 
     def load_factor(self) -> float:
         try:
