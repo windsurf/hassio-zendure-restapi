@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Řízení podle ceny",
-        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: se dvěma pevnými cenami, nebo s denním plánem nad cenami na dnešek a zítřek (Nord Pool, EPEX Spot, Zonneplan, …). Je vypnuto, dokud ho nezapnete. Můžete zvolit i bateriový cluster nebo Virtual cluster: denní plán pak plánuje pro všechny jeho baterie společně a nastavuje provozní režim clusteru.",
+        "description": "Nastavuje provozní režim baterie podle ceny elektřiny: s levnou a drahou cenou, nebo s denním plánem nad cenami na dnešek a zítřek (Nord Pool, EPEX Spot, Zonneplan, …). Je vypnuto, dokud ho nezapnete. Můžete zvolit i bateriový cluster nebo Virtual cluster: denní plán pak plánuje pro všechny jeho baterie společně a nastavuje provozní režim clusteru. S pevným tarifem se řídí sluncem: jeden režim ve dne, druhý v noci.",
         "data": {
           "battery_entry": "Baterie nebo cluster",
           "price_entity": "Cenový senzor (cena za kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena. EPEX Spot: senzor Market price: spotová cena; senzor Total price: nákupní cena. Zonneplan: nákupní cena.",
-          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie."
+          "price_entity": "Cenová pásma: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie. Pevný tarif: není potřeba."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Pro denní plán. Nord Pool (HACS) s DPH a bez dalších nákladů: spotová cena s DPH. Bez DPH: spotová cena. S celým tarifem v dalších nákladech: nákupní cena. EPEX Spot: senzor Market price: spotová cena; senzor Total price: nákupní cena. Zonneplan: nákupní cena.",
-          "price_entity": "Pevné ceny: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie."
+          "price_entity": "Cenová pásma: jakýkoli senzor s aktuální cenou. Denní plán: senzor se seznamem cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e nebo Frank Energie. Pevný tarif: není potřeba."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Pevné ceny",
-          "day_plan": "Denní plán"
+          "price_bands": "Cenová pásma",
+          "day_plan": "Denní plán",
+          "fixed_tariff": "Pevný tarif"
         },
         "name": "Rozhodování"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Vypnuto",
           "direct": "Přímo",
-          "price_control": "Price Control (nejlevněji do 6 h)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Režim od východu slunce"
+      },
+      "sunset_mode": {
+        "name": "Režim od západu slunce"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Levné",
           "between": "Mezi",
           "expensive": "Drahé",
-          "paused": "Pozastaveno (koordinováno)"
+          "paused": "Pozastaveno (koordinováno)",
+          "sun_up": "Den (slunce nahoře)",
+          "sun_down": "Noc (slunce dole)"
         },
         "name": "Stav",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Extra response time"
+      },
+      "fixed_import_price": {
+        "name": "Pevná nákupní cena"
+      },
+      "fixed_export_price": {
+        "name": "Pevná výkupní cena"
+      },
+      "sunrise_offset": {
+        "name": "Posun východu slunce"
+      },
+      "sunset_offset": {
+        "name": "Posun západu slunce"
       }
     },
     "switch": {

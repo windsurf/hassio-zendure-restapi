@@ -19,12 +19,15 @@ batteries ever sees them.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 
 from ..const import (
     CONF_MAX_SHARE,
@@ -46,6 +49,7 @@ from ..const import (
     OPT_LOAD_FACTOR,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
+    OPT_VIRTUAL_STATE,
     OPT_PRICE_CONTROL,
     OPT_REDISTRIBUTE,
     OPT_SOC_OFFSET_1,
@@ -81,6 +85,10 @@ from .device import VirtualDevice
 from .meter import VirtualMeter
 
 _LOGGER = logging.getLogger(__name__)
+
+# The copies' state across a restart (v1.8.2): kept in the options of the cluster,
+# like every setting; written when it changed, checked every 5 minutes and at a stop.
+STATE_SAVE_INTERVAL = timedelta(minutes=5)
 
 RUNTIME_SUFFIX = "_runtime"
 # A clone's start-of-test state of charge stays inside this band.
@@ -218,6 +226,7 @@ class VirtualCluster:
         # How the copies started (v1.7.2): the real SoC, the centring and the shift.
         self.start_info: dict[str, Any] = {}
         self.start_offsets: list[float] = []
+        self._running = False
 
     # ── What the entities read ──────────────────────────────────────────
 
@@ -415,7 +424,8 @@ class VirtualCluster:
             OPT_PRICE_CONTROL: False,
             OPT_TAKE_PART: True,
         })
-        socs = self.start_socs()
+        restored = self.restored_copies(self.entry.options.get(OPT_VIRTUAL_STATE))
+        socs = [c["soc"] for c in restored] if restored else self.start_socs()
         tail = self.entry.entry_id[-6:].upper()
         for index, soc in enumerate(socs, start=1):
             serial = f"SIMULATED{index}{tail}"
@@ -437,6 +447,9 @@ class VirtualCluster:
             member = ZendureMember(f"clone{index}", name, data, controller, view, settings)
             self.clones.append(Clone(index, name, model, device, coordinator, settings, view, controller, member))
             self.clones[-1].start_offset = self.start_offsets[index - 1]
+            if restored:
+                controller._stopped = restored[index - 1]["stopped"]
+                controller._stopped_mode = restored[index - 1]["stopped_mode"]
 
         for clone in self.clones:
             await clone.coordinator.async_refresh()
@@ -452,6 +465,10 @@ class VirtualCluster:
         self.cluster.set_members([c.member for c in self.clones])
         self.meter.async_link()
         self._unsubs.append(async_dispatcher_connect(self.hass, SIGNAL_EXTERNALS_CHANGED, self._on_relinked))
+
+        self._unsubs.append(self.hass.bus.async_listen(EVENT_HOMEASSISTANT_STOP, self._on_ha_stop))
+        self._unsubs.append(async_track_time_interval(self.hass, self._on_save_tick, STATE_SAVE_INTERVAL))
+        self._running = True
         self.cluster.start()
         _LOGGER.info(
             "Virtual cluster: %d clone(s) of %s, %.1f kWh each, SoC %s, load factor %.1f, "
@@ -461,6 +478,8 @@ class VirtualCluster:
         )
 
     async def async_stop(self) -> None:
+        self.save_state()
+        self._running = False
         self.cluster.stop()
         for unsub in self._unsubs:
             unsub()
@@ -514,7 +533,79 @@ class VirtualCluster:
         self.cluster.distributor.primary = None
         self.cluster.distributor.last_split = None
         _LOGGER.info("Virtual cluster reset: SoC %s", [round(c.device.soc) for c in self.clones])
+        self.save_state()
         await self.cluster.async_evaluate()
+
+    # ── The copies' state across a restart (v1.8.2) ─────────────────────────
+    def snapshot(self) -> dict[str, Any]:
+        """What is kept: per copy the SoC (one decimal) and its stop memory."""
+        return {
+            "copies": [
+                {
+                    "soc": round(float(c.device.soc), 1),
+                    "stopped": c.controller._stopped,
+                    "stopped_mode": c.controller._stopped_mode,
+                }
+                for c in self.clones
+            ],
+        }
+
+    def restored_copies(self, saved: Any) -> list[dict[str, Any]] | None:
+        """The saved copies to start on, or None to centre afresh.
+
+        Restored in every Operation mode but Follow source, which follows the real
+        battery and so starts centred on it as before. Only a saved set with as many
+        copies as now and a SoC for each counts. The downtime is not simulated: the
+        copies pick up where they were. Sets `start_info` and `start_offsets`.
+        """
+        if str(self.settings.get(OPT_OPERATION_MODE)) == MODE_FOLLOW_SOURCE or not isinstance(saved, dict):
+            return None
+        copies = saved.get("copies")
+        if not isinstance(copies, list) or len(copies) != self.clone_count():
+            return None
+        restored = []
+        try:
+            for copy in copies:
+                stopped = copy.get("stopped")
+                restored.append({
+                    "soc": max(0.0, min(100.0, float(copy["soc"]))),
+                    "stopped": stopped if stopped in ("charge", "discharge") else None,
+                    "stopped_mode": copy.get("stopped_mode") if stopped in ("charge", "discharge") else None,
+                })
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return None
+        real = self._source_soc()
+        self.start_info = {"start_soc_real": round(real, 1)}
+        self.start_offsets = [round(c["soc"] - real, 1) for c in restored]
+        _LOGGER.info(
+            "Virtual cluster start: copies restored, SoC %s (real %.1f %%)",
+            [c["soc"] for c in restored], real,
+        )
+        return restored
+
+    @callback
+    def _on_save_tick(self, _now: Any) -> None:
+        self.save_state()
+
+    @callback
+    def _on_ha_stop(self, _event: Any) -> None:
+        self.save_state()
+
+    @callback
+    def save_state(self) -> None:
+        """Keep the copies' state in the options of the cluster, as every setting is.
+
+        Written when a copy's SoC or stop memory changed: every 5 minutes and at a
+        stop of the cluster or Home Assistant. Nothing before the copies run.
+        """
+        if not self._running or not self.clones:
+            return
+        snapshot = self.snapshot()
+        old = self.entry.options.get(OPT_VIRTUAL_STATE)
+        if isinstance(old, dict) and old.get("copies") == snapshot["copies"]:
+            return
+        self.hass.config_entries.async_update_entry(
+            self.entry, options={**self.entry.options, OPT_VIRTUAL_STATE: snapshot})
 
     def _capacity(self) -> float:
         """Usable kWh of the real battery: measured, else the nominal pack capacity."""

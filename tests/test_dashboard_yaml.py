@@ -2,8 +2,9 @@
 
 The YAML files for those who paste a dashboard by hand are built with the
 integration's own build_config and cluster_config by
-scripts/build_dashboard_yaml.py. A change to the template or the dashboard
-code without running the script fails here.
+scripts/build_dashboard_yaml.py. Since v1.8.2 the template lives in
+custom_components/zendure_restapi/templates/. A change to the template or the
+dashboard code without running the script fails here.
 """
 
 import importlib.util
@@ -23,9 +24,10 @@ def load_script():
     return module
 
 
-def test_the_script_reads_the_template_the_integration_reads():
-    assert D.TEMPLATE == ROOT / "custom_components" / "zendure_restapi" / "dashboard_zendure_restapi.json"
+def test_the_template_lives_in_templates():
+    assert D.TEMPLATE == ROOT / "custom_components" / "zendure_restapi" / "templates" / "dashboard_zendure_restapi.json"
     assert D.TEMPLATE.is_file()
+    assert not (ROOT / "custom_components" / "zendure_restapi" / "dashboard_zendure_restapi.json").exists()
 
 
 def test_the_yaml_is_what_the_template_gives():

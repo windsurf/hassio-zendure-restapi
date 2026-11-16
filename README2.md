@@ -120,6 +120,8 @@ Forget it, and the integration notices: the binary sensor *Second controller* tu
 
 The Marketplace (HACS) shows the version it last downloaded. After a manual install, or a copy of the files over such an install, that is not the version that runs: the tile *Integration* on the first tab of the dashboard (since v1.6.9, the attribute `integration_version` of *Controller status*) and the integration's page under **Settings → Devices & services** show the one that runs. A *Redownload* in HACS puts its own version back.
 
+**Pre-releases.** A new version comes out as a pre-release first, and the Marketplace offers it only when you ask for it: open *Zendure RestAPI* in the Marketplace, open the three-dot menu and choose *Include pre-releases*; the page then shows *Pre-releases included* and the update offers pre-releases too. *Exclude pre-releases* in the same menu returns to the latest release only. In HACS on Home Assistant before 2026.11, enable the *Pre-release* switch of the repository (disabled by default) and turn it on.
+
 ---
 
 <a id="manual-installation"></a>
@@ -136,7 +138,7 @@ Copy `custom_components/zendure_restapi/` into your Home Assistant `config/custo
 
 Devices broadcast over mDNS as `_zendure._tcp`, so Home Assistant usually discovers them and offers them under **Settings → Devices & Services**. If discovery does not fire, add the integration manually and enter the device IP.
 
-Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. A HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM is an entry of its own too — **Add integration → Zendure RestAPI → External grid meter** — and is linked the same way; see [An external P1 meter](#an-external-p1-meter).
+Add the battery and, if you have one, the Zendure P1 meter as **separate entries**. The controller links to the Zendure meter automatically when exactly one is present. A HomeWizard, YouLess, EcoTracker or Shelly Pro 3EM is an entry of its own too — **Add integration → Zendure RestAPI → External grid meter** — and is linked the same way; see [An external P1 meter](#an-external-p1-meter). *Add integration* adds one entry and leaves the existing entries as they are.
 
 The polling interval is configurable from 1 to 60 seconds under **Configure**. The default is 10 seconds, and it doubles as the control interval.
 
@@ -174,7 +176,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 
 ## 📊 Dashboard
 
-`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the switch, its status and decision, the day plan with its charge and discharge periods and the expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the fixed prices and the three modes per band (used by both the fixed prices and the day plan), the tariff, losses and margin — every setting a tile with a slider, a select or a toggle (see [Price control](#price-control)) — and the battery and grid now. The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed) and, under them, the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, and control with the realized margin (one section since v1.7.4). The view **Zendure RestAPI** has fifteen sections:
+`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the switch, its status and decision, the day plan with its charge and discharge periods and the expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the cheap and the expensive price and the three modes per band (used by both Price bands and the day plan), the fixed tariff when it is chosen, the tariff, losses and margin — every setting a tile with a slider, a select or a toggle (see [Price control](#price-control)) — and the battery and grid now. The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed) and, under them, the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, and control with the realized margin (one section since v1.7.4). The view **Zendure RestAPI** has fifteen sections:
 
 | Section | Content |
 |---|---|
@@ -204,7 +206,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 | Last 24 hours | the past day, from the 5-minute statistics |
 | Last 30 days | energy charged, discharged and from PV, per day |
 
-Every power axis, the day plan chart on *Price Control* included, follows the data in steps of 500 W and reaches at least a full charge below zero; a larger export moves it one step further down instead of cutting the line off. Without apexcharts-card a note takes the place of the charts. The charts read the recorder: if you filter it, include the grid power of the meter that steers, *Home output power*, *Grid input power*, *PV input power*, *State of charge*, *Energy charged*, *Energy discharged* and *PV energy*, or their lines stay empty.
+Every power axis, the day plan chart on *Price Control* included, follows the data in steps of 500 W (200 W for a battery under 1 kW), with the zero line always in view; below zero it goes only as far as charging or export reaches (since v1.8.2; before, it always reached a full charge below zero). Without apexcharts-card a note takes the place of the charts. The charts read the recorder: if you filter it, include the grid power of the meter that steers, *Home output power*, *Grid input power*, *PV input power*, *State of charge*, *Energy charged*, *Energy discharged* and *PV energy*, or their lines stay empty.
 
 **Created for you.** The dashboard **Zendure RestAPI** appears in the sidebar by itself once the battery is added, unless you untick *Create the Zendure RestAPI dashboard* while adding it (since v1.6.3; an installation updated to v1.6.3 gets it once at the next start). Later, under the battery's **Configure**, *Rebuild dashboard* makes it again if it is gone. It is an ordinary dashboard, editable like any other. Before saving it, the integration fits the view to this installation: the entity IDs of your battery and Zendure P1 meter, power gauges up to the battery's own AC limit, and no cards for entities your model does not report; a section whose entities are all missing goes with its text. Without a Zendure P1 meter the grid gauge reads the external meter and the P1 section is left out. An existing dashboard at `/zendure-restapi` is left as it is. To rebuild it, tick *Rebuild dashboard* under the battery's **Configure** (since v1.6.6; one tick since v1.7.4, until then together with *Create the Zendure RestAPI dashboard*): it gets a fresh configuration, and your own changes to it are lost. A notification says what happened.
 
@@ -218,6 +220,8 @@ Cards carry no `name:` override on purpose, so every label comes from the integr
 
 Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000 Mix AC+*. Home Assistant deviates on a name clash — appending `_2` — or after the device is renamed, so verify under **Developer tools → States** filtered on `zendure` if cards come up empty.
 
+**Unknown or missing sensors.** If the dashboard shows *unknown* or missing sensors, Home Assistant may have put the room name into the entity IDs. The dashboard is built on the prefix of the entity IDs: open *Configure*, tick *Rebuild dashboard* and save. If that does not help, open an issue with the diagnostics download attached.
+
 ---
 
 <a id="price-control"></a>
@@ -228,10 +232,11 @@ Entity IDs in the file were derived from the device name *Zendure SolarFlow 3000
 
 *The Price Control view: the day plan for today and tomorrow, measured up to now and planned after it, which quarters charge and which discharge, and the expected margin. With net metering on, the export price follows the import price.*
 
-Steering on dynamic tariffs, built in, in two ways:
+Three ways to decide, chosen with *Decision*:
 
-- **Fixed prices.** At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, and in between it follows the meter or rests. Any sensor that gives the current price per kWh will do: EPEX Spot, Nord Pool, Zonneplan, Frank Energie, or a template of your own.
+- **Price bands** (`price_bands`; called *Fixed prices*, `fixed_prices`, until v1.8.1). At or below the **cheap price** the battery charges, at or above the **expensive price** it discharges, and in between it follows the meter or rests. Any sensor that gives the current price per kWh will do: EPEX Spot, Nord Pool, Zonneplan, Frank Energie, or a template of your own.
 - **Day plan.** Over the prices of today and tomorrow from a price sensor with a price list — **EPEX Spot** or **Nord Pool** from HACS, the **Zonneplan** integration and [others](#other-price-sources-epex-spot-zonneplan-and-more) — it works out for every quarter of an hour whether to charge, discharge or neither — with an import price and an export price each from a formula of their own, the conversion losses on both sides, wear, and a minimum margin per kWh that every cycle has to clear.
+- **Fixed tariff** (`fixed_tariff`, v1.8.2). For a fixed-price contract, without a price sensor: one mode by day and one by night, by the sun. See [Fixed tariff](#fixed-tariff).
 
 ### Modes per band
 
@@ -252,12 +257,14 @@ Switching *Decision*, or switching *Net metering* on or off, fills the three mod
 
 | Choice | Cheap price mode | Expensive price mode | In-between mode |
 |---|---|---|---|
-| Fixed prices, net metering off | `quick_charge` | `smart_discharge_only` | `smart_matching` |
-| Fixed prices, net metering on | `quick_charge` | `smart_discharge_only` | `smart_matching` |
+| Price bands, net metering off | `quick_charge` | `smart_discharge_only` | `smart_matching` |
+| Price bands, net metering on | `quick_charge` | `smart_discharge_only` | `smart_matching` |
 | Day plan, net metering on | `quick_charge` | `quick_discharge` | `standby` |
 | Day plan, net metering off | `quick_charge` | `quick_discharge` | `smart_matching` |
 
-Why these. Fixed prices know only the price now, so they cover the house rather than sell, and hold the grid at zero in between: that is how the battery fills with solar surplus at all. The day plan knows the day ahead, and selling at full power in the dearest quarters is where its value is. With net metering the day plan does best with the battery resting in between: the plan already moves the energy to where the spread is, and holding the grid at zero would spend energy it set aside for a dearer quarter. Once net metering ends, solar surplus sent to the grid fetches far less than it saves later, and holding the grid at zero in between pays again. The figures are in [Replays](#replays).
+The fixed tariff has two modes of its own, filled in the same way: see [Fixed tariff](#fixed-tariff).
+
+Why these. *Price bands* knows only the price now, so it covers the house rather than sells, and holds the grid at zero in between: that is how the battery fills with solar surplus at all. The day plan knows the day ahead, and selling at full power in the dearest quarters is where its value is. With net metering the day plan does best with the battery resting in between: the plan already moves the energy to where the spread is, and holding the grid at zero would spend energy it set aside for a dearer quarter. Once net metering ends, solar surplus sent to the grid fetches far less than it saves later, and holding the grid at zero in between pays again. The figures are in [Replays](#replays).
 
 #### Why not fill the battery with free solar in between?
 
@@ -280,9 +287,9 @@ Price control is a device of its own, linked to one battery or, since v1.8.0, to
 | Entity | What it does | Default |
 |---|---|---|
 | Price Control (`switch.price_control`) | on or off | off |
-| Decision | `fixed_prices` or `day_plan` | `fixed_prices` |
-| Cheap price | fixed prices: at or below, the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
-| Expensive price | fixed prices: at or above, the expensive-price mode | 0.35 |
+| Decision | `price_bands` (Price bands), `day_plan` or `fixed_tariff`; a stored `fixed_prices` of v1.8.1 and earlier reads as `price_bands` and is stored anew | `price_bands` |
+| Cheap price | Price bands: at or below, the cheap-price mode, in the currency Home Assistant is set to | 0.15 |
+| Expensive price | Price bands: at or above, the expensive-price mode | 0.35 |
 | Cheap price mode | both: `quick_charge` (from the grid at full power) or `smart_charge_only` (surplus only) | preset |
 | Expensive price mode | both: `smart_discharge_only` (cover the house, no export) or `quick_discharge` (sell at full power) | preset |
 | In-between mode | both: `smart_matching` (grid at zero) or `standby`; also without a usable price | preset |
@@ -294,10 +301,13 @@ Price control is a device of its own, linked to one battery or, since v1.8.0, to
 | Expected house load | day plan: the part of a discharge that covers the house and is worth the import price; the rest is sold. The steady load in the discharge hours, without short peaks ([more](#a-cherry-picker-not-a-whole-house-battery)) | 400 W |
 | Charge efficiency, Discharge efficiency | day plan: grid to cells, cells to house | 95 %, 95 % |
 | Electricity price | the price the sensor gives, per kWh in Home Assistant's currency | — |
-| Import price, Export price | now, from the formulas | — |
+| Import price, Export price | now, from the formulas; with the fixed tariff the fixed prices | — |
+| Fixed import price, Fixed export price | fixed tariff: the prices of the contract per kWh; export = feed-in compensation minus feed-in costs, may be negative | 0.25, 0.01 |
+| Sunrise mode, Sunset mode | fixed tariff: `smart_charge_only`, `smart_matching`, `smart_discharge_only` or `standby` | preset |
+| Sunrise offset, Sunset offset | fixed tariff: minutes after sunrise and after sunset (negative: before) | 60, −30 min |
 | Plan | day plan: `charge`, `discharge` or `idle` now; the charge and discharge blocks ahead, each with the power its mode runs at, as attributes | — |
 | Expected margin | day plan: what the plan earns over the prices known, after losses and wear | — |
-| Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`; the target mode and both prices as attributes, and `prices_held` / `prices_held_until` while it runs on a held price list | — |
+| Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`, with the fixed tariff `sun_up` or `sun_down`; the target mode and both prices as attributes, and `prices_held` / `prices_held_until` while it runs on a held price list | — |
 
 The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus two cents, without VAT. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
 
@@ -339,6 +349,16 @@ The day plan does not try to run the house from the battery. It uses the battery
 
 **For the settings.** *Expected house load* is the load the battery actually covers while it discharges: the steady part in those hours, without the short peaks. With `quick_discharge` (the preset) it only decides which part of a discharge counts at the import price and which part is sold; with `smart_discharge_only` it is all the plan counts on. How much energy the short peaks take is in the measured diagnostic *Skipped peaks* (attribute `wh_today`).
 
+### Peaks, negative prices and the sun
+
+What the day plan and the smart modes do with three things that often come up.
+
+**Peaks.** `smart_matching` covers demand up to the battery's output power, so a large load is lowered by that much, whatever the price. There is no setting that holds the grid under a target power, as a capacity tariff on the monthly quarter-hour peak would ask (Flanders, see [Other countries](#other-countries)); for that the battery's power counts far more than its capacity. Peaks shorter than *Start after* (30 s) are left to the grid by a battery at rest, see [A cherry picker](#a-cherry-picker-not-a-whole-house-battery); they barely move a quarter-hour average.
+
+**Negative prices.** The day plan charges in the cheapest quarters, and a negative import price is the cheapest there is: it charges there if the battery has room. It counts what a discharge sends to the grid at the export price, so with a negative export price it does not discharge into the grid. It does not switch solar panels off: with a full battery, surplus goes to the grid at whatever the price is, unless the inverter of the panels limits export. That is outside this integration.
+
+**The sun.** The day plan knows the prices, not the weather. It does not hold back a cheap night charge because tomorrow will be sunny, and it does not keep room for solar surplus. Under net metering that costs nothing: solar sent to the grid is worth the import price. Once net metering ends, choose `smart_charge_only` as the cheap-price mode if you want the cheap quarters to charge from solar only.
+
 ### Replays
 
 **Strategies.** 30 consecutive days: a SolarFlow 3000 Mix AC+ on a Dutch dynamic contract, quarter prices, the measured house load and solar, net metering. Every strategy on the same simulated battery:
@@ -346,7 +366,7 @@ The day plan does not try to run the house from the battery. It uses the battery
 | Strategy | Per day | Under the 2027 rules |
 |---|---|---|
 | `smart_matching` only | € 0.07 | € 0.41 |
-| Fixed prices 0.15 / 0.35 | € 0.21 | € 0.49 |
+| Price bands 0.15 / 0.35 | € 0.21 | € 0.49 |
 | Day plan (trading at full power) | **€ 1.58** | **€ 0.83** ¹ |
 | For comparison: the same plan discharging only to cover the house | € 0.33 | € 0.54 |
 | The owner's own home-energy planner, as it ran | € 1.58 | — |
@@ -359,8 +379,8 @@ Trading at full power is where the value is: while net metering lasts the day pl
 
 | Modes | Net metering | 2027 rules |
 |---|---|---|
-| Fixed prices, in between `smart_matching` | 0.22 | 0.45 |
-| Fixed prices, in between `standby` | 0.04 | 0.05 |
+| Price bands, in between `smart_matching` | 0.22 | 0.45 |
+| Price bands, in between `standby` | 0.04 | 0.05 |
 | Day plan `quick_charge` / `quick_discharge`, in between `smart_matching` | 1.67 | **1.02** |
 | Day plan `quick_charge` / `quick_discharge`, in between `standby` | **1.73** | 0.67 |
 | Day plan `quick_charge` / `smart_discharge_only` (house only), `smart_matching` | 0.51 | 0.79 |
@@ -372,15 +392,36 @@ This replay is simpler than the one above: it leaves out the standby draw and th
 
 **When the price sensor drops out.** A price list once read is held (since v1.6.9). When the sensor becomes unavailable, loses its list, or gives a shorter one, the day plan and the current price carry on from the held list until its last period has passed; the status keeps showing the band, and the attributes `prices_held` and `prices_held_until` say that it runs on the held list. A new list that reaches at least as far ahead replaces it, so the new day at midnight and a corrected list are taken over. Nothing is stored: after a restart of Home Assistant there is nothing to hold until the sensor gives a list again.
 
-**When it cannot plan.** Without a price list (`no_price`) or without battery data (`no_plan`), the in-between mode applies. So it does without a usable price, and with fixed prices when the cheap price is at or above the expensive one. The battery's own SOC limits still apply: the smart modes do not order into a full or empty battery, and the quick modes report the refusal.
+**When it cannot plan.** Without a price list (`no_price`) or without battery data (`no_plan`), the in-between mode applies. So it does without a usable price, and with Price bands when the cheap price is at or above the expensive one. The battery's own SOC limits still apply: the smart modes do not order into a full or empty battery, and the quick modes report the refusal.
 
 **Only on a change.** Price control writes the Operation mode only when its target changes, or when it is switched on: a mode set by hand holds until then.
 
 **One writer.** Leave price control off when an automation or planner of your own already sets the Operation mode; two writers would undo each other's choices.
 
+### Fixed tariff
+
+*Since v1.8.2.* For a fixed-price contract with solar panels: Price Control without a price sensor, switching the battery between a mode for the day and one for the night.
+
+**The day** runs from sunrise plus *Sunrise offset* to sunset plus *Sunset offset*, from the sun at the location set in Home Assistant, checked every minute. The defaults, 60 minutes after sunrise and 30 minutes before sunset, leave the first hour of weak sun to the house and start covering it before it is dark. Offsets that close the window (a short winter day) leave no day; where the sun does not rise or set, `sun.sun` decides.
+
+**The modes.** *Sunrise mode* runs by day, *Sunset mode* by night, each `smart_charge_only`, `smart_matching`, `smart_discharge_only` or `standby`. Switching *Decision* to **Fixed tariff**, or *Net metering* on or off, fills them in once:
+
+| Net metering | Sunrise mode | Sunset mode | Why |
+|---|---|---|---|
+| off | `smart_charge_only` | `smart_matching` | by day the surplus goes into the battery and nothing comes out, so it is full for the evening; by night it covers the house |
+| on | `standby` | `standby` | a kWh sent to the grid earns the import price, so storing solar earns nothing |
+
+`smart_matching` all day also works, but discharges at every cloud and every load, and can be empty by the evening; `smart_charge_only` keeps the sun for later.
+
+**The prices.** *Fixed import price* and *Fixed export price* are the prices per kWh of the contract: the export price is the feed-in compensation minus the feed-in costs and may be negative. With *Net metering* on the export price is the import price. They show as *Import price* and *Export price*, give the realized margin of the battery, and give the advice for *Stop charging below* in the status: the lowest charging power at which storing beats exporting, from the losses measured on the reference device (about 44 W fixed while charging). At 0.25 and 0.01 that is 50 W; at a third of the import price 80 W; none when export is worth the import price. Set *Stop charging below* on the battery by hand.
+
+**The status** is `sun_up` or `sun_down`, with `day_from` and `day_until` (as HH:MM: today's day until the evening switch, from then tomorrow's, so never a day that is over) and `stop_charging_below_advice` ("50 W", or "storing does not pay") as attributes. There is no day plan and no expected margin; a price sensor that is still set only shows its price. SOC protection `price_control` has no price list here and charges directly.
+
+**A cluster** works the same: Price Control sets the cluster's Operation mode by day and by night.
+
 ### Setting up spot prices for the day plan
 
-The day plan needs a price sensor with the prices of today and tomorrow. Fixed prices work with any price sensor. The day-ahead price is one price per price area, set once a day for all of Europe, so every dynamic contract works with the bare spot price and your own tariff in Price Control, whatever the supplier is called (see [Your tariff](#your-tariff)). This section uses **EPEX Spot** from HACS ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)), the recommended source: its *Market price* sensor carries the attribute `data`, per quarter of an hour where the source has them, with tomorrow's prices from about 13:00. **Nord Pool** works just as well ([below](#nord-pool-instead-of-epex-spot)); Zonneplan and Frank Energie customers can also use their supplier's own integration ([other price sources](#other-price-sources-epex-spot-zonneplan-and-more)).
+The day plan needs a price sensor with the prices of today and tomorrow. Price bands works with any price sensor; the fixed tariff needs none. The day-ahead price is one price per price area, set once a day for all of Europe, so every dynamic contract works with the bare spot price and your own tariff in Price Control, whatever the supplier is called (see [Your tariff](#your-tariff)). This section uses **EPEX Spot** from HACS ([mampfes/ha_epex_spot](https://github.com/mampfes/ha_epex_spot)), the recommended source: its *Market price* sensor carries the attribute `data`, per quarter of an hour where the source has them, with tomorrow's prices from about 13:00. **Nord Pool** works just as well ([below](#nord-pool-instead-of-epex-spot)); Zonneplan and Frank Energie customers can also use their supplier's own integration ([other price sources](#other-price-sources-epex-spot-zonneplan-and-more)).
 
 > **Recommended price sensor:** `sensor.epex_spot_data_market_price` (EPEX Spot, Market Price) with *The price sensor holds* set to **Spot price excl. VAT**. The integration applies VAT and supplier and tax surcharges itself, so the result is correct in every country. Do not use the Total Price sensor: its VAT setting differs per installation and causes double or missing VAT. Netherlands (Zonneplan, 2026): import = spot × 1.21 + 0.1308481 €/kWh; feed-in from 2027 = spot + 0.02 €/kWh.
 
@@ -525,7 +566,7 @@ The United Kingdom bills per half hour, in pounds, with regional network charges
 
 ##### On a fixed-price contract
 
-The battery needs no price sensor and no Price Control on a fixed-price contract: `smart_matching` soaks up the solar surplus and gives it back to the house in the evening. Leave *Stop charging below* and *Stop discharging below* at their default of 50 W, so small surpluses and small demand are taken too; below that the battery's own losses (about 44 W charging, 33 W discharging, fixed) take most of the energy, which is why they stay above 0.
+The battery needs no price sensor and no Price Control on a fixed-price contract: `smart_matching` soaks up the solar surplus and gives it back to the house in the evening. Price Control's [Fixed tariff](#fixed-tariff) does it by the sun: `smart_charge_only` by day, `smart_matching` by night. Leave *Stop charging below* and *Stop discharging below* at their default of 50 W, so small surpluses and small demand are taken too; below that the battery's own losses (about 44 W charging, 33 W discharging, fixed) take most of the energy, which is why they stay above 0.
 
 Storing pays when the round-trip efficiency is above (feed-in compensation − feed-in costs) / import price. Example: import 0.25, feed-in compensation 0.16 and feed-in costs 0.15 per kWh: (0.16 − 0.15) / 0.25 = 4 %. The round trip depends on the power, because the converter loses about 44 W while charging and 33 W while discharging, whatever it delivers: about 7 % at 50 W, 40 % at 100 W, over 70 % from 300 W (see [Conversion efficiency](#conversion-efficiency)). At 50 W that is just above the 4 % of the example, so storing still pays there, barely; below it, it no longer does. That is why the stop limits stay at 50 W and not lower. Under Dutch net metering an exported kWh is worth the import price, so storing earns little until 1 January 2027; from then on every kWh stored instead of exported is worth almost the full import price.
 
@@ -603,7 +644,7 @@ The first external meter keeps the device name **External P1 meter** and its ent
 - **A device** (since v1.6.5). Choose the device that measures the grid connection — a Shelly, a DSMR reader, an inverter's grid meter — and its power sensors are recognised: a net total, or import minus export, or the sum of the phases when there is no total; an average, such as the Zonneplan Connect's *Elektriciteitsgemiddelde*, only when there is nothing else. kW is converted to W. The next page shows which sensors make the total and the reading of that moment, so the sign can be checked: with sun on the panels and little use in the house it should read export. Tick *The meter reads export as positive* if import and export come out the wrong way round. A few integrations are recognised by name: Huawei (sign inverted), SMA, Enphase and SolarEdge. Phase readings are kept as attributes of the meter's *Power* sensor.
 - **Sensors chosen by hand**, as before v1.6.5: one power sensor, import positive, and where import and export are separate sensors, both positive, the export sensor too.
 
-A meter from Home Assistant is only as fast as its integration updates it, and the control loops accept a reading for 5 s. Choose the reader over IP where this integration has one:
+A meter from Home Assistant is only as fast as its integration updates it. With *Meter source* `auto` the control loops accept a reading for at most 5 s and then turn to the Zendure meter, or stop the battery without one; with `external` a reading counts for up to 60 s before the battery stops. A sensor that updates every 10 s is too slow; one that updates every 2 s works. Many meter readers can publish more often than their default; see the documentation of your reader. Choose the reader over IP where this integration has one:
 
 | Meter | Over IP (this integration) | Through Home Assistant |
 |---|---|---|
@@ -711,9 +752,9 @@ New keys in the report after an upgrade raise a repair as well, see [Reporting a
 
 *Since v1.7.0.* A **battery cluster** lets up to six batteries (v1.7.3; v1.7.2 four; until v1.7.1 three, one per phase) hold the grid of the whole connection at zero together. Several may share a phase: the cluster regulates the total the meter measures, and the phase is a label. The load per phase or group is not watched — four 800 W batteries on one phase put 3.2 kW on it; whether that fits is up to the installation. One battery is primary and runs the loop described below, unchanged; the others are secondary and hold a fixed limit that the cluster sets at most every 30 seconds. Below 300 W of demand the primary works alone. Add it under *Add integration → Zendure RestAPI → Battery cluster*; the batteries become its sub-entries.
 
-Everything about it — setting up, how it regulates, its entities, its status and its limits — is in its own guide: **[docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md)**.
+Everything about it — setting up, how it regulates, its entities, its status and its limits — is in its own guide: **[docs/cluster.md](./docs/cluster.md)**.
 
-*v1.7.1.* A **Virtual cluster** shows what a cluster would do in your house without a second battery: up to three copies of one of your batteries under a cluster of their own, steering on a virtual P1 meter — a device of its own: the house load times a *Load factor*, minus what the copies deliver. Each copy runs this integration's own controller on a model of the device, with the real battery's tuning. Nothing is written to the real battery and it is never `blocked`; the test costs only computing power. Add it under *Add integration → Zendure RestAPI → Virtual cluster (simulated)*. Guide: **[docs/virtual_cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/virtual_cluster.md)**.
+*v1.7.1.* A **Virtual cluster** shows what a cluster would do in your house without a second battery: up to three copies of one of your batteries under a cluster of their own, steering on a virtual P1 meter — a device of its own: the house load times a *Load factor*, minus what the copies deliver. Each copy runs this integration's own controller on a model of the device, with the real battery's tuning. Nothing is written to the real battery and it is never `blocked`; the test costs only computing power. Add it under *Add integration → Zendure RestAPI → Virtual cluster (simulated)*. Guide: **[docs/virtual_cluster.md](./docs/virtual_cluster.md)**.
 
 The cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster`): a *Cluster* tab in the layout of the battery dashboard (v1.7.2) — tiles, one status text, gauges, the distribution over primary and secondaries, the group's settings as sliders and a chart of today and tomorrow — and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets a dashboard of its own, **Virtual Cluster** (`/virtual-cluster/virtual-cluster`, v1.7.3), with a tab per copy (*Virtual copy 1, 2, 3*) and none for the real battery, which keeps its own. The tabs carry an icon, numbered for the batteries and copies. Each is made once; after a change in the group a notification offers *Rebuild dashboard*, which touches only that kind's dashboard. Two sample files show both dashboards as the integration builds them, with the default entity ids and each with its *Price Control* tab: `dashboard/battery_cluster.yaml` for a battery cluster of one SolarFlow 3000 Mix AC+ (since v1.8.0) and `dashboard/virtual_cluster.yaml` (since v1.7.4) for three copies. A reference of the layout, or to paste into the raw configuration editor by hand; `scripts/build_dashboard_yaml.py` generates them with the integration's own code.
 
@@ -798,7 +839,9 @@ A closed loop with no feedback is worse than no loop. When the meter cannot be b
 
 That last bound is the connection, not the battery. This meter reads the whole house: an inverter ceiling of 3.6 kW would be quite wrong here, since the installation's own measurements record an evening peak of 4384 W from an oven and a dryer together and a boiling-water tap alone draws 2330 W. 3×25 A at 230 V is 17.25 kW, and nothing past that can be real. The check earns its place because scale and sign errors are a live risk on this API — six of them were found in the zenSDK documentation for this device alone.
 
-Releasing to zero is always safe: it is the direction the clamp already allows, and it cannot reverse anything.
+### When the connection drops
+
+This integration steers the battery over your local network. If the Wi-Fi to the battery or Home Assistant itself goes away, the battery keeps the last limit it was given and runs on without control: in a smart mode usually at a modest power, in `quick_charge` or `quick_discharge` at full power, to or from the grid if the house does not take it. It stops only at its own *Lower SOC limit* or *Upper SOC limit*, kept in the device, or when the connection is back; then the integration takes over again. Keep the Wi-Fi to the battery reliable, and do not leave a quick mode running unattended where an outage would cost you.
 
 ### Standby stops the battery, once
 
@@ -918,14 +961,17 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 
 *Since v1.7.6.* Below *minSoc* SOC protection charges from the grid. *SOC protection* is a select since v1.7.6, on a battery and on a cluster; until v1.7.5 it was a switch on a battery only.
 
+> **In short:** an empty battery is charged from the grid to its *minSoc* + 5. `direct` does that at once; `price_control` waits for the cheapest quarter within the next 6 hours, or under the *Fixed tariff* for the sun, unless there are no prices or the battery drops 2 points under *minSoc*. In a cluster this happens only once every battery is empty. `off` leaves it to the device.
+
 **A battery on its own.** *SOC protection* (`select.…_soc_protection`) offers:
 
 - **`off`**: never charges from under *minSoc*; the device guards its own bound. The switch when off.
 - **`direct`** (default): charges as soon as the battery is under *minSoc*, at full power, to *minSoc* + 5. The switch when on, as in v1.7.5.
 - **`price_control`**: waits for the cheapest period within 6 hours of the moment the battery fell under *minSoc*, from the price list of this battery's [Price control](#price-control) — whether or not Price control steers the Operation mode. One period is enough: from just under the bound to 5 points above it takes a few minutes at full power. Once it charges, it carries on to *minSoc* + 5 whatever the price. While it waits, the device keeps the battery from discharging and the smart modes still charge it from surplus; the *Controller status* carries `soc_protection_waits` (`SOC 9% under the floor 10%: charges at 03:15, 0.21 per kWh (now 0.34)`).
+- **Under the *Fixed tariff*** (since v1.8.2) every quarter costs the same, so `price_control` waits for the sun instead of a price: by day it charges from solar surplus and only from the grid at the end of the day (sunset plus its offset), or after the 6 hours if that comes first; under *minSoc* at night it first waits for the day (sunrise plus its offset) if that comes within the 6 hours. The status reads `SOC 4% under the floor 5%: charges from solar, from the grid at 15:09 at the latest`, or `waits for daylight at 08:32, …`.
 - **Falls back to `direct`**, with the reason in the status, when there is no Price control or no price list, when the 6 hours are over, or when the battery sits 2 points or more under *minSoc*. A battery at its lower bound is a battery in need, not a trade.
 
-**A battery cluster: when every battery is under its bound.** The cluster has a *SOC protection* select of its own, `off`, `direct` (default) or, since v1.8.1, `price_control`. While at least one battery still has charge, nothing changes: a battery under its bound gets no discharging share and is not charged from the grid, because it would take what the other discharges (measured in v1.7.0: 2,400 W from one battery into the other for 55 s). Once every battery taking part is under its *minSoc*, none discharges, and the cluster charges them all from the grid at full power, each to its own *minSoc* + 5; one that is there stands still until the last one is. The cluster status reads `protecting`, the batteries' status `protecting` with `cluster: every battery under its SOC floor`. Only in the smart modes: not in `standby` or the quick modes. With `price_control` the cluster waits for the cheapest period within 6 hours of the moment every battery was under its bound, from the price list of the cluster's own [Price control](#for-a-battery-cluster-or-a-virtual-cluster), and charges directly without one, after 6 hours, or once a battery sits 2 points or more under its bound — the same rules as for a single battery. While it waits, the cluster's *Status* carries `soc_protection_waits` (`every battery under its SOC floor: charges at 03:15, 0.21 per kWh (now 0.34)`) and the group runs as usual: no battery discharges, surplus still charges them. Once it charges it carries on to *minSoc* + 5 whatever the price, and the reason says why it charged (`cheapest price within 6 h: 0.21 per kWh`, or `direct: …`). Without SOC protection, all batteries empty means the house runs on the grid until the sun, `quick_charge` or a planner fills them, and the device's own small charge at its bound is all that happens. A Virtual cluster has the same select.
+**A battery cluster: when every battery is under its bound.** The cluster has a *SOC protection* select of its own, `off`, `direct` (default) or, since v1.8.1, `price_control`. While at least one battery still has charge, nothing changes: a battery under its bound gets no discharging share and is not charged from the grid, because it would take what the other discharges (measured in v1.7.0: 2,400 W from one battery into the other for 55 s). Once every battery taking part is under its *minSoc*, none discharges, and the cluster charges them all from the grid at full power, each to its own *minSoc* + 5; one that is there stands still until the last one is. The cluster status reads `protecting`, the batteries' status `protecting` with `cluster: every battery under its SOC floor`. Only in the smart modes: not in `standby` or the quick modes. With `price_control` the cluster waits for the cheapest period within 6 hours of the moment every battery was under its bound, from the price list of the cluster's own [Price control](#for-a-battery-cluster-or-a-virtual-cluster), and charges directly without one, after 6 hours, or once a battery sits 2 points or more under its bound — the same rules as for a single battery, including the wait for the sun under the *Fixed tariff*. While it waits, the cluster's *Status* carries `soc_protection_waits` (`every battery under its SOC floor: charges at 03:15, 0.21 per kWh (now 0.34)`) and the group runs as usual: no battery discharges, surplus still charges them. Once it charges it carries on to *minSoc* + 5 whatever the price, and the reason says why it charged (`cheapest price within 6 h: 0.21 per kWh`, or `direct: …`). Without SOC protection, all batteries empty means the house runs on the grid until the sun, `quick_charge` or a planner fills them, and the device's own small charge at its bound is all that happens. A Virtual cluster has the same select.
 
 **From the switch to the select.** On updating, a switch that was on reads as `direct`, one that was off as `off`; nothing to set. The entity changes domain: `switch.…_soc_protection` is removed, `select.…_soc_protection` takes its place. An automation that switched it on or off now uses `select.select_option` with `off` or `direct`.
 
@@ -1157,7 +1203,7 @@ The sensors sit on the battery device as diagnostics; *Realized margin* sits on 
 |---|---|---|---|
 | Measured charge efficiency | DC into the cells against AC from the grid, weighted by energy over the last five blocks | a block of charging of at least 1 kWh AC | *Charge efficiency* |
 | Measured discharge efficiency | AC to the house against DC from the cells, the same way | a block of discharging of at least 1 kWh AC | *Discharge efficiency* |
-| Round trip efficiency AC | AC out against AC in over a whole cycle | from a SOC bound back to the same bound (full to full, or empty to empty) with at least 2 kWh each way, within 72 hours | what a cycle really returns |
+| Round trip efficiency AC | AC out against AC in over a whole cycle | from a SOC bound back to the same bound (full to full, or empty to empty) with at least 2 kWh each way, within 72 hours; empty until the first such cycle | what a cycle really returns |
 | Round trip efficiency DC | DC out against DC in over the same cycles | the same | the cells and the battery management; the gap to the AC figure is the converter |
 | Usable capacity | DC out from the upper to the lower SOC limit in one discharge | a full discharge with at most 10 % charging in between | against nominal capacity × SOC range |
 | Full cycles | DC discharged divided by the nominal capacity of the packs, counted from v1.6.3 | always | the wear cost |
@@ -1224,7 +1270,7 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 23 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Charge buffer, Discharge buffer, Trim strength, SOC protection (select: off, direct, price_control), Trace recording, Mode threshold, Trim threshold |
-| **Battery cluster entry** | 18 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
+| **Battery cluster entry** | 18 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](./docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1486,6 +1532,24 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.8.2 — A fixed tariff by the sun, Price bands, and a shorter README
+
+**Price Control gets a third way to decide, for a fixed-price contract; *Fixed prices* is now called *Price bands*.**
+
+- **Fixed tariff:** a new *Decision* `fixed_tariff`, without a price sensor: *Fixed import price* and *Fixed export price*, *Sunrise mode* and *Sunset mode*, *Sunrise offset* and *Sunset offset*. By day (sunrise + 60 min to sunset − 30 min by default) `smart_charge_only`, by night `smart_matching`; both `standby` with *Net metering* on. Status `sun_up` or `sun_down`, with the window of the day and an advice for *Stop charging below*. See [Fixed tariff](#fixed-tariff).
+- **Price bands:** the decision called *Fixed prices* (`fixed_prices`) is now *Price bands* (`price_bands`); it works as before, and a stored `fixed_prices` is taken over by itself. An automation that selects `fixed_prices` must select `price_bands` now.
+- **Price sensor optional:** adding Price Control no longer needs a price sensor; the fixed tariff works without one.
+- **Dashboard:** the *Price Control* tab shows what the chosen decision uses; what a decision does not use is hidden. The *Day plan* section is gone: the *Price Control* section is the full width, with on one row the switch, *Status*, *Decision*, *Net metering*, *Plan* and *Expected margin*; no badges of the plan in a heading any more. *Net metering* is always shown, as it applies to all three. *Day plan*: the plan, the expected margin and the plan text, the modes per band, *Minimum margin* and *Expected house load*. *Price bands*: the two prices and the modes per band. *Fixed tariff*: its own section with the two prices and both offsets as sliders, the modes by day and by night, in its heading the times of the day, and *Fixed export price* only with *Net metering* off; the factors and surcharges of the formulas and the *Electricity price* are hidden. Tick *Rebuild dashboard* on the battery and on the cluster.
+
+- **A shorter README:** the price setup in steps moved to [Setting up spot prices for the day plan](#setting-up-spot-prices-for-the-day-plan); the README keeps what you need and the Dutch tariff in one paragraph. The app screenshots (*Add to HEMS*, *Safe power setting*) are now also under *Get started*. The flash memory point in *Why this integration* is one plain sentence.
+- **SOC protection in short:** a summary above [SOC protection: when and at what price](#soc-protection-when-and-at-what-price).
+- **[Peaks, negative prices and the sun](#peaks-negative-prices-and-the-sun):** what the day plan and the smart modes do with a capacity tariff, a negative price and solar surplus.
+- **Guides:** an index of the guides in `docs/` ([docs/README.md](./docs/README.md)).
+- **Virtual cluster: the copies keep their state across a restart.** In every Operation mode but *Follow source*, a restart of Home Assistant or a reload picks up the copies' state of charge and stop memory where they were, instead of centring them on your battery again. Kept in the options of the Virtual cluster, like its settings; no file of its own, no entity, no history. *Follow source* and *Reset* centre as before. See [docs/virtual_cluster.md](./docs/virtual_cluster.md).
+- **SOC protection under the fixed tariff waits for the sun:** with *SOC protection* `price_control` and Price Control on the *Fixed tariff*, a battery or cluster under *minSoc* charges from solar surplus by day and from the grid only at the end of the day or after 6 hours; at night it waits for the day if that comes within 6 hours. Before, it charged from the grid at once, as there was no price list. The option is now called just *Price Control*: it follows the chosen decision. See [SOC protection: when and at what price](#soc-protection-when-and-at-what-price).
+- **Charts start at zero:** the power axis of every chart (*History*, *Price Control*, the cluster) no longer reaches a full charge below zero when nothing is charged or exported; the zero line stays in view and the axis goes below it only as far as the data does. Tick *Rebuild dashboard*.
+- **Dashboard template in its own folder:** the dashboard template moved to `custom_components/zendure_restapi/templates/`; `scripts/build_dashboard_yaml.py` reads it there to generate the sample dashboards.
+
 ### v1.8.1 — SOC protection of a cluster at the cheapest price, and faults on the Cluster tab
 
 **A cluster whose batteries are all empty can wait for the cheapest period, and the Cluster tab flags a battery with a fault.** Nothing to set: `direct` stays the default.
@@ -1600,7 +1664,7 @@ A single battery decides exactly as in v1.7.0. After updating, restart Home Assi
 
 - **Virtual cluster (test).** A new entry under *Add integration → Zendure RestAPI*: up to three copies of one battery under a cluster of their own, to see how a cluster regulates in your house before buying one. The copies run this integration's controller on a model of the device — write in the device after 1.8 s, first power ~8 s after a write from standstill, 200 W/s up, a stop in ~3 s, 95 % conversion, 29 or 5 W at rest — with the real battery's maxima, SOC limits and tuning. They steer on a **virtual P1**: house load (real grid plus the real battery's power) times *Load factor* (1–3), minus what the copies deliver. Nothing is written to the real battery, the grid is not claimed, and the copies have no energy counters.
 - **Virtual P1 meter.** A device of its own under the Virtual cluster, with Power (the virtual P1), House load, Real grid and Load factor, so the meter can be read and charted like a real one.
-- **Settings on the Virtual cluster:** Clones (1–3), Load factor, SoC offset of clones 2 and 3 against the first, which starts on the real battery's state of charge, Response offset of clones 2 and 3 (0–10 s on top of the measured 1.8 s), Operation mode with `follow_source` (the real battery's mode, and so its planner), the group settings of the cluster, and **Reset**: every copy back to the start. Guide: [docs/virtual_cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/virtual_cluster.md).
+- **Settings on the Virtual cluster:** Clones (1–3), Load factor, SoC offset of clones 2 and 3 against the first, which starts on the real battery's state of charge, Response offset of clones 2 and 3 (0–10 s on top of the measured 1.8 s), Operation mode with `follow_source` (the real battery's mode, and so its planner), the group settings of the cluster, and **Reset**: every copy back to the start. Guide: [docs/virtual_cluster.md](./docs/virtual_cluster.md).
 - **Cluster dashboard.** *Cluster* (`/zendure-cluster`) for a cluster, *Virtual Cluster* for the Virtual cluster: a *Cluster* tab with mode, status, primary, *Grid at last distribution*, the role, direction and limit of every battery, power and state of charge per battery, a 24-hour chart of the grid against the group and each battery, and the settings; then a tab per battery by name, like the first page of the battery dashboard. The Virtual cluster gets a tab per copy, headed *Virtual Mix n (simulated)* with its offsets, the offsets in the settings named after their copy, and no tab for the real battery. Tabs show their names, not icons. Made once; after a change in the group a notification offers **Rebuild dashboard**, a new button on the cluster and on the Virtual cluster. Deleting the last cluster or Virtual cluster removes the dashboard and its notification, so Home Assistant is as it was before.
 - **Ready for Home Assistant 2027.8.** The Virtual cluster looks up and links its devices with the calls Home Assistant 2026.8 introduced, and with the old ones before that version.
 - **Next to a battery steered elsewhere.** When this integration only monitors the battery (`standby`, limits set by an automation of your own or a HEMS), give the Virtual cluster a mode of its own: the copies regulate on the virtual P1, the integration writes nothing to the battery, and deleting the Virtual cluster leaves Home Assistant as it was before (tested in a simulation).
@@ -1610,7 +1674,7 @@ A single battery decides exactly as in v1.7.0. After updating, restart Home Assi
 A single battery decides exactly as in v1.6.10. Home Assistant 2025.3 or newer is now required (the cluster's batteries are sub-entries). After updating, restart Home Assistant. Existing entities and automations of a single battery keep working. Tested on a simulator, not yet with real batteries: testers with two or more Zendure batteries are welcome in the [Discussions](https://github.com/windsurf/hassio-zendure-restapi/discussions).
 
 - **Licence: Apache 2.0** instead of MIT, with a NOTICE file. The v1.6 line and earlier stay under MIT.
-- **Battery cluster.** A new entry under *Add integration → Zendure RestAPI*: up to three batteries, one per phase, hold the total of the connection at zero together. One battery is primary and runs the single-battery loop, unchanged, on the cluster's meter, buffers and start thresholds; the others are secondary and hold a fixed limit, set at most every 30 s (*Redistribute every*) or sooner when the primary sits at its maximum or at nothing. Below *Concentrate below* (300 W) the primary works alone, which saves the fixed loss of a second inverter. When the load drops away the secondaries are lowered at once rather than the whole group stopping; a real direction change waits until the secondaries have stopped. In the group the cluster, not the single battery's SOC protection, decides about a battery below its floor: it does not discharge and is not charged from the grid against the others. Guide: [docs/cluster.md](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md).
+- **Battery cluster.** A new entry under *Add integration → Zendure RestAPI*: up to three batteries, one per phase, hold the total of the connection at zero together. One battery is primary and runs the single-battery loop, unchanged, on the cluster's meter, buffers and start thresholds; the others are secondary and hold a fixed limit, set at most every 30 s (*Redistribute every*) or sooner when the primary sits at its maximum or at nothing. Below *Concentrate below* (300 W) the primary works alone, which saves the fixed loss of a second inverter. When the load drops away the secondaries are lowered at once rather than the whole group stopping; a real direction change waits until the secondaries have stopped. In the group the cluster, not the single battery's SOC protection, decides about a battery below its floor: it does not discharge and is not charged from the grid against the others. Guide: [docs/cluster.md](./docs/cluster.md).
 - **Batteries as sub-entries.** *Add battery*, *Reconfigure* (phase, Priority, Max share) and *Delete* under the cluster. Priority decides who is primary; among equals the battery with the fastest measured response.
 - **On a battery in the group** the Operation mode shows `coordinated`, the controller status `secondary` on a secondary, and a new switch **Take part** takes it out for a while. Its own meter, buffers and thresholds are kept but not used. A Price Control entry of such a battery writes nothing and shows `paused`.
 - **A cluster that steers nothing blocks nothing.** With no battery taking part, or the group in standby or a quick mode, a battery outside it steers on its own as before.

@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Prisstyring",
-        "description": "Indstiller et batteris driftstilstand efter elprisen: med to faste priser eller med en dagsplan over priserne for i dag og i morgen (Nord Pool, EPEX Spot, Zonneplan, …). Den er slukket, indtil du tænder den. Du kan også vælge en batteriklynge eller Virtual cluster: dagsplanen planlægger så for dens batterier samlet og indstiller klyngens driftstilstand.",
+        "description": "Indstiller et batteris driftstilstand efter elprisen: med en billig og en dyr pris eller med en dagsplan over priserne for i dag og i morgen (Nord Pool, EPEX Spot, Zonneplan, …). Den er slukket, indtil du tænder den. Du kan også vælge en batteriklynge eller Virtual cluster: dagsplanen planlægger så for dens batterier samlet og indstiller klyngens driftstilstand. Med en fast tarif følger den solen: én tilstand om dagen, én om natten.",
         "data": {
           "battery_entry": "Batteri eller klynge",
           "price_entity": "Prissensor (pris pr. kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Til dagsplanen. Nord Pool (HACS) med moms og uden ekstra omkostninger: spotpris inkl. moms. Uden moms: spotpris. Med hele tariffen i ekstra omkostninger: købspris. EPEX Spot: sensoren Market price: spotpris; sensoren Total price: købspris. Zonneplan: købspris.",
-          "price_entity": "Faste priser: enhver sensor med den aktuelle pris. Dagsplan: en sensor med en prisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e eller Frank Energie."
+          "price_entity": "Prisbånd: enhver sensor med den aktuelle pris. Dagsplan: en sensor med en prisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e eller Frank Energie. Fast tarif: ikke nødvendig."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Til dagsplanen. Nord Pool (HACS) med moms og uden ekstra omkostninger: spotpris inkl. moms. Uden moms: spotpris. Med hele tariffen i ekstra omkostninger: købspris. EPEX Spot: sensoren Market price: spotpris; sensoren Total price: købspris. Zonneplan: købspris.",
-          "price_entity": "Faste priser: enhver sensor med den aktuelle pris. Dagsplan: en sensor med en prisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e eller Frank Energie."
+          "price_entity": "Prisbånd: enhver sensor med den aktuelle pris. Dagsplan: en sensor med en prisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e eller Frank Energie. Fast tarif: ikke nødvendig."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Faste priser",
-          "day_plan": "Dagsplan"
+          "price_bands": "Prisbånd",
+          "day_plan": "Dagsplan",
+          "fixed_tariff": "Fast tarif"
         },
         "name": "Beslutning"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Fra",
           "direct": "Direkte",
-          "price_control": "Price Control (billigst inden for 6 t)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Tilstand ved solopgang"
+      },
+      "sunset_mode": {
+        "name": "Tilstand ved solnedgang"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Billigt",
           "between": "Imellem",
           "expensive": "Dyrt",
-          "paused": "Sat på pause (koordineret)"
+          "paused": "Sat på pause (koordineret)",
+          "sun_up": "Dag (solen oppe)",
+          "sun_down": "Nat (solen nede)"
         },
         "name": "Status",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Extra response time"
+      },
+      "fixed_import_price": {
+        "name": "Fast købspris"
+      },
+      "fixed_export_price": {
+        "name": "Fast salgspris"
+      },
+      "sunrise_offset": {
+        "name": "Forskydning solopgang"
+      },
+      "sunset_offset": {
+        "name": "Forskydning solnedgang"
       }
     },
     "switch": {

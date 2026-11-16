@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Preissteuerung",
-        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit zwei festen Preisen oder mit einem Tagesplan über die Preise von heute und morgen (Nord Pool, EPEX Spot, Zonneplan, …). Sie ist aus, bis du sie einschaltest. Du kannst auch einen Batterie-Cluster oder den virtuellen Cluster wählen: Der Tagesplan rechnet dann für seine Batterien zusammen und setzt den Betriebsmodus des Clusters.",
+        "description": "Setzt den Betriebsmodus einer Batterie nach dem Strompreis: mit einem günstigen und einem teuren Preis oder mit einem Tagesplan über die Preise von heute und morgen (Nord Pool, EPEX Spot, Zonneplan, …). Sie ist aus, bis du sie einschaltest. Du kannst auch einen Batterie-Cluster oder den virtuellen Cluster wählen: Der Tagesplan rechnet dann für seine Batterien zusammen und setzt den Betriebsmodus des Clusters. Mit einem Festtarif folgt sie der Sonne: ein Modus am Tag, einer in der Nacht.",
         "data": {
           "battery_entry": "Batterie oder Cluster",
           "price_entity": "Preissensor (Preis pro kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis. EPEX Spot: Sensor Market price: Spotpreis; Sensor Total price: Bezugspreis. Zonneplan: Bezugspreis.",
-          "price_entity": "Feste Preise: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e oder Frank Energie."
+          "price_entity": "Preisbänder: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e oder Frank Energie. Festtarif: keiner nötig."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Für den Tagesplan. Nord Pool (HACS) mit MwSt. an und ohne Zusatzkosten: Spotpreis inkl. MwSt. Mit MwSt. aus: Spotpreis. Mit dem ganzen Tarif in den Zusatzkosten: Bezugspreis. EPEX Spot: Sensor Market price: Spotpreis; Sensor Total price: Bezugspreis. Zonneplan: Bezugspreis.",
-          "price_entity": "Feste Preise: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e oder Frank Energie."
+          "price_entity": "Preisbänder: jeder Sensor mit dem aktuellen Preis. Tagesplan: ein Sensor mit Preisliste — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e oder Frank Energie. Festtarif: keiner nötig."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Feste Preise",
-          "day_plan": "Tagesplan"
+          "price_bands": "Preisbänder",
+          "day_plan": "Tagesplan",
+          "fixed_tariff": "Festtarif"
         },
         "name": "Entscheidung"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Aus",
           "direct": "Direkt",
-          "price_control": "Price Control (günstigste binnen 6 h)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Modus ab Sonnenaufgang"
+      },
+      "sunset_mode": {
+        "name": "Modus ab Sonnenuntergang"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Günstig",
           "between": "Dazwischen",
           "expensive": "Teuer",
-          "paused": "Pausiert (koordiniert)"
+          "paused": "Pausiert (koordiniert)",
+          "sun_up": "Tag (Sonne auf)",
+          "sun_down": "Nacht (Sonne unter)"
         },
         "name": "Status",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Zusätzliche Reaktionszeit"
+      },
+      "fixed_import_price": {
+        "name": "Fester Bezugspreis"
+      },
+      "fixed_export_price": {
+        "name": "Fester Einspeisepreis"
+      },
+      "sunrise_offset": {
+        "name": "Versatz Sonnenaufgang"
+      },
+      "sunset_offset": {
+        "name": "Versatz Sonnenuntergang"
       }
     },
     "switch": {

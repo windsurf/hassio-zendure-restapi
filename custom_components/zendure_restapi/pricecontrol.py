@@ -4,12 +4,12 @@ An entry and a device of its own, linked to one battery. Its own settings —
 price sensor, how to decide, prices, tariff, modes, on/off — live in its own
 entry; the Operation mode it writes lives in the battery's entry.
 
-Two ways to decide, chosen with the Decision select:
+Three ways to decide, chosen with the Decision select:
 
-- **Fixed prices** (since v1.6.0). At or below the cheap price the battery
-  charges, at or above the expensive price it discharges, and in between it
-  follows the meter or rests. Works with any sensor that gives the current
-  price per kWh.
+- **Price bands** (since v1.6.0; called Fixed prices, `fixed_prices`,
+  until v1.8.1). At or below the cheap price the battery charges, at or above
+  the expensive price it discharges, and in between it follows the meter or
+  rests. Works with any sensor that gives the current price per kWh.
 - **Day plan** (v1.6.0). A plan over the prices of today and tomorrow from a
   price sensor with a price list (Nord Pool; since v1.6.5 also EPEX Spot,
   Zonneplan and others, see dayplan.read_prices), with the import price and the export
@@ -17,6 +17,12 @@ Two ways to decide, chosen with the Decision select:
   minimum margin per kWh; see dayplan.py. A charge period runs the cheap
   price mode, a discharge period the expensive price mode, every other
   period the in-between mode.
+- **Fixed tariff** (v1.8.2). A fixed-price contract: no price sensor, a fixed
+  import price and export price, and an Operation mode for the day and one
+  for the night. The day runs from sunrise plus its offset to sunset plus its
+  offset, from the sun at Home Assistant's own location; checked every minute.
+  The prices give the import and export price of the status and the realized
+  margin, and the advice for Stop charging below.
 
 The three modes per band are shared by both ways of deciding (v1.6.1). The
 day plan also plans with them: quick_charge charges from the grid,
@@ -57,19 +63,27 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datetime import datetime, timedelta
+
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import SUN_EVENT_SUNRISE, SUN_EVENT_SUNSET
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_change,
 )
+from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
 from .const import (
     PRICE_MODE_OPTIONS,
     price_presets,
+    DECISION_BANDS,
+    DECISION_BANDS_OLD,
     DECISION_PLAN,
+    DECISION_TARIFF,
+    decision_choice,
     DOMAIN,
     MODE_FOLLOW_SOURCE,
     MODE_QUICK_CHARGE,
@@ -79,6 +93,8 @@ from .const import (
     OPT_DISCHARGE_EFFICIENCY,
     OPT_EXPORT_FACTOR,
     OPT_EXPORT_SURCHARGE,
+    OPT_FIXED_EXPORT_PRICE,
+    OPT_FIXED_IMPORT_PRICE,
     OPT_HOUSE_LOAD,
     OPT_IMPORT_FACTOR,
     OPT_IMPORT_SURCHARGE,
@@ -96,6 +112,10 @@ from .const import (
     OPT_PRICE_ENTITY,
     OPT_PRICE_EXPENSIVE,
     OPT_PRICE_EXPENSIVE_MODE,
+    OPT_SUNRISE_MODE,
+    OPT_SUNRISE_OFFSET,
+    OPT_SUNSET_MODE,
+    OPT_SUNSET_OFFSET,
     OPT_WEAR_COST,
     PACK_PREFIX,
     PRICE_STATUS_BETWEEN,
@@ -105,7 +125,10 @@ from .const import (
     PRICE_STATUS_NO_PRICE,
     PRICE_STATUS_OFF,
     PRICE_STATUS_PAUSED,
+    PRICE_STATUS_SUN_DOWN,
+    PRICE_STATUS_SUN_UP,
     SIGNAL_PRICE_CHANGED,
+    stop_charge_advice,
 )
 from .dayplan import (
     ACTION_CHARGE,
@@ -136,6 +159,29 @@ MIGRATED_V161 = "price_modes_v161"
 # state, and plans again with the state of charge of that moment.
 QUARTERS = [0, 15, 30, 45]
 SECOND = 5
+
+
+def sun_band(
+    now: datetime,
+    sunrise: datetime | None,
+    sunset: datetime | None,
+    rise_offset_min: float,
+    set_offset_min: float,
+    above_horizon: bool = False,
+) -> tuple[str, datetime | None, datetime | None]:
+    """Day or night for the fixed tariff, with the window of the day (v1.8.2).
+
+    The day runs from sunrise plus its offset to sunset plus its offset. A
+    window that closes before it opens (large offsets on a short winter day)
+    is no day at all. Without a sunrise or sunset (midnight sun, polar night)
+    the sun itself decides.
+    """
+    if sunrise is None or sunset is None:
+        return (PRICE_STATUS_SUN_UP if above_horizon else PRICE_STATUS_SUN_DOWN), None, None
+    start = sunrise + timedelta(minutes=rise_offset_min)
+    end = sunset + timedelta(minutes=set_offset_min)
+    band = PRICE_STATUS_SUN_UP if start <= now < end else PRICE_STATUS_SUN_DOWN
+    return band, start, end
 
 
 def decide(
@@ -216,6 +262,35 @@ def group_price_periods(hass: HomeAssistant, cluster_id: str) -> tuple:
     return ()
 
 
+def _window_tuples(windows: list[tuple[datetime, datetime]]) -> tuple:
+    """(start, end, start HH:MM, end HH:MM local), start and end as epoch seconds."""
+    return tuple(
+        (start.timestamp(), end.timestamp(),
+         dt_util.as_local(start).strftime("%H:%M"), dt_util.as_local(end).strftime("%H:%M"))
+        for start, end in windows
+    )
+
+
+def solar_windows_for(hass: HomeAssistant, entry_id: str, group: bool) -> tuple | None:
+    """The day windows of the Price Control of a battery or cluster under the
+    fixed tariff, for SOC protection (v1.8.2); None for the other decisions or
+    without a Price Control."""
+    for item in hass.data.get(DOMAIN, {}).values():
+        if isinstance(item, PriceControl) and bool(item.group) == group and item.battery_entry_id == entry_id:
+            try:
+                windows = item.solar_windows()
+            except Exception:  # noqa: BLE001 - the sun must not stop protection
+                _LOGGER.debug("No day windows from price control", exc_info=True)
+                return None
+            return None if windows is None else _window_tuples(windows)
+    return None
+
+
+def group_solar_windows(hass: HomeAssistant, cluster_id: str) -> tuple | None:
+    """The day windows of the cluster's own Price Control (v1.8.2)."""
+    return solar_windows_for(hass, cluster_id, True)
+
+
 def group_state(members: list[Any]) -> tuple[float, float, float, float] | None:
     """Usable and stored kWh, charge and discharge kW of a cluster (v1.8.0).
 
@@ -279,6 +354,9 @@ class PriceControl:
         self._signal = SIGNAL_PRICE_CHANGED.format(entry.entry_id)
         self._unsub_price: Any = None
         self._unsub_timer: Any = None
+        self._unsub_minute: Any = None
+        # Fixed tariff (v1.8.2): the window of the day, for the status.
+        self.sun_window: tuple[datetime | None, datetime | None] = (None, None)
         self._entity: str = ""
         self._enabled = False
         self._last_target: str | None = None
@@ -313,14 +391,16 @@ class PriceControl:
         self._unsub_timer = async_track_time_change(
             self.hass, self._on_timer, minute=QUARTERS, second=SECOND
         )
+        # The fixed tariff follows the sun, to the minute (v1.8.2).
+        self._unsub_minute = async_track_time_change(self.hass, self._on_minute, second=SECOND)
         self.async_update()
 
     @callback
     def async_stop(self) -> None:
-        for unsub in (self._unsub_price, self._unsub_timer):
+        for unsub in (self._unsub_price, self._unsub_timer, self._unsub_minute):
             if unsub is not None:
                 unsub()
-        self._unsub_price = self._unsub_timer = None
+        self._unsub_price = self._unsub_timer = self._unsub_minute = None
 
     @property
     def battery_controller(self) -> Any:
@@ -394,6 +474,7 @@ class PriceControl:
             # this runs before the update listener exists, so no second call
             # would follow (v1.6.2).
             self._migrate_net_metering_mode()
+            self._migrate_decision()
         if self._stand is not None and stand != self._stand:
             # Decision or Net metering switched: the presets of the new
             # stand, once. The write calls this method again through the
@@ -411,6 +492,19 @@ class PriceControl:
             # Apply the current target now, even if it equals the last one.
             self._last_target = None
         self.evaluate()
+
+    def _migrate_decision(self) -> bool:
+        """Store Price bands in place of "fixed_prices", once (v1.8.2).
+
+        Reading already maps the old value (settings.decision_choice); this
+        puts the new one in the options, so nothing older stays behind.
+        """
+        if self._entry.options.get(OPT_PRICE_DECISION) != DECISION_BANDS_OLD:
+            return False
+        options = dict(self._entry.options)
+        options[OPT_PRICE_DECISION] = DECISION_BANDS
+        self.hass.config_entries.async_update_entry(self._entry, options=options)
+        return True
 
     def _migrate_net_metering_mode(self) -> bool:
         """Carry the behaviour of v1.6.0 over to the shared band modes, once.
@@ -443,6 +537,12 @@ class PriceControl:
     @callback
     def _on_timer(self, _now: Any) -> None:
         self.evaluate()
+
+    @callback
+    def _on_minute(self, _now: Any) -> None:
+        # Only the fixed tariff needs the minute; the others decide per quarter.
+        if self._settings.get(OPT_PRICE_DECISION) == DECISION_TARIFF:
+            self.evaluate()
 
     # ── Inputs ───────────────────────────────────────────────────────────
 
@@ -542,6 +642,10 @@ class PriceControl:
         The day plan is worked out in the executor: two days of quarters take
         tens of milliseconds, too long for the event loop on a small machine.
         """
+        if self._settings.get(OPT_PRICE_DECISION) == DECISION_TARIFF:
+            self._evaluate_tariff()
+            return
+        self.sun_window = (None, None)
         now = dt_util.now()
         self.price, attributes = self._read_price()
         periods = self._price_list(attributes, now)
@@ -589,6 +693,56 @@ class PriceControl:
             return
         self.hass.async_create_task(self._async_plan(self._generation, inputs))
 
+    def _sun_times(self, now: datetime) -> tuple[datetime | None, datetime | None]:
+        """Today's sunrise and sunset at Home Assistant's location; None
+        where the sun does not rise or set today."""
+        try:
+            day = dt_util.as_local(now).date()
+            return (
+                get_astral_event_date(self.hass, SUN_EVENT_SUNRISE, day),
+                get_astral_event_date(self.hass, SUN_EVENT_SUNSET, day),
+            )
+        except Exception:  # noqa: BLE001 - no location: let the sun entity decide
+            return None, None
+
+    def _evaluate_tariff(self) -> None:
+        """Fixed tariff (v1.8.2): the mode of the day or of the night.
+
+        No price sensor and no plan. The import price is the fixed one; the
+        export price is the fixed one, or the import price under net metering.
+        A price sensor that is still set only shows its price.
+        """
+        now = dt_util.now()
+        s = self._settings
+        self.price, _attributes = self._read_price()
+        self.price_format = None
+        self._held = []
+        self._held_format = None
+        self.prices_held = False
+        self._periods = []
+        self.price_curve = []
+        self.plan = None
+        self.import_price = round(s.get_float(OPT_FIXED_IMPORT_PRICE), 7)
+        self.export_value = (
+            self.import_price if s.get_bool(OPT_NET_METERING)
+            else round(s.get_float(OPT_FIXED_EXPORT_PRICE), 7)
+        )
+        sun = self.hass.states.get("sun.sun")
+        above = sun is not None and sun.state == "above_horizon"
+        sunrise, sunset = self._sun_times(now)
+        rise_offset, set_offset = s.get_float(OPT_SUNRISE_OFFSET), s.get_float(OPT_SUNSET_OFFSET)
+        band, start, end = sun_band(now, sunrise, sunset, rise_offset, set_offset, above)
+        if end is not None and now >= end:
+            # After the evening switch the heading shows the next day (v1.8.2):
+            # never a window that is over. The band itself stays today's.
+            sunrise, sunset = self._sun_times(now + timedelta(days=1))
+            _next, next_start, next_end = sun_band(now, sunrise, sunset, rise_offset, set_offset, above)
+            if next_start is not None:
+                start, end = next_start, next_end
+        self.sun_window = (start, end)
+        self._generation += 1
+        self._apply(band)
+
     async def _async_plan(self, generation: int, inputs: tuple) -> None:
         plan = await self.hass.async_add_executor_job(make_plan, *inputs)
         if generation != self._generation:
@@ -611,6 +765,29 @@ class PriceControl:
         if self.virtual and self._battery_present():
             _LOGGER.debug("Price control off: the Virtual cluster follows its source again")
             self._battery.set(OPT_OPERATION_MODE, MODE_FOLLOW_SOURCE)
+
+    def solar_windows(self) -> list[tuple[datetime, datetime]] | None:
+        """The windows of the day, today and tomorrow, under the fixed tariff (v1.8.2).
+
+        For SOC protection: every quarter costs the same, so it waits for the
+        sun. Sunrise plus its offset to sunset plus its offset, as the
+        decision itself; a window that closes before it opens is left out.
+        None for the other decisions, which have a price list.
+        """
+        s = self._settings
+        if decision_choice(s.get(OPT_PRICE_DECISION)) != DECISION_TARIFF:
+            return None
+        now = dt_util.now()
+        windows = []
+        for days in (0, 1):
+            sunrise, sunset = self._sun_times(now + timedelta(days=days))
+            if sunrise is None or sunset is None:
+                continue
+            start = sunrise + timedelta(minutes=s.get_float(OPT_SUNRISE_OFFSET))
+            end = sunset + timedelta(minutes=s.get_float(OPT_SUNSET_OFFSET))
+            if end > start:
+                windows.append((start, end))
+        return windows
 
     def import_periods(self) -> list[tuple[Any, Any, float]]:
         """(start, end, import price) of the periods not yet over (v1.7.6).
@@ -636,6 +813,8 @@ class PriceControl:
         mode_key = {
             PRICE_STATUS_CHEAP: OPT_PRICE_CHEAP_MODE,
             PRICE_STATUS_EXPENSIVE: OPT_PRICE_EXPENSIVE_MODE,
+            PRICE_STATUS_SUN_UP: OPT_SUNRISE_MODE,
+            PRICE_STATUS_SUN_DOWN: OPT_SUNSET_MODE,
         }.get(band, OPT_PRICE_BETWEEN_MODE)
         self.target = str(self._settings.get(mode_key))
 
@@ -673,7 +852,7 @@ class PriceControl:
 
     @property
     def attributes(self) -> dict[str, Any]:
-        return {
+        attributes = {
             "price": self.price,
             "price_entity": self._entity or None,
             "price_name": self._price_name(),
@@ -692,6 +871,20 @@ class PriceControl:
                 self._held[-1].end.isoformat() if self.prices_held and self._held else None
             ),
         }
+        if self._settings.get(OPT_PRICE_DECISION) == DECISION_TARIFF:
+            # Fixed tariff (v1.8.2): the day window, and from the two prices
+            # the lowest charging power at which storing beats exporting.
+            # As text for the dashboard heading: the times of the day, and
+            # the advice in W or that storing does not pay.
+            start, end = self.sun_window
+            attributes["day_from"] = dt_util.as_local(start).strftime("%H:%M") if start else None
+            attributes["day_until"] = dt_util.as_local(end).strftime("%H:%M") if end else None
+            if self.import_price is not None and self.export_value is not None:
+                advice = stop_charge_advice(self.import_price, self.export_value)
+                attributes["stop_charging_below_advice"] = (
+                    f"{advice} W" if advice is not None else "storing does not pay"
+                )
+        return attributes
 
     def _price_name(self) -> str | None:
         """The name of the price sensor, for the dashboard heading (v1.6.5)."""

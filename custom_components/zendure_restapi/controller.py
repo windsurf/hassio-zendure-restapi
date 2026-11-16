@@ -62,6 +62,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
+from .cluster.contract import solar_wait
 from .const import (
     DOMAIN,
     CLUSTER_KEY,
@@ -963,7 +964,9 @@ class ZendureController:
         surplus as usual and the device keeps it from discharging. Direct,
         with the reason in the status, when there is no Price Control or no
         price list, when the window is over, or when the battery sits
-        SOC_PROTECT_HARD_POINTS or more under its floor.
+        SOC_PROTECT_HARD_POINTS or more under its floor. Under the fixed tariff
+        (v1.8.2) every quarter costs the same, so it waits for the sun instead:
+        solar surplus by day, the grid at the end of the day or after the window.
         """
         self._protect_why = None
         if self._soc_protection() != SOC_PROTECT_PRICE:
@@ -978,6 +981,19 @@ class ZendureController:
         if now >= deadline:
             self._protect_why = f"direct: waited {SOC_PROTECT_WINDOW_H} h"
             return None
+        windows = self._solar_windows()
+        if windows is not None:
+            # Fixed tariff (v1.8.2): every quarter costs the same; wait for the sun.
+            wait = solar_wait(self._protect_since.timestamp(), now.timestamp(), windows,
+                              SOC_PROTECT_WINDOW_H * 3600)
+            if wait.charge_at is None:
+                self._protect_why = wait.why
+                return None
+            at = wait.charge_label or dt_util.as_local(dt_util.utc_from_timestamp(wait.charge_at)).strftime("%H:%M")
+            head = f"SOC {soc:g}% under the floor {floor:g}%"
+            if wait.daylight_at:
+                return f"{head}: waits for daylight at {wait.daylight_at}, from the grid at {at} at the latest"
+            return f"{head}: charges from solar, from the grid at {at} at the latest"
         periods = [p for p in self._import_periods() if p[0] < deadline and p[1] > now]
         if not periods:
             self._protect_why = "direct: no prices from Price Control"
@@ -993,6 +1009,15 @@ class ZendureController:
         if current is not None:
             text += f" (now {current[2]:g})"
         return text
+
+    def _solar_windows(self) -> tuple | None:
+        """The day windows of this battery's Price Control under the fixed tariff (v1.8.2)."""
+        entry = getattr(self.coordinator, "config_entry", None)
+        if entry is None:
+            return None
+        from .pricecontrol import solar_windows_for
+
+        return solar_windows_for(self.coordinator.hass, entry.entry_id, False)
 
     def _import_periods(self) -> list[tuple[datetime, datetime, float]]:
         """(start, end, import price) ahead, from the Price Control entry of this battery."""

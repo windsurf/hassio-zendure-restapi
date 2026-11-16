@@ -86,6 +86,7 @@ from .const import (
     OPT_CREATE_DASHBOARD,
     OPT_REBUILD_DASHBOARD,
     OPT_SOLAR_ENERGY,
+    OPT_VIRTUAL_STATE,
     OPT_SOLAR_POWER,
     OWN_PV_MIN_KWH,
     OPT_DASHBOARD_OFFERED,
@@ -308,7 +309,7 @@ def protection_settings(hass: HomeAssistant, cluster_id: str, settings: Any) -> 
     With price_control the prices of the cluster's own Price Control go
     along; without one the list is empty and the cluster charges directly.
     """
-    from .pricecontrol import group_price_periods
+    from .pricecontrol import group_price_periods, group_solar_windows
 
     choice = soc_protection_choice(settings.get(OPT_SOC_PROTECTION))
     price = choice == SOC_PROTECT_PRICE
@@ -316,6 +317,7 @@ def protection_settings(hass: HomeAssistant, cluster_id: str, settings: Any) -> 
         "soc_protection": choice != SOC_PROTECT_OFF,
         "soc_protection_price": price,
         "price_periods": group_price_periods(hass, cluster_id) if price else (),
+        "solar_windows": group_solar_windows(hass, cluster_id) if price else None,
     }
 
 
@@ -427,8 +429,15 @@ async def _async_setup_virtual(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     migrate_group_ids(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, VIRTUAL_PLATFORMS)
     clones = vc.clone_count()
+    settings = {k: v for k, v in entry.options.items() if k != OPT_VIRTUAL_STATE}
 
     async def _changed(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        nonlocal settings
+        # Only the copies' state saved (v1.8.2): no setting changed, nothing to do.
+        now = {k: v for k, v in entry.options.items() if k != OPT_VIRTUAL_STATE}
+        if now == settings:
+            return
+        settings = now
         # Another number of clones: set up again. Anything else: decide now.
         if vc.clone_count() != clones:
             notify_changed(hass, entry)

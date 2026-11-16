@@ -125,6 +125,10 @@ class GroupSettings:
     # period not yet over, start and end as epoch seconds. Empty without one.
     soc_protection_price: bool = False
     price_periods: tuple = ()
+    # Since v1.8.2, with the fixed tariff: the windows of the day, (start, end,
+    # start as HH:MM, end as HH:MM local), start and end as epoch seconds, today
+    # and tomorrow. None for the other decisions or without Price Control.
+    solar_windows: tuple | None = None
 
 
 class Member(Protocol):
@@ -146,3 +150,48 @@ class Member(Protocol):
 
     async def apply(self) -> None:
         """Run the battery's cycle now, so a new role or limit is written."""
+
+
+@dataclass(frozen=True)
+class SolarWait:
+    """What SOC protection does under the fixed tariff (v1.8.2).
+
+    `charge_at` None: charge from the grid now, `why` says why. Otherwise it
+    waits until `charge_at` (epoch seconds): for daylight first when
+    `daylight_at` is set, then for solar surplus; `charge_label` is the end of
+    the day as HH:MM when that is the moment, None when the wait runs out first.
+    """
+
+    charge_at: float | None
+    why: str | None = None
+    daylight_at: str | None = None
+    charge_label: str | None = None
+
+
+def solar_wait(since: float, now: float, windows: tuple | list, window_s: float) -> SolarWait:
+    """Under the fixed tariff every quarter costs the same: wait for the sun.
+
+    From the moment the battery fell under its floor (`since`) it charges from
+    solar surplus during the window of the day, and from the grid at the end
+    of that window, or once `window_s` has passed if that comes first. Under
+    the floor at night, it first waits for the window to open, if that is
+    within `window_s`. Windows are (start, end, start HH:MM, end HH:MM).
+    """
+    later = [w for w in windows if w[1] > since]
+    if not later:
+        return SolarWait(None, "direct: no daylight")
+    start, end, start_label, end_label = later[0]
+    deadline = since + window_s
+    hours = int(window_s // 3600)
+    if start > deadline:
+        return SolarWait(None, f"direct: no daylight within {hours} h")
+    charge_at = min(end, deadline)
+    if now >= charge_at:
+        return SolarWait(None, "direct: no solar surplus by the end of the day" if end <= deadline
+                         else f"direct: waited {hours} h")
+    return SolarWait(
+        charge_at,
+        daylight_at=start_label if now < start else None,
+        charge_label=end_label if end <= deadline else None,
+    )
+

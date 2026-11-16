@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Prijssturing",
-        "description": "Zet de werkmodus van een batterij op basis van de stroomprijs: met twee vaste prijzen, of met een dagplan over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan, …). Hij staat uit tot je hem aanzet. Je kunt ook een batterijcluster of het virtuele cluster kiezen: het dagplan rekent dan voor zijn batterijen samen en zet de werkmodus van het cluster.",
+        "description": "Zet de werkmodus van een batterij op basis van de stroomprijs: met een goedkope en een dure prijs, of met een dagplan over de prijzen van vandaag en morgen (Nord Pool, EPEX Spot, Zonneplan, …). Hij staat uit tot je hem aanzet. Je kunt ook een batterijcluster of het virtuele cluster kiezen: het dagplan rekent dan voor zijn batterijen samen en zet de werkmodus van het cluster. Met een vast tarief volgt hij de zon: één modus overdag, één 's nachts.",
         "data": {
           "battery_entry": "Batterij of cluster",
           "price_entity": "Prijssensor (prijs per kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
-          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie."
+          "price_entity": "Prijsbanden: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie. Vast tarief: geen nodig."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Voor het dagplan. Nord Pool (HACS) met btw aan en zonder extra kosten: spotprijs incl. btw. Met btw uit: spotprijs. Met je hele tarief in de extra kosten: importprijs. EPEX Spot: sensor Market price: spotprijs; sensor Total price: importprijs. Zonneplan: importprijs.",
-          "price_entity": "Vaste prijzen: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie."
+          "price_entity": "Prijsbanden: elke sensor met de huidige prijs. Dagplan: een sensor met een prijslijst — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e of Frank Energie. Vast tarief: geen nodig."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Vaste prijzen",
-          "day_plan": "Dagplan"
+          "price_bands": "Prijsbanden",
+          "day_plan": "Dagplan",
+          "fixed_tariff": "Vast tarief"
         },
         "name": "Beslissing"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Uit",
           "direct": "Direct",
-          "price_control": "Price Control (goedkoopst binnen 6 u)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Modus bij zonsopkomst"
+      },
+      "sunset_mode": {
+        "name": "Modus bij zonsondergang"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Goedkoop",
           "between": "Daartussen",
           "expensive": "Duur",
-          "paused": "Gepauzeerd (gecoördineerd)"
+          "paused": "Gepauzeerd (gecoördineerd)",
+          "sun_up": "Dag (zon op)",
+          "sun_down": "Nacht (zon onder)"
         },
         "name": "Status",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Extra reactietijd"
+      },
+      "fixed_import_price": {
+        "name": "Vaste importprijs"
+      },
+      "fixed_export_price": {
+        "name": "Vaste exportprijs"
+      },
+      "sunrise_offset": {
+        "name": "Verschuiving zonsopkomst"
+      },
+      "sunset_offset": {
+        "name": "Verschuiving zonsondergang"
       }
     },
     "switch": {

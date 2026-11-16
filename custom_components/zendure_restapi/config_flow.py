@@ -509,7 +509,8 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DEVICE_NAME: name,
                 },
                 options={
-                    OPT_PRICE_ENTITY: user_input[OPT_PRICE_ENTITY],
+                    # Optional since v1.8.2: the fixed tariff needs no price sensor.
+                    OPT_PRICE_ENTITY: user_input.get(OPT_PRICE_ENTITY, ""),
                     OPT_PRICE_CONTAINS: user_input.get(OPT_PRICE_CONTAINS, DEFAULTS[OPT_PRICE_CONTAINS]),
                 },
             )
@@ -524,7 +525,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Required(OPT_PRICE_ENTITY): selector.EntitySelector(
+                vol.Optional(OPT_PRICE_ENTITY): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Required(OPT_PRICE_CONTAINS, default=DEFAULTS[OPT_PRICE_CONTAINS]): _contains_selector(),
@@ -1071,11 +1072,16 @@ class ZendureOptionsFlow(config_entries.OptionsFlow):
         """Price control: the price sensor and what it holds. Everything else is an entity."""
         entry = self.config_entry
         if user_input is not None:
-            return self.async_create_entry(title="", data={**entry.options, **user_input})
+            # A cleared price sensor is left out of the input (v1.8.2: optional).
+            return self.async_create_entry(
+                title="",
+                data={**entry.options, OPT_PRICE_ENTITY: "", **user_input},
+            )
         schema = vol.Schema(
             {
-                vol.Required(
-                    OPT_PRICE_ENTITY, default=entry.options.get(OPT_PRICE_ENTITY) or vol.UNDEFINED
+                vol.Optional(
+                    OPT_PRICE_ENTITY,
+                    description={"suggested_value": entry.options.get(OPT_PRICE_ENTITY) or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Required(
                     OPT_PRICE_CONTAINS,

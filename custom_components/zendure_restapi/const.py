@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.1"
+INTEGRATION_VERSION = "1.8.2"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -296,10 +296,24 @@ OPT_PRICE_EXPENSIVE = "price_expensive"
 OPT_PRICE_CHEAP_MODE = "price_cheap_mode"
 OPT_PRICE_EXPENSIVE_MODE = "price_expensive_mode"
 OPT_PRICE_BETWEEN_MODE = "price_between_mode"
+# Fixed tariff (v1.8.2): no price sensor needed. A fixed import price and
+# export price, and an Operation mode for the day and one for the night. The
+# day runs from sunrise plus its offset to sunset plus its offset, from the
+# sun of Home Assistant's own location; solar panels deliver little in the
+# first hour after sunrise, the house wants cover before it is dark.
+OPT_FIXED_IMPORT_PRICE = "fixed_import_price"
+OPT_FIXED_EXPORT_PRICE = "fixed_export_price"
+OPT_SUNRISE_MODE = "sunrise_mode"
+OPT_SUNSET_MODE = "sunset_mode"
+OPT_SUNRISE_OFFSET = "sunrise_offset"   # minutes after sunrise, negative before
+OPT_SUNSET_OFFSET = "sunset_offset"     # minutes after sunset, negative before
+SUN_MODE_OPTIONS = (MODE_SMART_CHARGE, MODE_SMART_MATCHING, MODE_SMART_DISCHARGE, MODE_STANDBY)
 PRICE_MODE_OPTIONS = {
     OPT_PRICE_CHEAP_MODE: (MODE_QUICK_CHARGE, MODE_SMART_CHARGE),
     OPT_PRICE_EXPENSIVE_MODE: (MODE_SMART_DISCHARGE, MODE_QUICK_DISCHARGE),
     OPT_PRICE_BETWEEN_MODE: (MODE_SMART_MATCHING, MODE_STANDBY),
+    OPT_SUNRISE_MODE: SUN_MODE_OPTIONS,
+    OPT_SUNSET_MODE: SUN_MODE_OPTIONS,
 }
 PRICE_STATUS_OFF = "off"
 PRICE_STATUS_NO_PRICE = "no_price"
@@ -310,9 +324,13 @@ PRICE_STATUS_NO_PLAN = "no_plan"
 # The battery belongs to a battery cluster (v1.7.0): price control writes
 # nothing, the group's Operation mode is set on the cluster.
 PRICE_STATUS_PAUSED = "paused"
+# Fixed tariff (v1.8.2): between sunrise and sunset, each with its offset, or not.
+PRICE_STATUS_SUN_UP = "sun_up"
+PRICE_STATUS_SUN_DOWN = "sun_down"
 PRICE_STATUSES = (
     PRICE_STATUS_OFF, PRICE_STATUS_NO_PRICE, PRICE_STATUS_NO_PLAN, PRICE_STATUS_CHEAP,
     PRICE_STATUS_BETWEEN, PRICE_STATUS_EXPENSIVE, PRICE_STATUS_PAUSED,
+    PRICE_STATUS_SUN_UP, PRICE_STATUS_SUN_DOWN,
 )
 SIGNAL_PRICE_CHANGED = f"{DOMAIN}_price_changed_{{}}"
 
@@ -405,6 +423,8 @@ VIRTUAL_MODEL = "Virtual cluster (simulated)"
 VIRTUAL_UNIQUE_ID = "virtual_cluster"
 CONF_SOURCE_BATTERY = "source_battery"
 OPT_CLONES = "clones"
+# The copies' state across a restart (v1.8.2): SoC and stop memory, kept in the options like every setting.
+OPT_VIRTUAL_STATE = "virtual_state"
 OPT_LOAD_FACTOR = "load_factor"
 # Copy 1 has them too since v1.7.2, at 0 by default: it is the twin of the real
 # battery until they are changed.
@@ -436,14 +456,26 @@ VIRTUAL_DEFAULTS = {
 MAX_CLONES = 3
 
 # ── Price control: the day plan (v1.6.0) ─────────────────────────────────
-# A second way to decide, next to the two fixed prices: a plan over the
-# prices of today and tomorrow (Nord Pool, EPEX Spot and others), with separate
-# import and export formulas, conversion losses and a margin per kWh. See
-# dayplan.py.
+# A second way to decide, next to a cheap and an expensive price: a plan over
+# the prices of today and tomorrow (Nord Pool, EPEX Spot and others), with
+# separate import and export formulas, conversion losses and a margin per kWh.
+# See dayplan.py. The first was called "fixed_prices" until v1.8.1 and is
+# "price_bands" (Price bands) since v1.8.2; "fixed_tariff" (v1.8.2) is a
+# fixed-price contract, steered by the sun.
 OPT_PRICE_DECISION = "price_decision"
-DECISION_FIXED = "fixed_prices"
+DECISION_BANDS = "price_bands"
 DECISION_PLAN = "day_plan"
-PRICE_DECISIONS = (DECISION_FIXED, DECISION_PLAN)
+DECISION_TARIFF = "fixed_tariff"
+DECISION_BANDS_OLD = "fixed_prices"
+PRICE_DECISIONS = (DECISION_BANDS, DECISION_PLAN, DECISION_TARIFF)
+
+
+def decision_choice(value: object) -> str:
+    """The Decision of a stored value: "fixed_prices" of v1.8.1 and earlier is
+    Price bands; anything unknown is the default."""
+    if value == DECISION_BANDS_OLD:
+        return DECISION_BANDS
+    return value if value in PRICE_DECISIONS else DECISION_BANDS
 # What the price sensor holds; the formulas need the bare spot price.
 OPT_PRICE_CONTAINS = "price_contains"
 PRICE_CONTAINS_OPTIONS = ("spot_vat", "spot", "import_price")
@@ -470,8 +502,16 @@ PLAN_ACTIONS = ("charge", "discharge", "idle")
 #   fixed, in between standby          0.04 / 0.05
 #   plan,  in between smart_matching   1.67 / 1.02
 #   plan,  in between standby          1.73 / 0.67
+# Fixed tariff: under net metering a kWh sent to the grid earns the import
+# price, so storing solar earns nothing and the battery rests; without it the
+# day soaks up the surplus and the night covers the house with it.
 def price_presets(decision: str, net_metering: bool) -> dict[str, str]:
-    """The cheap, expensive and in-between mode for a decision."""
+    """The modes a decision starts with: per band, or by day and night."""
+    if decision == DECISION_TARIFF:
+        return {
+            OPT_SUNRISE_MODE: MODE_STANDBY if net_metering else MODE_SMART_CHARGE,
+            OPT_SUNSET_MODE: MODE_STANDBY if net_metering else MODE_SMART_MATCHING,
+        }
     plan = decision == DECISION_PLAN
     return {
         OPT_PRICE_CHEAP_MODE: MODE_QUICK_CHARGE,
@@ -546,7 +586,7 @@ DEFAULTS = {
     # import = spot x 1.21 + supplier surcharge and energy tax incl. VAT,
     # export = spot + 0.02 (no VAT) once net metering has ended; contract
     # bonuses are left out of the plan.
-    OPT_PRICE_DECISION: DECISION_FIXED,
+    OPT_PRICE_DECISION: DECISION_BANDS,
     OPT_PRICE_CONTAINS: "spot_vat",     # the Nord Pool sensor's own default
     OPT_NET_METERING: False,
     OPT_IMPORT_FACTOR: 1.21,
@@ -558,6 +598,14 @@ DEFAULTS = {
     OPT_HOUSE_LOAD: 400,                # W the battery covers while discharging
     OPT_CHARGE_EFFICIENCY: 95,          # %, grid to cells
     OPT_DISCHARGE_EFFICIENCY: 95,       # %, cells to house
+    # Fixed tariff (v1.8.2): a Dutch fixed contract after net metering, with
+    # feed-in costs that leave a cent or so per kWh exported.
+    OPT_FIXED_IMPORT_PRICE: 0.25,       # per kWh
+    OPT_FIXED_EXPORT_PRICE: 0.01,       # per kWh: feed-in compensation minus feed-in costs
+    OPT_SUNRISE_MODE: MODE_SMART_CHARGE,
+    OPT_SUNSET_MODE: MODE_SMART_MATCHING,
+    OPT_SUNRISE_OFFSET: 60,             # min
+    OPT_SUNSET_OFFSET: -30,             # min
     # Battery cluster (v1.7.0)
     OPT_CONCENTRATE_BELOW: 300,         # W, below this one battery works alone
     OPT_REDISTRIBUTE: 30,               # s between two splits over the secondaries
@@ -754,3 +802,25 @@ CONTROL_REST_MIN_SECONDS = 10   # floor under the poll-derived hysteresis
 TRACE_MAX_ROWS = 5000
 TRACE_ROWS_JITTER = 400     # plus or minus, drawn per file
 
+
+
+# Charging at low power (v1.8.2, for the advice of the fixed tariff): the cells
+# get about CHARGE_FACTOR x AC - CHARGE_FIXED_W, and later about
+# DISCHARGE_SHARE of that comes back to the house; the measured figures of a
+# SolarFlow 3000 Mix AC+ (docs/low_demand.md). Storing beats exporting where
+# that share times the import price is above the export price.
+CHARGE_FIXED_W = 44.0
+CHARGE_FACTOR = 0.967
+DISCHARGE_SHARE = 0.8
+
+
+def stop_charge_advice(import_price: float, export_price: float) -> int | None:
+    """The lowest charging power, in W, at which storing beats exporting,
+    rounded up to 10 W and at least 50 W; None when storing never pays."""
+    if import_price <= 0:
+        return None
+    room = CHARGE_FACTOR - max(0.0, export_price) / import_price / DISCHARGE_SHARE
+    if room <= 0.05:
+        return None
+    watts = CHARGE_FIXED_W / room
+    return max(50, int(-(-watts // 10) * 10))

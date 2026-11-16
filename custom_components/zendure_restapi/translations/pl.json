@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Sterowanie cenowe",
-        "description": "Ustawia tryb pracy baterii według ceny energii: z dwiema stałymi cenami albo z planem dziennym na cenach z dziś i jutra (Nord Pool, EPEX Spot, Zonneplan, …). Jest wyłączone, dopóki go nie włączysz. Możesz też wybrać klaster akumulatorów lub Virtual cluster: plan dzienny planuje wtedy dla wszystkich jego baterii razem i ustawia tryb pracy klastra.",
+        "description": "Ustawia tryb pracy baterii według ceny energii: z tanią i drogą ceną albo z planem dziennym na cenach z dziś i jutra (Nord Pool, EPEX Spot, Zonneplan, …). Jest wyłączone, dopóki go nie włączysz. Możesz też wybrać klaster akumulatorów lub Virtual cluster: plan dzienny planuje wtedy dla wszystkich jego baterii razem i ustawia tryb pracy klastra. Przy stałej taryfie kieruje się słońcem: jeden tryb w dzień, drugi w nocy.",
         "data": {
           "battery_entry": "Bateria lub klaster",
           "price_entity": "Czujnik ceny (cena za kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu. EPEX Spot: czujnik Market price: cena spot; czujnik Total price: cena zakupu. Zonneplan: cena zakupu.",
-          "price_entity": "Stałe ceny: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e lub Frank Energie."
+          "price_entity": "Przedziały cenowe: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e lub Frank Energie. Stała taryfa: niepotrzebny."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Dla planu dziennego. Nord Pool (HACS) z VAT i bez kosztów dodatkowych: cena spot z VAT. Bez VAT: cena spot. Z całą taryfą w kosztach dodatkowych: cena zakupu. EPEX Spot: czujnik Market price: cena spot; czujnik Total price: cena zakupu. Zonneplan: cena zakupu.",
-          "price_entity": "Stałe ceny: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e lub Frank Energie."
+          "price_entity": "Przedziały cenowe: dowolny czujnik z bieżącą ceną. Plan dzienny: czujnik z listą cen — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e lub Frank Energie. Stała taryfa: niepotrzebny."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Stałe ceny",
-          "day_plan": "Plan dzienny"
+          "price_bands": "Przedziały cenowe",
+          "day_plan": "Plan dzienny",
+          "fixed_tariff": "Stała taryfa"
         },
         "name": "Decyzja"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Wyłączona",
           "direct": "Bezpośrednio",
-          "price_control": "Price Control (najtaniej w ciągu 6 h)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Tryb od wschodu słońca"
+      },
+      "sunset_mode": {
+        "name": "Tryb od zachodu słońca"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Tanio",
           "between": "Pomiędzy",
           "expensive": "Drogo",
-          "paused": "Wstrzymane (koordynowane)"
+          "paused": "Wstrzymane (koordynowane)",
+          "sun_up": "Dzień (słońce wzeszło)",
+          "sun_down": "Noc (słońce zaszło)"
         },
         "name": "Stan",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Extra response time"
+      },
+      "fixed_import_price": {
+        "name": "Stała cena zakupu"
+      },
+      "fixed_export_price": {
+        "name": "Stała cena sprzedaży"
+      },
+      "sunrise_offset": {
+        "name": "Przesunięcie wschodu słońca"
+      },
+      "sunset_offset": {
+        "name": "Przesunięcie zachodu słońca"
       }
     },
     "switch": {

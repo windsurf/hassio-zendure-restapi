@@ -110,7 +110,7 @@ Until v1.7.2 these were *Power* and *Real grid*, and *Load factor* was a sensor 
 
 ## Where the copies start
 
-At the start of the Virtual cluster (adding it, a restart of Home Assistant, a reload) and at *Reset* — and only then — every copy gets a state of charge of its own (v1.7.2):
+When the Virtual cluster is added, at *Reset*, and at a start in Operation mode *Follow source* — and only then — every copy gets a state of charge of its own (v1.7.2):
 
 1. **Centred on your battery.** Each copy gets your battery's SoC plus its own offset minus the mean offset (copy 1 at 0 by default). With one copy its offset centres away: it starts on your battery's SoC. The copies then average your battery: the cluster's *State of charge* starts on it.
 2. **Shifted into 5–100 %.** When that leaves a copy below 5 % or above 100 %, the whole set moves until it fits, so the differences between the copies stay the offsets you set.
@@ -127,6 +127,8 @@ With offsets 0 / −20 / +15:
 With one copy, or offsets that add up to 0, Virtual copy 1 starts on your battery's SoC. After a shift it does not: compare it with your battery on the change in state of charge, not on the level. For such a comparison, press *Reset* while your battery is in the middle (with these offsets between 23 and 83 %), where nothing shifts.
 
 What happened is on the entities: the cluster status carries `start_soc_real`, `start_centre` and `start_shift`, each copy's *State of charge* `start_offset_vs_real`. A changed offset counts from the next start or *Reset*.
+
+**Across a restart the copies keep their state (v1.8.2).** In every Operation mode but *Follow source* a restart of Home Assistant or a reload picks up where the copies were: their state of charge (one decimal) and whether a copy had stopped charging or discharging. It is kept in the options of the Virtual cluster, where its settings are kept too: written when a copy changed, checked every 5 minutes and when Home Assistant or the cluster stops; no file of its own, no entity, no history. The time Home Assistant was down is not simulated: the copies go on from where they were. The cluster status then shows `start_soc_real` without `start_centre` and `start_shift`. *Follow source* follows your battery and so starts centred on it, as before. Another number of copies, or a saved state that cannot be read, also starts centred.
 
 ## Dashboard
 

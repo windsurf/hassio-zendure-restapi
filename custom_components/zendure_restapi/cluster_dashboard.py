@@ -380,7 +380,7 @@ def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | Non
         "type": APEX, "graph_span": "48h", "span": {"start": "day"}, "now": {"show": True, "label": "Now"},
         "header": {"show": False},
         "yaxis": [
-            {"id": "power", "min": "~-3000", "decimals": 0, "align_to": step, "apex_config": {
+            {"id": "power", "min": "~0", "decimals": 0, "align_to": step, "apex_config": {
                 "stepSize": step,
                 "labels": {"formatter": "EVAL:function (v) { return Math.round(v) % "
                            + str(2 * step) + " === 0 ? Math.round(v) : \"\"; }"}}},

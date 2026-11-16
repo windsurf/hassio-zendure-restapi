@@ -4,15 +4,15 @@
 
 🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Version](README.de.md)
 
-**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.** Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je batterij toe, kies een modus — de batterij houdt je netaansluiting op nul, elke seconde: nul op de meter.
+**Je Zendure SolarFlow-thuisbatterij in Home Assistant, 100% lokaal, in drie stappen.** Geen cloudaccount, geen MQTT-broker, geen YAML-packages om te kopiëren. Installeer via HACS, voeg je batterij toe, kies een modus: dat is het.
 
-**⚖️ Nul op de meter, elke seconde.** De batterij houdt je netaansluiting op nul (*nul op de meter*, NOM; Engels: *zero export*). Een snelle lus leest je meter elke seconde en corrigeert gelijkmatig aan beide kanten van nul: wat je zonnepanelen aan het net zouden geven gaat de batterij in, en wat het huis uit het net zou halen komt eruit, zonder heen en weer te slingeren. Waarom het loont: een kWh die je teruglevert brengt minder op dan een kWh die je afneemt kost — en zodra salderen stopt, kan terugleveren je zelfs geld kosten. Elke kWh die thuis blijft is de volle inkoopprijs waard.
+**⚖️ Nul op de meter? Elke seconde.** De batterij houdt je netaansluiting op nul. Een snelle lus leest je meter elke seconde en corrigeert gelijkmatig aan beide kanten van nul: wat je zonnepanelen aan het net zouden geven gaat de batterij in, en wat het huis uit het net zou halen komt eruit, zonder heen en weer te slingeren. Waarom het loont: een kWh die je teruglevert brengt minder op dan een kWh die je afneemt kost — en zodra salderen stopt, kan terugleveren je zelfs geld kosten. Elke kWh die thuis blijft is de volle inkoopprijs waard.
 
-**☀️ Vast contract met zonnepanelen? Ondersteund.** Geen prijssensor, geen Price Control: `smart_matching` slurpt je zonne-overschot op en geeft het 's avonds terug aan het huis. Als salderen stopt (Nederland, 2027) en je leverancier terugleverkosten rekent, is elke kWh die je opslaat in plaats van teruglevert bijna de volle inkoopprijs waard. [Meer](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract) (Engels)
+**☀️ Vast contract met zonnepanelen? Ondersteund.** Geen prijssensor, geen Price Control: `smart_matching` slurpt je zonne-overschot op en geeft het 's avonds terug aan het huis. Als salderen stopt (Nederland, 2027) en je leverancier terugleverkosten rekent, is elke kWh die je opslaat in plaats van teruglevert bijna de volle inkoopprijs waard. [Meer](./README2.md#on-a-fixed-price-contract) (Engels)
 
 **💶 Dynamisch tarief? Ingebouwd.** Zonneplan, Tibber, Frank Energie, Vattenfall, Essent of elke andere leverancier: Price Control plant laden en ontladen per kwartier over de prijzen van vandaag en morgen, met omzetverlies en slijtage meegerekend. Salderen zit erin zolang het geldt. Zet het aan — geen automation te schrijven.
 
-**🔌 Works with HomeWizard.** Heb je al een HomeWizard P1-meter? Meer heb je niet nodig — een Zendure-meter is niet vereist. YouLess, EcoTracker, Shelly Pro 3EM en de Zendure-meters werken ook.
+**🔌 Works with HomeWizard, and others.** Heb je al een HomeWizard P1-meter? Meer heb je niet nodig — een Zendure-meter is niet vereist. YouLess, EcoTracker, Shelly Pro 3EM, de Zendure-meters en andere werken ook.
 
 ![\<afbeelding van het dashboard\>](images/dashboard.png)
 
@@ -66,14 +66,14 @@ In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe 
 - **100% lokaal.** Praat rechtstreeks met de eigen HTTP-server van de batterij op je netwerk. Blijft werken als internet of de Zendure-cloud dat niet doet.
 - **Nul-teruglevering, elke seconde.** Een snelle lus volgt je meter elke seconde; een tragere regelt de richting en de veiligheid. Gebouwd en afgesteld op metingen, niet op aannames.
 - **Zeven werkmodi** — van rustig `standby` tot `smart_matching`, alleen laden, alleen ontladen, snel laden/ontladen en handmatig. Stuur ze met de hand, met Price Control of met je eigen automation.
-- **Dynamische tarieven, ingebouwd.** Price Control stuurt de batterij op twee vaste prijzen of op een dagplan over de prijzen van vandaag en morgen — zie [Prijssturing](#-prijssturing).
-- **Ook voor vaste contracten.** Met zonnepanelen en een vaste prijs slaat `smart_matching` alleen al het overschot op voor de avond; prijzen zijn niet nodig.
+- **Dynamische tarieven, ingebouwd.** Price Control stuurt de batterij op een goedkope en een dure prijs, op een dagplan over de prijzen van vandaag en morgen, of op een vast tarief per dag en nacht — zie [Prijssturing](#-prijssturing).
+- **Ook voor vaste contracten.** Met zonnepanelen en een vaste prijs slaat `smart_matching` alleen al het overschot op voor de avond; prijzen zijn niet nodig. Het *Vaste tarief* van Price Control wisselt op de zon tussen een dag- en een nachtmodus.
 - **Blijft werken als het web het laat afweten.** De sturing draait lokaal in je netwerk, zonder cloud. Prijzen kunnen uit EPEX Spot of Nord Pool komen, die doorwerkten terwijl webdiensten offline gingen voor de noodpatches van PHP2Shell, en Price Control houdt bij een storing de laatste prijzen vast (v1.6.9).
 - **Instellingen zijn entiteiten.** Elke instelling overleeft een herstart en is live aan te passen vanaf het dashboard of vanuit een automation. Updates via HACS laten je eigen configuratie met rust.
 - **Je eigen meter.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM of Zendure — gevonden op je netwerk of toegevoegd op IP-adres, rechtstreeks gelezen, elke seconde, niet via een tragere Home Assistant-sensor. Of elke vermogenssensor die Home Assistant al heeft.
 - **Veilig ontworpen.** Geen geldige meterwaarde, geen beweging: de batterij stopt. Twee batterijen vechten nooit om dezelfde meter; elke batterij heeft zijn eigen regelaar, meterkeuze en prijssturing.
 - **Laag sluimerverbruik, gemeten.** Geeft de batterij terug aan zijn zuinige stand als er niets te doen is: ongeveer 5 W in plaats van 29–36 W (Backup mode `closed`), elk uur dat hij stilstaat.
-- **Spaart het flashgeheugen.** De slimme modi schrijven hun limieten naar het werkgeheugen, niet naar flash — tienduizenden schrijfacties per jaar die het apparaat niet slijten.
+- **Spaart de hardware.** Frequente aanpassingen komen niet in het vaste geheugen van de batterij, dus ze slijten het niet ([hoe](./README2.md#safety), Engels).
 - **Laat een volle batterij met rust.** Op de eigen SOC-grenzen van het apparaat wordt niets in de dichte richting besteld: een hele nacht op 100% kostte twee limietwijzigingen, en de status zegt waarom.
 - **Alles zichtbaar.** Kant-en-klaar dashboard, een controllerstatus die zegt *waarom*, laad- en ontlaadrendement als sensoren, en een optionele CSV-trace per seconde voor wie het precies wil weten.
 - **Elke wijziging gemeten vóór de release.** Wijzigingen aan de regellus worden eerst nagespeeld op opgenomen meetreeksen per seconde; de metingen en de correcties op Zendures documentatie staan openbaar in de technische referentie.
@@ -85,9 +85,13 @@ In één keer ingesteld: **Integratie toevoegen → Zendure RestAPI → Externe 
 
 **1. Zet de lokale API aan en de eigen sturing van Zendure uit** — onder EN 18031 staat de API standaard uit. In de Zendure-app:
 - voeg **HEMS** toe — dat zet de lokale API aan;
-- zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
+- zet op de apparaatpagina **Add to HEMS** uit — dan blijft de eigen sturing van Zendure buiten spel. Andere manieren en de vermogensinstellingen van de app: [Before you start](./README2.md#-before-you-start).
 
 Sluit de app daarna af. Controleer het vanuit een browser: `http://<ip-batterij>/properties/report` moet een resultaat in JSON-formaat tonen: tekst tussen accolades `{ … }` met `"properties"` erin.
+
+<img src="images/app_add_to_hems.png" width="300" alt="&lt;afbeelding van de schakelaar Add to HEMS&gt;"> <img src="images/app_safe_power_setting.png" width="300" alt="&lt;afbeelding van de Safe power setting&gt;">
+
+*Links: **Add to HEMS** uit op de apparaatpagina. Rechts: de **Safe power setting** (zeshoekje rechtsboven op de HEMS-pagina → Home settings), het plafond voor laden en ontladen dat Home Assistant niet verhoogt.*
 
 **2. Installeer**
 
@@ -99,9 +103,9 @@ Of met de hand: vanaf Home Assistant 2026.11 **Instellingen → Marketplace**, z
 
 **3. Voeg je apparaten toe** Home Assistant vindt de batterij en de P1-meter meestal zelf, onder **Instellingen → Apparaten & diensten**. Anders: voeg **Zendure RestAPI** toe, kies **Zendure-batterij** (de eerste optie) en vul het IP-adres in. Het dashboard **Zendure RestAPI** verschijnt vanzelf in je zijbalk; een bestaand dashboard blijft ongemoeid. Zet **Operation mode** op `smart_matching` en zie het net naar nul gaan.
 
-**Eén regelaar.** Zet uit wat de batterij verder nog stuurt: de eigen sturing van Zendure in de app (ZENKI — *Add to HEMS* uit, of *Custom Mode* zonder regels), een andere integratie, of een Home Assistant-automation die de modus of de limieten van de batterij zet. Twee regelaars op één batterij maken elkaars werk ongedaan; de integratie waarschuwt met de sensor *Tweede regelaar*. Zie [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start) (Engels).
+**Eén regelaar.** Zet uit wat de batterij verder nog stuurt: de eigen sturing van Zendure in de app (ZENKI — *Add to HEMS* uit, of *Custom Mode* zonder regels), een andere integratie, of een Home Assistant-automation die de modus of de limieten van de batterij zet. Twee regelaars op één batterij maken elkaars werk ongedaan; de integratie waarschuwt met de sensor *Tweede regelaar*. Zie [Before you start](./README2.md#-before-you-start) (Engels).
 
-**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Een meter die al in Home Assistant zit: **Externe netmeter uit Home Assistant**. Klaar — `auto` pakt hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
+**Je meter:** een HomeWizard P1-meter staat klaar onder *Ontdekt*; klik **Toevoegen**. Andere meters: **Integratie toevoegen → Zendure RestAPI → Externe netmeter via IP**, kies YouLess, EcoTracker, Shelly of Zendure en vul het IP-adres in. Een meter die al in Home Assistant zit: voeg hem toe met **Integratie toevoegen → Zendure RestAPI → Externe netmeter uit Home Assistant**; daarna pakt `auto` hem op. Een Zendure P1-meter wordt gevonden als eigen apparaat en vraagt verder niets.
 
 ---
 
@@ -120,7 +124,7 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 | `quick_charge` / `quick_discharge` | Vol vermogen, los van de meter |
 | `manual` | Volgt een vast instelpunt |
 
-**Vast contract met zonnepanelen:** kies `smart_matching` en laat Price Control uit; *Laden stoppen onder* en *Ontladen stoppen onder* blijven op hun standaard van 50 W, zodat ook kleine overschotten en kleine vraag worden opgevangen. Wanneer opslaan loont: [On a fixed-price contract](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract) (Engels).
+**Vast contract met zonnepanelen:** kies `smart_matching` en laat Price Control uit; *Laden stoppen onder* en *Ontladen stoppen onder* blijven op hun standaard van 50 W, zodat ook kleine overschotten en kleine vraag worden opgevangen. Of laat Price Control op de zon wisselen: **Beslissing** op **Vast tarief**, overdag `smart_charge_only` en 's nachts `smart_matching` ([Fixed tariff](./README2.md#fixed-tariff), Engels). Wanneer opslaan loont: [On a fixed-price contract](./README2.md#on-a-fixed-price-contract) (Engels).
 
 ---
 
@@ -130,27 +134,19 @@ De namen van de modi blijven in elke taal gelijk, zodat automations en documenta
 
 *Het tabblad Price Control: het dagplan voor vandaag en morgen, gemeten tot nu en gepland daarna, welke kwartieren laden en welke ontladen, en de verwachte marge. Met salderen aan volgt de terugleverprijs de afnameprijs.*
 
-Twee manieren om de batterij te sturen op een dynamisch tarief, in een eigen apparaat:
+Drie manieren om de batterij te sturen, in een eigen apparaat:
 
-- **Vaste prijzen** — op of onder een **goedkope prijs** laadt de batterij (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: EPEX Spot, Nord Pool, Zonneplan, Frank Energie of je eigen.
+- **Prijsbanden** (tot v1.8.1 *Vaste prijzen*) — op of onder een **goedkope prijs** laadt de batterij (uit het net, of alleen van zon), op of boven een **dure prijs** ontlaadt hij, daartussen houdt hij het net op nul (de modi per band kies je zelf). Elke prijssensor werkt: EPEX Spot, Nord Pool, Zonneplan, Frank Energie of je eigen.
 - **Dagplan** (nieuw in v1.6.0) — over de prijzen van vandaag en morgen van [EPEX Spot](https://github.com/mampfes/ha_epex_spot), Nord Pool of de eigen integratie van je leverancier bepaalt het per kwartier of de batterij laadt, ontlaadt of geen van beide, met aparte import- en exportprijzen, omzetverlies, slijtage en een minimale marge per kWh. Standaard handelt het: laden en ontladen op het volle vermogen van de batterij; met de modi per band dekt het desgewenst alleen het huis of laadt het alleen van zon. Klaar voor het einde van de saldering in 2027: zet *Net metering* uit en de exportprijs volgt zijn eigen formule.
+- **Vast tarief** (nieuw in v1.8.2) — voor een vast contract, zonder prijssensor: een vaste import- en exportprijs, één modus overdag en één 's nachts, de dag van zonsopkomst plus een verschuiving tot zonsondergang plus een verschuiving. Standaard overdag `smart_charge_only` en 's nachts `smart_matching`, zodat de batterij zich vult met zonne-overschot en de avond dekt; beide `standby` zolang salderen aan staat. De status geeft een advies voor *Laden stoppen onder* uit de twee prijzen.
 
-Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,58 per dag** op — evenveel als een volledige energieplanner op dezelfde dagen; de vaste prijzen € 0,21.
+Teruggespeeld op 30 dagen van een echte installatie leverde het dagplan **€ 1,58 per dag** op — evenveel als een volledige energieplanner op dezelfde dagen.
 
-**Dagplan — wat je nodig hebt:** een prijssensor met de prijzen van vandaag en morgen, en **ApexCharts Card** uit HACS voor de grafiek. De day-aheadprijs is één prijs per land, dus elk dynamisch contract werkt: **EPEX Spot** is de aanbevolen bron en staat hieronder, **Nord Pool** werkt ook, en de opslag van je leverancier, de energiebelasting en de btw stel je in bij Price Control. Zo koppel je elke leverancier met een dynamisch contract — Zonneplan, Tibber, Frank Energie, Vattenfall, Eneco, Essent, Budget Energie, NextEnergy, Coolblue Energie, Vandebron, ANWB Energie, EnergyZero en meer. Klanten van Zonneplan en Frank Energie kunnen ook de eigen integratie van hun leverancier gebruiken. Zonder ApexCharts Card werkt het dagplan gewoon; het dashboard toont dan een melding in plaats van de grafiek.
+**In vier stappen ingesteld:** EPEX Spot (of Nord Pool) en ApexCharts Card uit HACS, Prijssturing met de sensor *Market price* op **Spotprijs excl. btw**, **Beslissing** op **Dagplan**, en je eigen tarief — uitleg in [Setting up spot prices](./README2.md#setting-up-spot-prices-for-the-day-plan) (Engels). De day-aheadprijs is één prijs per land, dus elk dynamisch contract werkt, welke leverancier het ook is. In 2026: *Importfactor* 1,21, *Importopslag* 0,1108481 (energiebelasting incl. btw) + de inkoopkosten per kWh van je leverancier ([tabel](./README2.md#import-surcharge-per-supplier-netherlands), Engels), en **Salderen** aan tot 1 januari 2027. Zonder ApexCharts Card werkt het dagplan gewoon; het dashboard toont dan een melding in plaats van de grafiek.
 
-1. Installeer **EPEX Spot** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)) en **ApexCharts Card** ([open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)); herstart Home Assistant en ververs de browser.
-2. **Integratie toevoegen → EPEX Spot** met je marktgebied (`NL` voor Nederland).
-3. Voeg Prijssturing toe (hieronder) met de sensor *Market price*, `sensor.epex_spot_data_market_price`, en zet *De prijssensor bevat* op **Spotprijs excl. btw**.
-4. Zet **Beslissing** op **Dagplan**. In 2026: *Importfactor* 1,21, *Importopslag* 0,1108481 (energiebelasting incl. btw) + de inkoopkosten per kWh van je leverancier ([tabel](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#import-surcharge-per-supplier-netherlands), Engels), en **Salderen** aan tot 1 januari 2027. Vergelijk **Importprijs** met de prijs van je leverancier voor dit kwartier.
+**Toevoegen:** **Integratie toevoegen → Zendure RestAPI → Prijssturing**, kies de batterij en je prijssensor (geen bij het vaste tarief). Het apparaat **Price Control** verschijnt naast je batterij; zet het daar aan. Elke instelling is live aan te passen, op dat apparaat of op het tabblad *Price Control* van het dashboard.
 
-**Liever Nord Pool?** Stel hem kaal in: *Include VAT* uit, precisie 7, low price percentage 0 (`sensor.nordpool_kwh_nl_eur_7_00_0`), en kies **Spotprijs excl. btw**. **De eigen integratie van je leverancier** (Zonneplan, Frank Energie): kies **Importprijs (heel tarief)**. Zie [Other price sources](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more) (Engels).
-
-Volledige uitleg, tariefinstellingen voor andere contracten en landen: [Setting up spot prices](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-spot-prices-for-the-day-plan) (Engels).
-
-**Toevoegen:** **Integratie toevoegen → Zendure RestAPI → Prijssturing**, kies de batterij en je prijssensor. Het apparaat **Price Control** verschijnt naast je batterij; zet het daar aan. Elke instelling is live aan te passen, op dat apparaat of op het tabblad *Price Control* van het dashboard.
-
-Standaard uit, en hij schrijft de werkmodus alleen als de beslissing verandert, dus een modus die je met de hand zet blijft staan. Stuurt een eigen automation of planner de werkmodus al, laat hem dan uit. Details in de [technische referentie](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Engels).
+Standaard uit, en hij schrijft de werkmodus alleen als de beslissing verandert, dus een modus die je met de hand zet blijft staan. Stuurt een eigen automation of planner de werkmodus al, laat hem dan uit. Details in de [technische referentie](./README2.md#-price-control) (Engels).
 
 ---
 
@@ -160,32 +156,34 @@ SolarFlow 3000 Mix AC+, één intern accupakket. Methode en ruwe cijfers in de t
 
 | | Gemeten |
 |---|---|
-| [Laadrendement](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) bij 3 kW, AC → cellen | **95,2%** (drie vensters, 95,1–95,2%) |
-| [Ontlaadverlies](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) | vast ~33 W plus 97,4% omzetting — 95%+ bij hoog vermogen, 81–84% bij 100–200 W |
-| [Bruikbare capaciteit](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#usable-capacity) | **8,8 kWh** aan de cellen; 9,3 kWh aan de AC-aansluiting voor 0 → 100% |
-| [Sluimerverbruik](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#known-limitations) | 29–36 W zolang hij wakker is; ongeveer 5 W zodra `standby` hem laat slapen (Backup mode `closed`) |
-| [Vertraging Zendure P1-meter](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-delay) | 0,4–1,1 s achter een YouLess op dezelfde poort; herhaalt in 28% van de seconden zijn vorige waarde |
+| [Laadrendement](./README2.md#conversion-efficiency) bij 3 kW, AC → cellen | **95,2%** (drie vensters, 95,1–95,2%) |
+| [Ontlaadverlies](./README2.md#conversion-efficiency) | vast ~33 W plus 97,4% omzetting — 95%+ bij hoog vermogen, 81–84% bij 100–200 W |
+| [Bruikbare capaciteit](./README2.md#usable-capacity) | **8,8 kWh** aan de cellen; 9,3 kWh aan de AC-aansluiting voor 0 → 100% |
+| [Sluimerverbruik](./README2.md#-known-limitations) | 29–36 W zolang hij wakker is; ongeveer 5 W zodra `standby` hem laat slapen (Backup mode `closed`) |
+| [Vertraging Zendure P1-meter](./README2.md#the-delay) | 0,4–1,1 s achter een YouLess op dezelfde poort; herhaalt in 28% van de seconden zijn vorige waarde |
 
 ---
 
 ## 📖 Technische referentie
 
-Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md)** (Engels):
+Alles wat op deze pagina ontbreekt staat in **[README2.md – Technical reference](./README2.md)** (Engels):
 
-- [Supported products](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#-supported-products) — zekerheid per model en waar die op rust
-- [Device support](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#device-support) — wat er per model verschilt, en waarom zonnepanelen op het apparaat experimenteel zijn
-- [How the controller works](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#how-the-controller-works) — de twee lussen, de boekhouding, de beveiligingen
-- [External meters](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#an-external-p1-meter) — HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, Zendure 3CT
-- [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) — elf talen, verbeteringen welkom
-- [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) en [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
-- [Debug logging en de voorbeeldtrace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
-- [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
-- [Batterijcluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — tot zes batterijen, op elke fase, als één systeem (Engels)
-- [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
+- [Supported products](./README2.md#-supported-products) — zekerheid per model en waar die op rust
+- [Device support](./README2.md#device-support) — wat er per model verschilt, en waarom zonnepanelen op het apparaat experimenteel zijn
+- [How the controller works](./README2.md#-how-the-controller-works) — de twee lussen, de boekhouding, de beveiligingen
+- [External meters](./README2.md#-an-external-p1-meter) — HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, Zendure 3CT
+- [Languages](./README2.md#languages) — elf talen, verbeteringen welkom
+- [Supported entities](./README2.md#-supported-entities) en [The Energy dashboard](./README2.md#-the-energy-dashboard)
+- [Debug logging en de voorbeeldtrace](./README2.md#-debug-logging)
+- [zenSDK and this integration](./README2.md#-zensdk-and-this-integration) — wat de SDK van Zendure noemt, en wat deze integratie toevoegt en corrigeert
+- [Batterijcluster](./docs/cluster.md) — tot zes batterijen, op elke fase, als één systeem (Engels)
+- [Changelog](./README2.md#-changelog)
+
+---
 
 **De 1.8-reeks** gaat over **één dagplan** voor een heel cluster — echt of virtueel — met een eigen Price control; een vast contract dat op de **zon** stuurt; en een batterij die niet meer **achter korte pieken aanjaagt**, met een teller die dat laat zien. Ze bouwt voort op de clusters van de 1.7-reeks: *SOC protection* wacht op het goedkoopste kwartier of op de zon, de volste batterij werkt eerst, en het cluster krijgt een tabblad *History* met het zonnevermogen. De [changelog](./README2.md#-changelog) noemt wat er veranderde en de eerdere releases.
 
-**Laatste release – v1.8.1:** een batterijcluster of het virtuele cluster met alle batterijen leeg kan wachten op het goedkoopste moment uit zijn eigen Price control voordat het ze laadt, zoals een losse batterij; de tab Cluster meldt een batterij met een fout of een tweede regelaar. **v1.8.0:** Price control kan een batterijcluster of het virtuele cluster sturen: één dagplan voor al zijn batterijen samen, de werkmodus van het cluster daaruit gezet, en een tab Price Control op het clusterdashboard; op het virtuele cluster een dagplan voor batterijen die je niet hebt.
+**Laatste release – v1.8.2:** een kortere README: het instellen van de prijzen staat in de technische referentie en de schermafbeeldingen van de app bij *Aan de slag*; SOC-bescherming krijgt een samenvatting; hoe het dagplan omgaat met pieken, negatieve prijzen en de zon; een inhoudsopgave van de gidsen in `docs/`; *Vaste prijzen* heet nu *Prijsbanden*; een nieuwe beslissing **Vast tarief** voor vaste contracten: één modus overdag, één 's nachts, op de zon; de kopieën van het virtuele cluster houden hun laadtoestand over een herstart heen. **v1.8.1:** een batterijcluster of het virtuele cluster met alle batterijen leeg kan wachten op het goedkoopste moment uit zijn eigen Price control voordat het ze laadt, zoals een losse batterij; de tab Cluster meldt een batterij met een fout of een tweede regelaar. **v1.8.0:** Price control kan een batterijcluster of het virtuele cluster sturen: één dagplan voor al zijn batterijen samen, de werkmodus van het cluster daaruit gezet, en een tab Price Control op het clusterdashboard; op het virtuele cluster een dagplan voor batterijen die je niet hebt.
 
 <a id="meer"></a>
 

@@ -29,7 +29,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from homeassistant.const import PERCENTAGE, UnitOfPower
+from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTime
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -38,6 +38,8 @@ from .const import (
     OPT_DISCHARGE_EFFICIENCY,
     OPT_EXPORT_FACTOR,
     OPT_EXPORT_SURCHARGE,
+    OPT_FIXED_EXPORT_PRICE,
+    OPT_FIXED_IMPORT_PRICE,
     OPT_HOUSE_LOAD,
     OPT_IMPORT_FACTOR,
     OPT_IMPORT_SURCHARGE,
@@ -50,6 +52,10 @@ from .const import (
     OPT_PRICE_DECISION,
     OPT_PRICE_EXPENSIVE,
     OPT_PRICE_EXPENSIVE_MODE,
+    OPT_SUNRISE_MODE,
+    OPT_SUNRISE_OFFSET,
+    OPT_SUNSET_MODE,
+    OPT_SUNSET_OFFSET,
     OPT_WEAR_COST,
     PLAN_ACTIONS,
     PRICE_DECISIONS,
@@ -169,6 +175,26 @@ PRICE_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         native_max_value=100, native_step=0.1, mode=NumberMode.BOX,
         native_unit_of_measurement=PERCENTAGE, icon="mdi:battery-arrow-down-outline",
     ), OPT_DISCHARGE_EFFICIENCY),
+    # Fixed tariff (v1.8.2): the two prices of the contract and the offsets
+    # of the day from sunrise and sunset.
+    (NumberEntityDescription(
+        key="fixed_import_price", name="Fixed import price", native_min_value=0, native_max_value=1,
+        native_step=0.0000001, mode=NumberMode.BOX, icon="mdi:transmission-tower-import",
+    ), OPT_FIXED_IMPORT_PRICE),
+    (NumberEntityDescription(
+        key="fixed_export_price", name="Fixed export price", native_min_value=-0.5, native_max_value=0.5,
+        native_step=0.0000001, mode=NumberMode.BOX, icon="mdi:transmission-tower-export",
+    ), OPT_FIXED_EXPORT_PRICE),
+    (NumberEntityDescription(
+        key="sunrise_offset", name="Sunrise offset", native_min_value=-180, native_max_value=240,
+        native_step=5, mode=NumberMode.BOX, native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:weather-sunset-up",
+    ), OPT_SUNRISE_OFFSET),
+    (NumberEntityDescription(
+        key="sunset_offset", name="Sunset offset", native_min_value=-240, native_max_value=180,
+        native_step=5, mode=NumberMode.BOX, native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:weather-sunset-down",
+    ), OPT_SUNSET_OFFSET),
 )
 # Plain factors carry no unit; the others without a unit of their own are an
 # amount per kWh in the currency Home Assistant is set to.
@@ -196,6 +222,15 @@ PRICE_SELECTS: tuple[tuple[SelectEntityDescription, str], ...] = (
         key="in_between_mode", name="In-between mode",
         options=list(PRICE_MODE_OPTIONS[OPT_PRICE_BETWEEN_MODE]), icon="mdi:scale-balance",
     ), OPT_PRICE_BETWEEN_MODE),
+    # Fixed tariff (v1.8.2): the mode of the day and of the night.
+    (SelectEntityDescription(
+        key="sunrise_mode", name="Sunrise mode",
+        options=list(PRICE_MODE_OPTIONS[OPT_SUNRISE_MODE]), icon="mdi:weather-sunset-up",
+    ), OPT_SUNRISE_MODE),
+    (SelectEntityDescription(
+        key="sunset_mode", name="Sunset mode",
+        options=list(PRICE_MODE_OPTIONS[OPT_SUNSET_MODE]), icon="mdi:weather-sunset-down",
+    ), OPT_SUNSET_MODE),
 )
 
 
@@ -297,7 +332,7 @@ class PriceNumber(_Setting, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         # Seven decimals: an energy tax such as 0.1108481 is entered exactly
-        # (the step since v1.7.6; until then the value was rounded to five).
+        # (the step since v1.7.6; until v1.8.1 the value was rounded to five).
         self._settings.set(self._key, round(float(value), 7))
         self.async_write_ha_state()
 

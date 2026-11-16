@@ -1145,7 +1145,7 @@
       "sections": [
         {
           "type": "grid",
-          "column_span": 2,
+          "column_span": 4,
           "cards": [
             {
               "type": "heading",
@@ -1188,28 +1188,6 @@
                 }
               ],
               "features_position": "inline"
-            }
-          ]
-        },
-        {
-          "type": "grid",
-          "column_span": 2,
-          "cards": [
-            {
-              "type": "heading",
-              "heading": "Day plan",
-              "heading_style": "title",
-              "icon": "mdi:calendar-clock",
-              "badges": [
-                {
-                  "type": "entity",
-                  "entity": "sensor.price_control_plan"
-                },
-                {
-                  "type": "entity",
-                  "entity": "sensor.price_control_expected_margin"
-                }
-              ]
             },
             {
               "type": "tile",
@@ -1224,12 +1202,26 @@
             {
               "type": "tile",
               "entity": "sensor.price_control_plan",
-              "icon": "mdi:calendar-clock"
+              "icon": "mdi:calendar-clock",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "day_plan"
+                }
+              ]
             },
             {
               "type": "tile",
               "entity": "sensor.price_control_expected_margin",
-              "icon": "mdi:cash-check"
+              "icon": "mdi:cash-check",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "day_plan"
+                }
+              ]
             }
           ]
         },
@@ -1239,14 +1231,21 @@
           "cards": [
             {
               "type": "markdown",
-              "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan: *Decision* is on *Fixed prices*, or there is no price list or battery data yet.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
+              "content": "{% set p = 'sensor.price_control_plan' %}\n{% if states(p) in ['unavailable', 'unknown'] %}\nNo day plan yet: no price list or battery data.\n{% else %}\n{% set nc = state_attr(p, 'next_change') %}\n{% set ns = namespace(c=[], d=[]) %}\n{% for r in state_attr(p, 'charge_periods') or [] %}{% set ns.c = ns.c + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n{% for r in state_attr(p, 'discharge_periods') or [] %}{% set ns.d = ns.d + [as_timestamp(r.start) | timestamp_custom('%A %H:%M') ~ '-' ~ as_timestamp(r.end) | timestamp_custom('%H:%M')] %}{% endfor %}\n**Now** {{ state_translated(p) }} | **next change** {{ as_timestamp(nc) | timestamp_custom('%H:%M') if nc else '-' }}\n\n**Charge** {{ ns.c | join(', ') if ns.c else '-' }}\n\n**Discharge** {{ ns.d | join(', ') if ns.d else '-' }}\n\n**Energy** {{ state_attr(p, 'charge_kwh') }} kWh in, {{ state_attr(p, 'discharge_kwh') }} kWh out | **in the battery** {{ state_attr(p, 'stored_kwh') }} of {{ state_attr(p, 'usable_kwh') }} kWh\n\n**Plan until** {{ as_timestamp(state_attr(p, 'plan_until')) | timestamp_custom('%A %H:%M') if state_attr(p, 'plan_until') else '-' }}\n{% endif %}\n",
               "grid_options": {
                 "columns": "full",
                 "rows": "auto"
               },
               "zendure": {
                 "needs": "sensor.price_control_plan"
-              }
+              },
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "day_plan"
+                }
+              ]
             },
             {
               "type": "markdown",
@@ -1274,7 +1273,7 @@
               "yaxis": [
                 {
                   "id": "power",
-                  "min": "~-3000",
+                  "min": "~0",
                   "decimals": 0,
                   "align_to": 500,
                   "apex_config": {
@@ -1460,6 +1459,13 @@
         {
           "type": "grid",
           "column_span": 2,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "select.price_control_decision",
+              "state_not": "fixed_tariff"
+            }
+          ],
           "cards": [
             {
               "type": "heading",
@@ -1495,7 +1501,14 @@
               "grid_options": {
                 "columns": 12,
                 "rows": 2
-              }
+              },
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "price_bands"
+                }
+              ]
             },
             {
               "type": "tile",
@@ -1511,13 +1524,27 @@
               "grid_options": {
                 "columns": 12,
                 "rows": 2
-              }
+              },
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "price_bands"
+                }
+              ]
             },
             {
               "type": "heading",
               "heading": "Mode per band",
               "heading_style": "subtitle",
-              "icon": "mdi:tune-vertical"
+              "icon": "mdi:tune-vertical",
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "price_bands"
+                }
+              ]
             },
             {
               "type": "tile",
@@ -1569,6 +1596,146 @@
         {
           "type": "grid",
           "column_span": 2,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "select.price_control_decision",
+              "state": "fixed_tariff"
+            }
+          ],
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Fixed tariff",
+              "heading_style": "title",
+              "icon": "mdi:weather-sunny",
+              "badges": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_status",
+                  "icon": "mdi:weather-sunset-up",
+                  "state_content": "day_from"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.price_control_status",
+                  "icon": "mdi:weather-sunset-down",
+                  "state_content": "day_until"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_fixed_import_price",
+              "icon": "mdi:transmission-tower-import",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_fixed_export_price",
+              "icon": "mdi:transmission-tower-export",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              },
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "switch.price_control_net_metering",
+                  "state": "off"
+                }
+              ]
+            },
+            {
+              "type": "heading",
+              "heading": "Day and night",
+              "heading_style": "subtitle",
+              "icon": "mdi:theme-light-dark"
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_sunrise_mode",
+              "icon": "mdi:weather-sunset-up",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "select.price_control_sunset_mode",
+              "icon": "mdi:weather-sunset-down",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_sunrise_offset",
+              "icon": "mdi:weather-sunset-up",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "number.price_control_sunset_offset",
+              "icon": "mdi:weather-sunset-down",
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
           "cards": [
             {
               "type": "heading",
@@ -1603,6 +1770,13 @@
                   "type": "numeric-input",
                   "style": "slider"
                 }
+              ],
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state_not": "fixed_tariff"
+                }
               ]
             },
             {
@@ -1614,6 +1788,13 @@
                 {
                   "type": "numeric-input",
                   "style": "slider"
+                }
+              ],
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state_not": "fixed_tariff"
                 }
               ]
             },
@@ -1641,6 +1822,11 @@
                   "condition": "state",
                   "entity": "switch.price_control_net_metering",
                   "state": "off"
+                },
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state_not": "fixed_tariff"
                 }
               ],
               "icon": "mdi:multiplication",
@@ -1660,6 +1846,11 @@
                   "condition": "state",
                   "entity": "switch.price_control_net_metering",
                   "state": "off"
+                },
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state_not": "fixed_tariff"
                 }
               ],
               "icon": "mdi:cash-minus",
@@ -1693,6 +1884,13 @@
               "features": [
                 {
                   "type": "trend-graph"
+                }
+              ],
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state_not": "fixed_tariff"
                 }
               ]
             },
@@ -1742,6 +1940,13 @@
                   "type": "numeric-input",
                   "style": "slider"
                 }
+              ],
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "day_plan"
+                }
               ]
             },
             {
@@ -1753,6 +1958,13 @@
                 {
                   "type": "numeric-input",
                   "style": "slider"
+                }
+              ],
+              "visibility": [
+                {
+                  "condition": "state",
+                  "entity": "select.price_control_decision",
+                  "state": "day_plan"
                 }
               ]
             }
@@ -1848,7 +2060,7 @@
               "yaxis": [
                 {
                   "id": "power",
-                  "min": "~-3000",
+                  "min": "~0",
                   "decimals": 0,
                   "align_to": 500,
                   "apex_config": {
@@ -2038,7 +2250,7 @@
               "yaxis": [
                 {
                   "id": "power",
-                  "min": "~-3000",
+                  "min": "~0",
                   "decimals": 0,
                   "align_to": 500,
                   "apex_config": {
@@ -2224,7 +2436,7 @@
               "yaxis": [
                 {
                   "id": "power",
-                  "min": "~-3000",
+                  "min": "~0",
                   "decimals": 0,
                   "align_to": 500,
                   "apex_config": {

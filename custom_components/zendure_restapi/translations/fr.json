@@ -53,7 +53,7 @@
       },
       "price_control": {
         "title": "Pilotage par le prix",
-        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec deux prix fixes, ou avec un plan journalier sur les prix d'aujourd'hui et de demain (Nord Pool, EPEX Spot, Zonneplan, …). Désactivé tant que vous ne l'activez pas. Vous pouvez aussi choisir un cluster de batteries ou le Virtual cluster : le plan journalier planifie alors pour ses batteries ensemble et règle le mode de fonctionnement du cluster.",
+        "description": "Règle le mode de fonctionnement d'une batterie selon le prix de l'électricité : avec un prix bas et un prix élevé, ou avec un plan journalier sur les prix d'aujourd'hui et de demain (Nord Pool, EPEX Spot, Zonneplan, …). Désactivé tant que vous ne l'activez pas. Vous pouvez aussi choisir un cluster de batteries ou le Virtual cluster : le plan journalier planifie alors pour ses batteries ensemble et règle le mode de fonctionnement du cluster. Avec un tarif fixe, il suit le soleil : un mode le jour, un la nuit.",
         "data": {
           "battery_entry": "Batterie ou cluster",
           "price_entity": "Capteur de prix (prix par kWh)",
@@ -61,7 +61,7 @@
         },
         "data_description": {
           "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat. EPEX Spot : capteur Market price : prix spot ; capteur Total price : prix d'achat. Zonneplan : prix d'achat.",
-          "price_entity": "Prix fixes : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e ou Frank Energie."
+          "price_entity": "Tranches de prix : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e ou Frank Energie. Tarif fixe : aucun nécessaire."
         }
       },
       "ha_meter": {
@@ -170,7 +170,7 @@
         },
         "data_description": {
           "price_contains": "Pour le plan journalier. Nord Pool (HACS) avec TVA et sans coûts supplémentaires : prix spot TTC. Sans TVA : prix spot. Avec tout votre tarif dans les coûts supplémentaires : prix d'achat. EPEX Spot : capteur Market price : prix spot ; capteur Total price : prix d'achat. Zonneplan : prix d'achat.",
-          "price_entity": "Prix fixes : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e ou Frank Energie."
+          "price_entity": "Tranches de prix : tout capteur donnant le prix actuel. Plan journalier : un capteur avec une liste de prix — Nord Pool (HACS), EPEX Spot (HACS), Zonneplan, ENTSO-e ou Frank Energie. Tarif fixe : aucun nécessaire."
         }
       },
       "device": {
@@ -256,8 +256,9 @@
       },
       "price_decision": {
         "state": {
-          "fixed_prices": "Prix fixes",
-          "day_plan": "Plan journalier"
+          "price_bands": "Tranches de prix",
+          "day_plan": "Plan journalier",
+          "fixed_tariff": "Tarif fixe"
         },
         "name": "Décision"
       },
@@ -281,8 +282,14 @@
         "state": {
           "off": "Désactivée",
           "direct": "Directe",
-          "price_control": "Price Control (le moins cher sous 6 h)"
+          "price_control": "Price Control"
         }
+      },
+      "sunrise_mode": {
+        "name": "Mode au lever du soleil"
+      },
+      "sunset_mode": {
+        "name": "Mode au coucher du soleil"
       }
     },
     "sensor": {
@@ -389,7 +396,9 @@
           "cheap": "Bon marché",
           "between": "Intermédiaire",
           "expensive": "Cher",
-          "paused": "En pause (coordonné)"
+          "paused": "En pause (coordonné)",
+          "sun_up": "Jour (soleil levé)",
+          "sun_down": "Nuit (soleil couché)"
         },
         "name": "État",
         "state_attributes": {
@@ -892,6 +901,18 @@
       },
       "copy_response_offset": {
         "name": "Extra response time"
+      },
+      "fixed_import_price": {
+        "name": "Prix d'achat fixe"
+      },
+      "fixed_export_price": {
+        "name": "Prix de revente fixe"
+      },
+      "sunrise_offset": {
+        "name": "Décalage lever du soleil"
+      },
+      "sunset_offset": {
+        "name": "Décalage coucher du soleil"
       }
     },
     "switch": {

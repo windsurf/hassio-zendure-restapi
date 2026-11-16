@@ -1,5 +1,5 @@
 # ============================================================
-# BATTERY CLUSTER DASHBOARD - v1.8.1
+# BATTERY CLUSTER DASHBOARD - v1.8.2
 # ============================================================
 #
 # The dashboard "Cluster" as the integration builds it for a
@@ -343,7 +343,7 @@ views:
         show: false
       yaxis:
       - id: power
-        min: '~-3000'
+        min: '~0'
         decimals: 0
         align_to: 500
         apex_config:
@@ -500,7 +500,7 @@ views:
   max_columns: 4
   sections:
   - type: grid
-    column_span: 2
+    column_span: 4
     cards:
     - type: heading
       heading: Price Control
@@ -533,18 +533,6 @@ views:
       features:
       - type: select-options
       features_position: inline
-  - type: grid
-    column_span: 2
-    cards:
-    - type: heading
-      heading: Day plan
-      heading_style: title
-      icon: mdi:calendar-clock
-      badges:
-      - type: entity
-        entity: sensor.price_control_battery_cluster_plan
-      - type: entity
-        entity: sensor.price_control_battery_cluster_expected_margin
     - type: tile
       entity: switch.price_control_battery_cluster_net_metering
       name:
@@ -559,11 +547,19 @@ views:
       name:
         type: entity
       icon: mdi:calendar-clock
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: day_plan
     - type: tile
       entity: sensor.price_control_battery_cluster_expected_margin
       name:
         type: entity
       icon: mdi:cash-check
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: day_plan
   - type: grid
     column_span: 4
     cards:
@@ -571,7 +567,7 @@ views:
       content: |
         {% set p = 'sensor.price_control_battery_cluster_plan' %}
         {% if states(p) in ['unavailable', 'unknown'] %}
-        No day plan: *Decision* is on *Fixed prices*, or there is no price list or battery data yet.
+        No day plan yet: no price list or battery data.
         {% else %}
         {% set nc = state_attr(p, 'next_change') %}
         {% set ns = namespace(c=[], d=[]) %}
@@ -590,6 +586,10 @@ views:
       grid_options:
         columns: full
         rows: auto
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: day_plan
     - type: custom:apexcharts-card
       graph_span: 48h
       span:
@@ -601,7 +601,7 @@ views:
         show: false
       yaxis:
       - id: power
-        min: '~-3000'
+        min: '~0'
         decimals: 0
         align_to: 500
         apex_config:
@@ -753,6 +753,10 @@ views:
       hours_12: false
   - type: grid
     column_span: 2
+    visibility:
+    - condition: state
+      entity: select.price_control_battery_cluster_decision
+      state_not: fixed_tariff
     cards:
     - type: heading
       heading: Pricing modes
@@ -779,6 +783,10 @@ views:
       grid_options:
         columns: 12
         rows: 2
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: price_bands
     - type: tile
       entity: number.price_control_battery_cluster_expensive_price
       name:
@@ -791,10 +799,18 @@ views:
       grid_options:
         columns: 12
         rows: 2
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: price_bands
     - type: heading
       heading: Mode per band
       heading_style: subtitle
       icon: mdi:tune-vertical
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: price_bands
     - type: tile
       entity: select.price_control_battery_cluster_cheap_price_mode
       name:
@@ -830,6 +846,104 @@ views:
         rows: 2
   - type: grid
     column_span: 2
+    visibility:
+    - condition: state
+      entity: select.price_control_battery_cluster_decision
+      state: fixed_tariff
+    cards:
+    - type: heading
+      heading: Fixed tariff
+      heading_style: title
+      icon: mdi:weather-sunny
+      badges:
+      - type: entity
+        entity: sensor.price_control_battery_cluster_status
+        icon: mdi:weather-sunset-up
+        state_content: day_from
+      - type: entity
+        entity: sensor.price_control_battery_cluster_status
+        icon: mdi:weather-sunset-down
+        state_content: day_until
+    - type: tile
+      entity: number.price_control_battery_cluster_fixed_import_price
+      name:
+        type: entity
+      icon: mdi:transmission-tower-import
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_battery_cluster_fixed_export_price
+      name:
+        type: entity
+      icon: mdi:transmission-tower-export
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+      visibility:
+      - condition: state
+        entity: switch.price_control_battery_cluster_net_metering
+        state: 'off'
+    - type: heading
+      heading: Day and night
+      heading_style: subtitle
+      icon: mdi:theme-light-dark
+    - type: tile
+      entity: select.price_control_battery_cluster_sunrise_mode
+      name:
+        type: entity
+      icon: mdi:weather-sunset-up
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: select.price_control_battery_cluster_sunset_mode
+      name:
+        type: entity
+      icon: mdi:weather-sunset-down
+      features_position: bottom
+      features:
+      - type: select-options
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_battery_cluster_sunrise_offset
+      name:
+        type: entity
+      icon: mdi:weather-sunset-up
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: number.price_control_battery_cluster_sunset_offset
+      name:
+        type: entity
+      icon: mdi:weather-sunset-down
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 12
+        rows: 2
+  - type: grid
+    column_span: 2
     cards:
     - type: heading
       heading: Tariff
@@ -857,6 +971,10 @@ views:
       features:
       - type: numeric-input
         style: slider
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state_not: fixed_tariff
     - type: tile
       entity: number.price_control_battery_cluster_import_surcharge
       name:
@@ -866,6 +984,10 @@ views:
       features:
       - type: numeric-input
         style: slider
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state_not: fixed_tariff
     - type: tile
       entity: sensor.price_control_battery_cluster_export_price
       name:
@@ -886,6 +1008,9 @@ views:
       - condition: state
         entity: switch.price_control_battery_cluster_net_metering
         state: 'off'
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state_not: fixed_tariff
       icon: mdi:multiplication
       features_position: bottom
       features:
@@ -899,6 +1024,9 @@ views:
       - condition: state
         entity: switch.price_control_battery_cluster_net_metering
         state: 'off'
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state_not: fixed_tariff
       icon: mdi:cash-minus
       features_position: bottom
       features:
@@ -920,6 +1048,10 @@ views:
         rows: 1
       features:
       - type: trend-graph
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state_not: fixed_tariff
     - type: tile
       entity: number.price_control_battery_cluster_charge_efficiency
       name:
@@ -956,6 +1088,10 @@ views:
       features:
       - type: numeric-input
         style: slider
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: day_plan
     - type: tile
       entity: number.price_control_battery_cluster_expected_house_load
       name:
@@ -965,6 +1101,10 @@ views:
       features:
       - type: numeric-input
         style: slider
+      visibility:
+      - condition: state
+        entity: select.price_control_battery_cluster_decision
+        state: day_plan
 - title: Zendure SolarFlow 3000 Mix AC+
   path: zendure_solarflow_3000_mix_ac
   type: sections

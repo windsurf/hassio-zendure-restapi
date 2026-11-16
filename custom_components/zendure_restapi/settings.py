@@ -36,6 +36,7 @@ from .const import (
     PRICE_MODE_OPTIONS,
     OPT_SOC_PROTECTION,
     soc_protection_choice,
+    decision_choice,
 )
 
 # Settings with a fixed set of values: a stored value outside it falls back
@@ -72,6 +73,9 @@ class ZendureSettings:
                 value, DEFAULTS[key],
             )
             return DEFAULTS[key]
+        if key == OPT_PRICE_DECISION:
+            # "fixed_prices" until v1.8.1 is Price bands (v1.8.2).
+            return decision_choice(value)
         if key == OPT_SOC_PROTECTION:
             # The switch of v1.7.5 and earlier stored True or False (v1.7.6).
             return soc_protection_choice(value)

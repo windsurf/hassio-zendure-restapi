@@ -4,15 +4,15 @@
 
 🇬🇧 [English version](README.md) · 🇳🇱 [Nederlandse versie](README.nl.md)
 
-**Deine Zendure-SolarFlow-Batterie in Home Assistant, 100 % lokal, in drei Schritten.** Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS installieren, Batterie hinzufügen, Modus wählen – die Batterie hält deinen Netzbezug auf null, einmal pro Sekunde: Nulleinspeisung ohne Cloud.
+**Deine Zendure-SolarFlow-Batterie in Home Assistant, 100 % lokal, in drei Schritten.** Kein Cloud-Konto, kein MQTT-Broker, keine YAML-Pakete zum Kopieren. Über HACS installieren, Batterie hinzufügen, Modus wählen: das ist alles.
 
-**⚖️ Nulleinspeisung, jede Sekunde.** Die Batterie hält deinen Netzanschluss auf null (*Nulleinspeisung*, Englisch *zero export*). Eine schnelle Schleife liest deinen Zähler jede Sekunde und korrigiert gleichmäßig auf beiden Seiten von null: Was deine Solarmodule ins Netz geben würden, geht in die Batterie, und was das Haus aus dem Netz holen würde, kommt aus ihr, ohne hin und her zu pendeln. Warum es sich lohnt: Eine eingespeiste kWh bringt weniger, als eine bezogene kWh kostet. Jede kWh, die im Haus bleibt, ist den vollen Bezugspreis wert.
+**⚖️ Nulleinspeisung? Jede Sekunde.** Die Batterie hält deinen Netzanschluss auf null. Eine schnelle Schleife liest deinen Zähler jede Sekunde und korrigiert gleichmäßig auf beiden Seiten von null: Was deine Solarmodule ins Netz geben würden, geht in die Batterie, und was das Haus aus dem Netz holen würde, kommt aus ihr, ohne hin und her zu pendeln. Warum es sich lohnt: Eine eingespeiste kWh bringt weniger, als eine bezogene kWh kostet. Jede kWh, die im Haus bleibt, ist den vollen Bezugspreis wert.
 
-**☀️ Festpreisvertrag mit Solarmodulen? Unterstützt.** Kein Preissensor, keine Price Control: `smart_matching` nimmt deinen Solarüberschuss auf und gibt ihn abends ans Haus zurück. Wo die Einspeisung weniger bringt, als der Strom kostet, ist jede gespeicherte statt eingespeiste kWh fast den vollen Bezugspreis wert. [Mehr](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract) (Englisch)
+**☀️ Festpreisvertrag mit Solarmodulen? Unterstützt.** Kein Preissensor, keine Price Control: `smart_matching` nimmt deinen Solarüberschuss auf und gibt ihn abends ans Haus zurück. Wo die Einspeisung weniger bringt, als der Strom kostet, ist jede gespeicherte statt eingespeiste kWh fast den vollen Bezugspreis wert. [Mehr](./README2.md#on-a-fixed-price-contract) (Englisch)
 
 **💶 Dynamischer Tarif? Eingebaut.** Tibber, Ostrom, E.ON oder jeder andere Anbieter: Price Control plant Laden und Entladen je Viertelstunde über die Preise von heute und morgen, mit Umwandlungsverlusten und Verschleiß eingerechnet. Einschalten – keine Automation zu schreiben.
 
-**🔌 Works with HomeWizard.** Du hast schon einen HomeWizard-P1-Zähler? Mehr brauchst du nicht – ein Zendure-Zähler ist nicht nötig. YouLess, EcoTracker, Shelly Pro 3EM und die Zendure-Zähler funktionieren ebenfalls.
+**🔌 Works with HomeWizard, and others.** Du hast schon einen HomeWizard-P1-Zähler? Mehr brauchst du nicht – ein Zendure-Zähler ist nicht nötig. YouLess, EcoTracker, Shelly Pro 3EM, die Zendure-Zähler und andere funktionieren ebenfalls.
 
 ![\<Bild des Dashboards\>](images/dashboard.png)
 
@@ -66,14 +66,14 @@ In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → 
 - **100 % lokal.** Spricht direkt mit dem eigenen HTTP-Server der Batterie in deinem Netzwerk. Funktioniert weiter, wenn Internet oder Zendure-Cloud ausfallen.
 - **Nulleinspeisung, einmal pro Sekunde.** Eine schnelle Schleife folgt deinem Zähler jede Sekunde; eine langsamere regelt Richtung und Sicherheit. Gebaut und abgestimmt auf Messungen, nicht auf Annahmen.
 - **Sieben Betriebsmodi** – vom passiven `standby` bis `smart_matching`, nur laden, nur entladen, schnell laden/entladen und manuell. Steuerbar von Hand, über Price Control oder über deine eigene Automation.
-- **Dynamische Tarife, eingebaut.** Price Control steuert die Batterie über zwei feste Preise oder über einen Tagesplan auf den Preisen von heute und morgen – siehe [Preissteuerung](#-preissteuerung).
-- **Auch für Festpreisverträge.** Mit Solarmodulen und einem festen Preis speichert `smart_matching` allein den Überschuss für den Abend; Preise sind nicht nötig.
+- **Dynamische Tarife, eingebaut.** Price Control steuert die Batterie über einen günstigen und einen teuren Preis, über einen Tagesplan auf den Preisen von heute und morgen oder über einen Festtarif nach Tag und Nacht – siehe [Preissteuerung](#-preissteuerung).
+- **Auch für Festpreisverträge.** Mit Solarmodulen und einem festen Preis speichert `smart_matching` allein den Überschuss für den Abend; Preise sind nicht nötig. Der *Festtarif* der Price Control wechselt nach der Sonne zwischen einem Tag- und einem Nachtmodus.
 - **Läuft weiter, wenn das Web ausfällt.** Die Steuerung läuft lokal in deinem Netzwerk, ohne Cloud. Preise können von EPEX Spot oder Nord Pool kommen, die weiterliefen, während Webdienste für die Notfall-Patches von PHP2Shell offline gingen, und Price Control hält bei einem Ausfall die letzten Preise fest (v1.6.9).
 - **Einstellungen sind Entitäten.** Jede Einstellung übersteht einen Neustart und lässt sich live im Dashboard oder per Automation ändern. Updates über HACS lassen deine eigene Konfiguration in Ruhe.
 - **Dein eigener Zähler.** HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM oder Zendure – im Netzwerk gefunden oder per IP hinzugefügt, direkt gelesen, einmal pro Sekunde, nicht über einen langsameren Home-Assistant-Sensor. Oder jeder Leistungssensor, den Home Assistant schon hat.
 - **Sicher konstruiert.** Kein gültiger Zählerwert, keine Bewegung: Die Batterie stoppt. Zwei Batterien streiten nie um denselben Zähler; jede hat ihren eigenen Regler, ihre Zählerwahl und ihre Preissteuerung.
 - **Geringer Standby-Verbrauch, gemessen.** Gibt die Batterie in ihren Sparzustand zurück, wenn nichts zu tun ist: etwa 5 W statt 29–36 W (Backup mode `closed`), für jede Stunde Stillstand.
-- **Schont den Flash-Speicher.** Die Smart-Modi schreiben ihre Grenzwerte in den Arbeitsspeicher, nicht in den Flash – Zehntausende Schreibvorgänge pro Jahr, die das Gerät nicht abnutzen.
+- **Schont die Hardware.** Häufige Anpassungen landen nicht im festen Speicher der Batterie und nutzen sie daher nicht ab ([wie](./README2.md#safety), Englisch).
 - **Lässt eine volle Batterie in Ruhe.** An den eigenen SOC-Grenzen des Geräts wird nichts in die gesperrte Richtung bestellt: Eine ganze Nacht bei 100 % kostete zwei Grenzwertänderungen, und der Status sagt, warum.
 - **Alles sichtbar.** Fertiges Dashboard, ein Controller-Status, der sagt *warum*, Lade- und Entladewirkungsgrad als Sensoren und ein optionaler CSV-Trace pro Sekunde für Genaue.
 - **Jede Änderung vor dem Release gemessen.** Änderungen an der Regelschleife werden zuerst an aufgezeichneten Messreihen pro Sekunde nachgespielt; die Messungen und die Korrekturen an Zendures Dokumentation stehen öffentlich in der technischen Referenz.
@@ -85,9 +85,13 @@ In einem Rutsch eingerichtet: **Integration hinzufügen → Zendure RestAPI → 
 
 **1. Lokale API einschalten und Zendures eigene Steuerung aus** – unter EN 18031 ist die API standardmäßig aus. In der Zendure-App:
 - **HEMS** hinzufügen – das schaltet die lokale API ein;
-- auf der Geräteseite **Add to HEMS** ausschalten – dann hält sich Zendures eigene Steuerung heraus. Andere Wege und die Leistungseinstellungen der App: [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start).
+- auf der Geräteseite **Add to HEMS** ausschalten – dann hält sich Zendures eigene Steuerung heraus. Andere Wege und die Leistungseinstellungen der App: [Before you start](./README2.md#-before-you-start).
 
 Die App danach schließen. Im Browser prüfen: `http://<IP-der-Batterie>/properties/report` muss ein Ergebnis im JSON-Format zeigen: Text in geschweiften Klammern `{ … }` mit `"properties"` darin.
+
+<img src="images/app_add_to_hems.png" width="300" alt="&lt;Bild des Schalters Add to HEMS&gt;"> <img src="images/app_safe_power_setting.png" width="300" alt="&lt;Bild der Safe power setting&gt;">
+
+*Links: **Add to HEMS** auf der Geräteseite aus. Rechts: die **Safe power setting** (Sechseck oben rechts auf der HEMS-Seite → Home settings), die Obergrenze für Laden und Entladen, die Home Assistant nicht anhebt.*
 
 **2. Installieren**
 
@@ -99,9 +103,9 @@ Oder von Hand: ab Home Assistant 2026.11 **Einstellungen → Marketplace**, nach
 
 **3. Geräte hinzufügen** Home Assistant findet Batterie und P1-Zähler meist selbst, unter **Einstellungen → Geräte & Dienste**. Sonst **Zendure RestAPI** hinzufügen, **Zendure-Batterie** (die erste Option) wählen und die IP-Adresse eingeben. Das Dashboard **Zendure RestAPI** erscheint von selbst in der Seitenleiste; ein vorhandenes bleibt unberührt. **Operation mode** auf `smart_matching` stellen und zusehen, wie das Netz auf null geht.
 
-**Nur ein Regler.** Schalte ab, was die Batterie sonst noch steuert: Zendures eigene Steuerung in der App (ZENKI – *Add to HEMS* aus, oder *Custom Mode* ohne Regeln), eine andere Integration oder eine Home-Assistant-Automation, die Modus oder Limits der Batterie setzt. Zwei Regler an einer Batterie heben sich gegenseitig auf; die Integration warnt mit dem Sensor *Zweiter Regler*. Siehe [Before you start](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#before-you-start) (Englisch).
+**Nur ein Regler.** Schalte ab, was die Batterie sonst noch steuert: Zendures eigene Steuerung in der App (ZENKI – *Add to HEMS* aus, oder *Custom Mode* ohne Regeln), eine andere Integration oder eine Home-Assistant-Automation, die Modus oder Limits der Batterie setzt. Zwei Regler an einer Batterie heben sich gegenseitig auf; die Integration warnt mit dem Sensor *Zweiter Regler*. Siehe [Before you start](./README2.md#-before-you-start) (Englisch).
 
-**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Ein Zähler, der schon in Home Assistant ist: **Externer Netzzähler aus Home Assistant**. Fertig – `auto` übernimmt ihn. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
+**Dein Zähler:** Ein HomeWizard-P1-Zähler steht unter *Entdeckt* bereit; auf **Hinzufügen** klicken. Andere Zähler: **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler über IP**, YouLess, EcoTracker, Shelly oder Zendure wählen und die IP-Adresse eingeben. Ein Zähler, der schon in Home Assistant ist: mit **Integration hinzufügen → Zendure RestAPI → Externer Netzzähler aus Home Assistant** hinzufügen; danach übernimmt ihn `auto`. Ein Zendure-P1-Zähler wird als eigenes Gerät gefunden und braucht nichts weiter.
 
 ---
 
@@ -120,7 +124,7 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 | `quick_charge` / `quick_discharge` | Volle Leistung, unabhängig vom Zähler |
 | `manual` | Folgt einem festen Sollwert |
 
-**Festpreisvertrag mit Solarmodulen:** `smart_matching` wählen und Price Control aus lassen; *Laden stoppen unter* und *Entladen stoppen unter* bleiben auf ihrem Standard von 50 W, sodass auch kleine Überschüsse und kleiner Bedarf aufgefangen werden. Wann sich Speichern lohnt: [On a fixed-price contract](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#on-a-fixed-price-contract) (Englisch).
+**Festpreisvertrag mit Solarmodulen:** `smart_matching` wählen und Price Control aus lassen; *Laden stoppen unter* und *Entladen stoppen unter* bleiben auf ihrem Standard von 50 W, sodass auch kleine Überschüsse und kleiner Bedarf aufgefangen werden. Oder Price Control nach der Sonne wechseln lassen: **Entscheidung** auf **Festtarif**, am Tag `smart_charge_only` und nachts `smart_matching` ([Fixed tariff](./README2.md#fixed-tariff), Englisch). Wann sich Speichern lohnt: [On a fixed-price contract](./README2.md#on-a-fixed-price-contract) (Englisch).
 
 ---
 
@@ -130,27 +134,19 @@ Die Namen der Modi bleiben in jeder Sprache gleich, damit Automationen und Dokum
 
 *Die Ansicht Price Control: der Tagesplan für heute und morgen, gemessen bis jetzt und geplant danach, welche Viertelstunden laden und welche entladen, und die erwartete Marge. Mit Saldierung folgt der Einspeisepreis dem Bezugspreis.*
 
-Zwei Wege, die Batterie nach einem dynamischen Tarif zu steuern, in einem eigenen Gerät:
+Drei Wege, die Batterie zu steuern, in einem eigenen Gerät:
 
-- **Feste Preise** – bei oder unter einem **günstigen Preis** lädt die Batterie (aus dem Netz oder nur aus Solarüberschuss), bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null (die Modi je Band wählst du selbst). Jeder Preissensor geht: EPEX Spot, Nord Pool, Zonneplan, Frank Energie oder dein eigener.
+- **Preisbänder** (bis v1.8.1 *Feste Preise*) – bei oder unter einem **günstigen Preis** lädt die Batterie (aus dem Netz oder nur aus Solarüberschuss), bei oder über einem **teuren Preis** entlädt sie, dazwischen hält sie das Netz auf null (die Modi je Band wählst du selbst). Jeder Preissensor geht: EPEX Spot, Nord Pool, Zonneplan, Frank Energie oder dein eigener.
 - **Tagesplan** (neu in v1.6.0) – über die Preise von heute und morgen von [EPEX Spot](https://github.com/mampfes/ha_epex_spot) oder Nord Pool bestimmt er je Viertelstunde, ob die Batterie lädt, entlädt oder keines von beiden, mit getrennten Bezugs- und Einspeisepreisen, Umwandlungsverlusten, Verschleiß und einer Mindestmarge pro kWh. Standardmäßig handelt er: Laden und Entladen mit der vollen Leistung der Batterie; über die Modi je Band deckt er auf Wunsch nur das Haus oder lädt nur aus Solarüberschuss. Bereit für das Ende der niederländischen Saldierung 2027: *Net metering* ausschalten, und der Einspeisepreis folgt seiner eigenen Formel.
+- **Festtarif** (neu in v1.8.2) – für einen Festpreisvertrag, ohne Preissensor: ein fester Bezugs- und Einspeisepreis, ein Modus am Tag und einer in der Nacht, der Tag von Sonnenaufgang plus Versatz bis Sonnenuntergang plus Versatz. Standardmäßig am Tag `smart_charge_only` und nachts `smart_matching`, sodass sich die Batterie mit Solarüberschuss füllt und den Abend deckt; beide `standby`, solange die Saldierung an ist. Der Status empfiehlt aus den beiden Preisen einen Wert für *Laden stoppen unter*.
 
-Auf 30 Tagen einer echten Anlage nachgespielt brachte der Tagesplan **€ 1,58 pro Tag** – so viel wie ein vollständiger Energieplaner an denselben Tagen; die festen Preise € 0,21.
+Auf 30 Tagen einer echten Anlage nachgespielt brachte der Tagesplan **€ 1,58 pro Tag** – so viel wie ein vollständiger Energieplaner an denselben Tagen.
 
-**Tagesplan – was du brauchst:** einen Preissensor mit den Preisen von heute und morgen, und **ApexCharts Card** aus HACS für die Grafik. Der Day-Ahead-Preis ist ein Preis je Preisgebiet, darum funktioniert jeder dynamische Tarif: **EPEX Spot** ist die empfohlene Quelle und wird unten verwendet, **Nord Pool** geht ebenso, und Aufschlag, Netzentgelt, Steuern und MwSt. stellst du in Price Control ein. So bindest du jeden Anbieter mit dynamischem Tarif an, etwa Tibber, Ostrom oder E.ON. Ohne ApexCharts Card läuft der Tagesplan normal; das Dashboard zeigt dann einen Hinweis statt der Grafik.
+**In vier Schritten eingerichtet:** EPEX Spot (oder Nord Pool) und ApexCharts Card aus HACS, Preissteuerung mit dem Sensor *Market price* auf **Spotpreis ohne MwSt.**, **Entscheidung** auf **Tagesplan**, und dein eigener Tarif – Anleitung in [Setting up spot prices](./README2.md#setting-up-spot-prices-for-the-day-plan) (Englisch). Der Day-Ahead-Preis ist ein Preis je Preisgebiet, darum funktioniert jeder dynamische Tarif, etwa Tibber, Ostrom oder E.ON: *Bezugsfaktor* 1,19 in Deutschland, 1,20 in Österreich; *Bezugsaufschlag* = alle Kosten je kWh deiner Rechnung inkl. MwSt. ([andere Länder](./README2.md#other-countries), Englisch). Ohne ApexCharts Card läuft der Tagesplan normal; das Dashboard zeigt dann einen Hinweis statt der Grafik.
 
-1. **EPEX Spot** ([in HACS öffnen](https://my.home-assistant.io/redirect/hacs_repository/?owner=mampfes&repository=ha_epex_spot&category=integration)) und **ApexCharts Card** ([in HACS öffnen](https://my.home-assistant.io/redirect/hacs_repository/?owner=RomRider&repository=apexcharts-card&category=plugin)) installieren; Home Assistant neu starten und den Browser neu laden.
-2. **Integration hinzufügen → EPEX Spot** mit deinem Marktgebiet (`DE-LU` für Deutschland, `AT` für Österreich).
-3. Preissteuerung (unten) mit dem Sensor *Market price* hinzufügen, `sensor.epex_spot_data_market_price`, und *Der Preissensor enthält* auf **Spotpreis ohne MwSt.** stellen.
-4. **Entscheidung** auf **Tagesplan** stellen; *Bezugsfaktor* 1,19 in Deutschland, 1,20 in Österreich; *Bezugsaufschlag* = alle Kosten je kWh deiner Rechnung inkl. MwSt. (Netzentgelt, Stromsteuer, Umlagen, Aufschlag des Anbieters; [andere Länder](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-countries), Englisch). **Bezugspreis** mit dem Preis deines Anbieters für diese Viertelstunde vergleichen.
+**Hinzufügen:** **Integration hinzufügen → Zendure RestAPI → Preissteuerung**, Batterie und Preissensor wählen (beim Festtarif keinen). Das Gerät **Price Control** erscheint neben deiner Batterie; schalte es dort ein. Jede Einstellung lässt sich live ändern, auf diesem Gerät oder im Tab *Price Control* des Dashboards.
 
-**Lieber Nord Pool?** Ohne MwSt. einrichten: *Include VAT* aus, Genauigkeit 7, Low price percentage 0, und **Spotpreis ohne MwSt.** wählen. Siehe [Other price sources](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#other-price-sources-epex-spot-zonneplan-and-more) (Englisch).
-
-Ausführliche Anleitung, Tarifeinstellungen für andere Verträge und Länder: [Setting up spot prices](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#setting-up-spot-prices-for-the-day-plan) (Englisch).
-
-**Hinzufügen:** **Integration hinzufügen → Zendure RestAPI → Preissteuerung**, Batterie und Preissensor wählen. Das Gerät **Price Control** erscheint neben deiner Batterie; schalte es dort ein. Jede Einstellung lässt sich live ändern, auf diesem Gerät oder im Tab *Price Control* des Dashboards.
-
-Standardmäßig aus, und sie schreibt den Betriebsmodus nur, wenn sich ihre Entscheidung ändert; ein von Hand gesetzter Modus bleibt also stehen. Steuert schon eine eigene Automation oder ein Planer den Betriebsmodus, lass sie aus. Details in der [technischen Referenz](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#price-control) (Englisch).
+Standardmäßig aus, und sie schreibt den Betriebsmodus nur, wenn sich ihre Entscheidung ändert; ein von Hand gesetzter Modus bleibt also stehen. Steuert schon eine eigene Automation oder ein Planer den Betriebsmodus, lass sie aus. Details in der [technischen Referenz](./README2.md#-price-control) (Englisch).
 
 ---
 
@@ -160,32 +156,34 @@ SolarFlow 3000 Mix AC+, ein internes Batteriepack. Methode und Rohdaten in der t
 
 | | Gemessen |
 |---|---|
-| [Ladewirkungsgrad](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) bei 3 kW, AC → Zellen | **95,2 %** (drei Fenster, 95,1–95,2 %) |
-| [Entladeverluste](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#conversion-efficiency) | fest ~33 W plus 97,4 % Wandlung – 95 %+ bei hoher Leistung, 81–84 % bei 100–200 W |
-| [Nutzbare Kapazität](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#usable-capacity) | **8,8 kWh** an den Zellen; 9,3 kWh am AC-Anschluss für 0 → 100 % |
-| [Ruheverbrauch](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#known-limitations) | 29–36 W im Wachzustand; etwa 5 W, sobald `standby` das Gerät schlafen lässt (Backup mode `closed`) |
-| [Verzögerung Zendure P1-Zähler](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-delay) | 0,4–1,1 s hinter einem YouLess am selben Port; wiederholt in 28 % der Sekunden seinen vorherigen Wert |
+| [Ladewirkungsgrad](./README2.md#conversion-efficiency) bei 3 kW, AC → Zellen | **95,2 %** (drei Fenster, 95,1–95,2 %) |
+| [Entladeverluste](./README2.md#conversion-efficiency) | fest ~33 W plus 97,4 % Wandlung – 95 %+ bei hoher Leistung, 81–84 % bei 100–200 W |
+| [Nutzbare Kapazität](./README2.md#usable-capacity) | **8,8 kWh** an den Zellen; 9,3 kWh am AC-Anschluss für 0 → 100 % |
+| [Ruheverbrauch](./README2.md#-known-limitations) | 29–36 W im Wachzustand; etwa 5 W, sobald `standby` das Gerät schlafen lässt (Backup mode `closed`) |
+| [Verzögerung Zendure P1-Zähler](./README2.md#the-delay) | 0,4–1,1 s hinter einem YouLess am selben Port; wiederholt in 28 % der Sekunden seinen vorherigen Wert |
 
 ---
 
 ## 📖 Technische Referenz
 
-Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical reference](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md)** (Englisch):
+Alles, was auf dieser Seite fehlt, steht in **[README2.md – Technical reference](./README2.md)** (Englisch):
 
-- [Supported products](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#-supported-products) – Verlässlichkeit pro Modell und worauf sie beruht
-- [Device support](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#device-support) – was sich zwischen den Modellen unterscheidet und warum Solarmodule am Gerät experimentell sind
-- [How the controller works](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#how-the-controller-works) – die zwei Schleifen, die Buchführung, die Schutzmechanismen
-- [External meters](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#an-external-p1-meter) – HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, Zendure 3CT
-- [Languages](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#languages) – elf Sprachen, Korrekturen willkommen
-- [Supported entities](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#supported-entities) und [The Energy dashboard](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#the-energy-dashboard)
-- [Debug-Logging und der Beispiel-Trace](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#debug-logging)
-- [zenSDK and this integration](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
-- [Batterie-Cluster](https://github.com/windsurf/hassio-zendure-restapi/blob/main/docs/cluster.md) — bis zu sechs Batterien, an beliebiger Phase, als ein System (Englisch)
-- [Changelog](https://github.com/windsurf/hassio-zendure-restapi/blob/main/README2.md#changelog)
+- [Supported products](./README2.md#-supported-products) – Verlässlichkeit pro Modell und worauf sie beruht
+- [Device support](./README2.md#device-support) – was sich zwischen den Modellen unterscheidet und warum Solarmodule am Gerät experimentell sind
+- [How the controller works](./README2.md#-how-the-controller-works) – die zwei Schleifen, die Buchführung, die Schutzmechanismen
+- [External meters](./README2.md#-an-external-p1-meter) – HomeWizard, YouLess, EcoTracker, Shelly Pro 3EM, Zendure 3CT
+- [Languages](./README2.md#languages) – elf Sprachen, Korrekturen willkommen
+- [Supported entities](./README2.md#-supported-entities) und [The Energy dashboard](./README2.md#-the-energy-dashboard)
+- [Debug-Logging und der Beispiel-Trace](./README2.md#-debug-logging)
+- [zenSDK and this integration](./README2.md#-zensdk-and-this-integration) – was Zendures SDK aufführt und was diese Integration ergänzt und korrigiert
+- [Batterie-Cluster](./docs/cluster.md) — bis zu sechs Batterien, an beliebiger Phase, als ein System (Englisch)
+- [Changelog](./README2.md#-changelog)
+
+---
 
 **Die 1.8-Reihe** handelt von **einem Tagesplan** für einen ganzen Cluster — echt oder virtuell — mit eigener Price control; einem Festpreisvertrag, der nach der **Sonne** steuert; und einer Batterie, die kurzen Spitzen **nicht mehr hinterherläuft**, mit einem Zähler, der das zeigt. Sie baut auf den Clustern der 1.7-Reihe auf: *SOC protection* wartet auf die günstigste Viertelstunde oder die Sonne, die vollste Batterie arbeitet zuerst, und der Cluster bekommt einen Tab *History* mit der Solarleistung. Das [Changelog](./README2.md#-changelog) nennt, was sich geändert hat, und die früheren Versionen.
 
-**Neueste Version – v1.8.1:** ein Batterie-Cluster oder der virtuelle Cluster mit allen Batterien leer kann auf den günstigsten Zeitraum aus seiner eigenen Price control warten, bevor er sie lädt, wie eine einzelne Batterie; der Tab Cluster meldet eine Batterie mit einem Fehler oder einem zweiten Regler. **v1.8.0:** Price control kann einen Batterie-Cluster oder den virtuellen Cluster steuern: ein Tagesplan für alle seine Batterien zusammen, der Betriebsmodus des Clusters daraus gesetzt, und ein Tab Price Control auf dem Cluster-Dashboard; auf dem virtuellen Cluster ein Tagesplan für Batterien, die du nicht besitzt.
+**Neueste Version – v1.8.2:** eine kürzere README: die Einrichtung der Preise steht in der technischen Referenz und die Bildschirmfotos der App bei *Loslegen*; der SOC-Schutz bekommt eine Zusammenfassung; wie der Tagesplan mit Spitzen, negativen Preisen und der Sonne umgeht; ein Inhaltsverzeichnis der Anleitungen in `docs/`; *Feste Preise* heißt jetzt *Preisbänder*; eine neue Entscheidung **Festtarif** für Festpreisverträge: ein Modus am Tag, einer in der Nacht, nach der Sonne; die Kopien des virtuellen Clusters behalten ihren Ladezustand über einen Neustart hinweg. **v1.8.1:** ein Batterie-Cluster oder der virtuelle Cluster mit allen Batterien leer kann auf den günstigsten Zeitraum aus seiner eigenen Price control warten, bevor er sie lädt, wie eine einzelne Batterie; der Tab Cluster meldet eine Batterie mit einem Fehler oder einem zweiten Regler. **v1.8.0:** Price control kann einen Batterie-Cluster oder den virtuellen Cluster steuern: ein Tagesplan für alle seine Batterien zusammen, der Betriebsmodus des Clusters daraus gesetzt, und ein Tab Price Control auf dem Cluster-Dashboard; auf dem virtuellen Cluster ein Tagesplan für Batterien, die du nicht besitzt.
 
 <a id="mehr"></a>
 

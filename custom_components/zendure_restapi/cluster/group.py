@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .contract import (
+    solar_wait,
     CHARGE,
     DISCHARGE,
     NONE,
@@ -274,7 +275,8 @@ class Distributor:
         just under the floor to 5 points above it is minutes at full power.
         Direct, with the reason in the status, without Price Control or a price
         list, once the window is over, or with a battery PROTECT_HARD_POINTS or
-        more under its floor.
+        more under its floor. Under the fixed tariff (v1.8.2) it waits for the
+        sun instead: solar surplus by day, the grid at the end of the day.
         """
         self.protect_why = None
         if not s.soc_protection_price:
@@ -288,6 +290,17 @@ class Distributor:
         if now >= deadline:
             self.protect_why = f"direct: waited {PROTECT_WINDOW_S // 3600} h"
             return None
+        if s.solar_windows is not None:
+            # Fixed tariff (v1.8.2): every quarter costs the same; wait for the sun.
+            wait = solar_wait(self.protect_since, now, s.solar_windows, PROTECT_WINDOW_S)
+            if wait.charge_at is None:
+                self.protect_why = wait.why
+                return None
+            latest = (f"from the grid at {wait.charge_label} at the latest" if wait.charge_label
+                      else f"from the grid after {PROTECT_WINDOW_S // 3600} h at the latest")
+            if wait.daylight_at:
+                return f"every battery under its SOC floor: waits for daylight at {wait.daylight_at}, {latest}"
+            return f"every battery under its SOC floor: charges from solar, {latest}"
         periods = [p for p in s.price_periods if p[0] < deadline and p[1] > now]
         if not periods:
             self.protect_why = "direct: no prices from Price Control"

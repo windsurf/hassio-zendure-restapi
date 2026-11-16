@@ -1,7 +1,7 @@
 """Generate the sample dashboards in dashboard/ from the integration's own builders (since v1.8.0).
 
 The integration builds its dashboards itself: the battery dashboard from
-custom_components/zendure_restapi/dashboard_zendure_restapi.json, the
+custom_components/zendure_restapi/templates/dashboard_zendure_restapi.json, the
 dashboard of a battery cluster and of a Virtual cluster from that template and
 cluster_dashboard.py. The YAML files in dashboard/ are the same dashboards for a
 reference installation, for those who paste a dashboard by hand:

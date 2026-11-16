@@ -1,8 +1,10 @@
 """The Zendure RestAPI dashboard: created on request, never overwritten.
 
-The template is dashboard/zendure_restapi.yaml — three views, Zendure
-RestAPI, Price Control and History — shipped inside the integration as
-dashboard_zendure_restapi.json because HACS installs only this folder. Before
+The template is templates/dashboard_zendure_restapi.json — three views,
+Zendure RestAPI, Price Control and History — inside the integration, because
+HACS installs only this folder. dashboard/zendure_restapi.yaml in the
+repository is generated from it by scripts/build_dashboard_yaml.py for the
+reference devices (v1.8.2); a test keeps the two the same. Before
 it is saved, the entity ids of the reference device are swapped for those of
 the devices actually set up, the power gauges get the device's own AC limit,
 and cards for entities that do not exist here are left out. The charts need
@@ -26,7 +28,6 @@ from __future__ import annotations
 import copy
 import inspect
 import json
-import math
 import logging
 import re
 from pathlib import Path
@@ -41,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 DASHBOARD_URL = "zendure-restapi"
 DASHBOARD_TITLE = "Zendure RestAPI"
 DASHBOARD_ICON = "mdi:home-battery"
-TEMPLATE = Path(__file__).with_name("dashboard_zendure_restapi.json")
+TEMPLATE = Path(__file__).parent / "templates" / "dashboard_zendure_restapi.json"
 YAML_URL = (
     "https://github.com/windsurf/hassio-zendure-restapi/blob/main/dashboard/zendure_restapi.yaml"
 )
@@ -265,10 +266,10 @@ def power_labels(every: int) -> str:
 def _scale_power_axis(card: dict[str, Any], ceiling: int) -> None:
     """The chart's power axis for another device than the template's 3000 W.
 
-    Every power axis follows the data, rounded to a whole step, and reaches
-    at least a full charge below zero (v1.6.7): "~-3000" is a soft bound,
-    so a larger export moves the axis one step down instead of cutting the
-    line off. A smaller device gets its own limit and a smaller step, so an
+    Every power axis follows the data, rounded to a whole step. Its soft
+    lower bound is zero (v1.8.2; a full charge below zero from v1.6.7): the
+    zero line is always in view, and the axis goes below it only as far as
+    charging or export reaches. A smaller device gets a smaller step, so an
     800 W battery does not draw a flat line.
     """
     step = 500 if ceiling >= 1000 else 200
@@ -279,8 +280,6 @@ def _scale_power_axis(card: dict[str, Any], ceiling: int) -> None:
         apex = axis.setdefault("apex_config", {})
         apex["stepSize"] = step
         apex.setdefault("labels", {})["formatter"] = power_labels(2 * step)
-        if isinstance(axis.get("min"), str) and axis["min"].startswith("~"):
-            axis["min"] = f"~{-math.ceil(ceiling / step) * step}"
 
 
 def _add_solar(
