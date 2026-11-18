@@ -719,19 +719,42 @@ class BatteryMeasure:
         if sw.get("day") != today:
             fresh = _new_switching(today)
             fresh["skipped"]["total"] = sw.get("skipped", {}).get("total", 0)
+            fresh["followed"]["total"] = sw.get("followed", {}).get("total", 0)
             fresh["relay"]["total"] = sw.get("relay", {}).get("total", 0)
             fresh["relay"]["short_total"] = sw.get("relay", {}).get("short_total", 0)
             self.switching = sw = fresh
         return sw
 
-    def on_skipped_peak(self, today: str, direction: str, seconds: float, wh: float) -> None:
-        """A start Start after held back, and that never came: the demand fell back in time."""
+    def on_skipped_peak(
+        self, today: str, direction: str, seconds: float, wh: float, running: bool = False,
+    ) -> None:
+        """A start Start after held back, and that never came: the demand fell back in time.
+
+        Since v1.8.3 also a raise Raise after held back while a direction ran
+        (`running`): counted the same, and apart as `while_running_today`.
+        """
         sk = self._switching_today(today)["skipped"]
         sk["total"] += 1
         sk["today"] += 1
         sk[f"{direction}_today"] = sk.get(f"{direction}_today", 0) + 1
+        if running:
+            sk["while_running_today"] = sk.get("while_running_today", 0) + 1
         sk["wh_today"] = round(sk["wh_today"] + max(0.0, wh), 1)
         sk["longest_s_today"] = round(max(sk["longest_s_today"], seconds), 1)
+
+    def on_followed_peak(self, today: str, seconds: float, import_wh: float, export_wh: float) -> None:
+        """A running direction followed a short peak up and came back down (v1.8.3).
+
+        What a raise costs when the demand is gone again before the battery
+        has settled: the grid takes the start of the peak, and the battery's
+        late fall back is exported. Counted to show how often it happens.
+        """
+        fp = self._switching_today(today)["followed"]
+        fp["total"] += 1
+        fp["today"] += 1
+        fp["import_wh_today"] = round(fp["import_wh_today"] + max(0.0, import_wh), 1)
+        fp["export_wh_today"] = round(fp["export_wh_today"] + max(0.0, export_wh), 1)
+        fp["longest_s_today"] = round(max(fp["longest_s_today"], seconds), 1)
 
     def on_relay(self, now: datetime, today: str, kind: str) -> None:
         """A start from standstill or a change of direction the controller ordered."""
@@ -761,6 +784,10 @@ class BatteryMeasure:
         return int(self.switching.get("skipped", {}).get("total", 0))
 
     @property
+    def followed_peaks(self) -> int:
+        return int(self.switching.get("followed", {}).get("total", 0))
+
+    @property
     def relay_switches(self) -> int:
         return int(self.switching.get("relay", {}).get("total", 0))
 
@@ -770,10 +797,13 @@ class BatteryMeasure:
         day is today. Reads only; the day turns over on the next count."""
         sk = self.switching.get("skipped", {})
         rl = self.switching.get("relay", {})
+        fp = self.switching.get("followed", {})
         current = self.switching.get("day") == today
         return {
             "skipped_peaks": int(sk.get("total", 0)),
             "skipped_peaks_today": int(sk.get("today", 0)) if current else 0,
+            "followed_peaks": int(fp.get("total", 0)),
+            "followed_peaks_today": int(fp.get("today", 0)) if current else 0,
             "relay_switches": int(rl.get("total", 0)),
             "relay_switches_today": int(rl.get("today", 0)) if current else 0,
             "short_runs_today": int(rl.get("short_today", 0)) if current else 0,
@@ -934,7 +964,9 @@ def _new_switching(day: str | None) -> dict[str, Any]:
     return {
         "day": day,
         "skipped": {"total": 0, "today": 0, "charge_today": 0, "discharge_today": 0,
-                    "wh_today": 0.0, "longest_s_today": 0.0},
+                    "while_running_today": 0, "wh_today": 0.0, "longest_s_today": 0.0},
+        "followed": {"total": 0, "today": 0, "import_wh_today": 0.0, "export_wh_today": 0.0,
+                     "longest_s_today": 0.0},
         "relay": {"total": 0, "today": 0, "starts_today": 0, "reversals_today": 0,
                   "short_today": 0, "short_total": 0},
     }
@@ -945,7 +977,7 @@ def _load_switching(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         return out
     out["day"] = data.get("day") if isinstance(data.get("day"), str) else None
-    for part in ("skipped", "relay"):
+    for part in ("skipped", "relay", "followed"):
         stored = data.get(part)
         if isinstance(stored, dict):
             for key, default in out[part].items():

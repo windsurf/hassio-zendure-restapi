@@ -73,6 +73,11 @@ from .const import (
     CONTROL_DEADBAND,
     DEVICE_SELF_CHARGE_W,
     RUN_FLOOR_W,
+    FOLLOWED_PEAK_S,
+    OPT_RAISE_AFTER,
+    RAISE_MARGIN_SHARE,
+    RAISE_MARGIN_W,
+    RISE_MIN_W,
     SOC_REARM_POINTS,
     SOC_PROTECT_HARD_POINTS,
     SOC_PROTECT_PRICE,
@@ -229,6 +234,22 @@ class ZendureController:
     # under its floor, why it charges now, and what it waits for.
     _protect_since: datetime | None = None
     _protect_why: str | None = None
+    # Raise after (v1.8.3): since when a running discharge has been asked for
+    # more than its margin above the limit it held then (`_raise_ref`), the grid
+    # energy of that rise so far, and whether the wait is over for this rise.
+    _raise_since: datetime | None = None
+    _raise_ref = 0
+    _raise_wh = 0.0
+    _raise_peak = 0
+    _raise_last: datetime | None = None
+    _raise_done = False
+    # Followed peaks (v1.8.3): the limit a running direction held before it
+    # went up, since when it is up, and the grid energy in and out meanwhile.
+    _follow_base: int | None = None
+    _follow_since: datetime | None = None
+    _follow_import = 0.0
+    _follow_export = 0.0
+    _follow_last: datetime | None = None
     protect_note: str | None = None
     # One mode cycle of "nothing to do" seen for a running direction.
     _zero_once = False
@@ -776,6 +797,8 @@ class ZendureController:
                 self._prev_grid = None
             self._trim_source = self._source_used
 
+        self._track_follow(charging, current, grid)
+
         # ── What has arrived since the last look ─────────────────────
         # Movement in the direction the outstanding order predicted counts as
         # that order landing. Movement the other way is the house, and must
@@ -821,6 +844,10 @@ class ZendureController:
         # took the limit to 0 and the next demand needed a new start.
         if current > 0 and target < min(RUN_FLOOR_W, current):
             target = min(RUN_FLOOR_W, current)
+        # A higher demand waits Raise after before a running discharge goes up
+        # for it (v1.8.3); lower goes at once.
+        if not charging:
+            target = self._hold_raise(current, target, grid)
 
         delta = target - current
         # Adjustments only. This loop never opens a direction — it is entered
@@ -1785,7 +1812,21 @@ class ZendureController:
         else:
             self._zero_once = False
 
+        if not starting and not charging and current_val > 0:
+            target = self._hold_raise(current_val, target, grid)
+
         if abs(target - current_val) < self._mode_threshold() and not starting:
+            if self._raise_since is not None and not self._raise_done:
+                waited = (dt_util.utcnow() - self._raise_since).total_seconds()
+                self._trim_direction = direction if current_val > 0 else None
+                self._set_state(
+                    "tracking",
+                    f"discharge holds at {current_val} W: demand higher for {waited:.0f} of "
+                    f"{self._raise_after()} s",
+                    target=current_val,
+                    direction=direction,
+                )
+                return
             # Settled, which is precisely the state in which the trim loop is
             # useful: the direction is established and healthy, and all that is
             # left is following the house between polls.
@@ -2006,6 +2047,115 @@ class ZendureController:
             f"{wanted} waits: demand {demand:.0f} W above {threshold} W for {waited:.0f} of {after} s",
         )
         return True
+
+    def _raise_after(self) -> int:
+        """Seconds a higher demand lasts before a running discharge goes up for it (v1.8.3)."""
+        return max(0, self.settings.get_int(OPT_RAISE_AFTER))
+
+    @staticmethod
+    def _raise_margin(limit: int) -> int:
+        """How far above a running limit a demand counts as a rise (v1.8.3)."""
+        return max(RAISE_MARGIN_W, int(limit * RAISE_MARGIN_SHARE))
+
+    def _hold_raise(self, current: int, target: int, grid: float) -> int:
+        """The limit a running discharge may go to now: held while a rise waits (v1.8.3).
+
+        Start after keeps a short peak from starting a battery that stands still;
+        a battery that already discharges followed every rise at once until
+        v1.8.2: 4-5 s late on a peak of about 10 s, then exported for as long
+        again while it came back down. Now a demand more than the margin above
+        the running limit waits Raise after; lower and within the margin go at
+        once, so the base load stays covered. A rise that falls back before
+        the wait is over is a skipped peak, while running. Once the wait is
+        over the battery follows that rise freely until the demand is back
+        within the margin. Raise after 0 is the behaviour of v1.8.2.
+        """
+        after = self._raise_after()
+        if after <= 0 or current <= 0:
+            self._reset_raise()
+            return target
+        now = dt_util.utcnow()
+        ref = self._raise_ref if self._raise_since is not None else current
+        if target <= ref + self._raise_margin(ref):
+            if self._raise_since is not None and not self._raise_done and self._raise_peak - ref >= RISE_MIN_W:
+                # The demand fell back in time: a peak the battery did not follow.
+                # Counted from RISE_MIN_W only: a held rise of 120 W on a low
+                # base load is not a peak, and a night gave 52 of those.
+                self.measure.on_skipped_peak(
+                    _today(now), "discharge", (now - self._raise_since).total_seconds(),
+                    self._raise_wh, running=True,
+                )
+            self._reset_raise()
+            return target
+        if self._raise_done:
+            return target
+        if self._raise_since is None:
+            self._raise_since = now
+            self._raise_ref = current
+            self._raise_wh = 0.0
+            self._raise_last = now
+            self._raise_peak = current
+        self._raise_peak = max(self._raise_peak, target)
+        # The grid's share of the rise, for the skipped peak should it end so.
+        excess = max(0.0, grid - self.settings.get_int(OPT_DISCHARGE_BUFFER))
+        self._raise_wh += excess * max(0.0, (now - self._raise_last).total_seconds()) / 3600.0
+        self._raise_last = now
+        if (now - self._raise_since).total_seconds() >= after:
+            self._raise_done = True
+            return target
+        return min(target, max(current, self._raise_ref))
+
+    def _reset_raise(self) -> None:
+        self._raise_since = None
+        self._raise_ref = 0
+        self._raise_wh = 0.0
+        self._raise_last = None
+        self._raise_done = False
+        self._raise_peak = 0
+
+    def _track_follow(self, charging: bool, current: int, grid: float) -> None:
+        """Count a raise of the running direction that is back within a minute (v1.8.3).
+
+        Measured on every meter sample while a discharge runs: the limit before
+        it went up is the base; going at least RISE_MIN_W (and the margin) above
+        it starts a follow, coming back within the margin of the base ends it. Within
+        FOLLOWED_PEAK_S that was a short peak followed: the grid gave the start
+        of it, and took the battery's late way back down. Longer is a load the
+        battery covered, and is not counted.
+        """
+        now = dt_util.utcnow()
+        seconds = max(0.0, (now - self._follow_last).total_seconds()) if self._follow_last else 0.0
+        self._follow_last = now
+        if charging:
+            # Charging follows the sun, not the house: a rise there is a cloud
+            # passing, and a noisy meter made 45 "peaks" of it in 22 minutes.
+            self._follow_since = None
+            self._follow_base = None
+            return
+        if self._follow_since is None:
+            if self._follow_base is not None and current > self._follow_base + max(RISE_MIN_W, self._raise_margin(self._follow_base)):
+                # Up since the previous sample: this sample's grid is already part of it.
+                self._follow_since = now - timedelta(seconds=seconds)
+                self._follow_import = 0.0
+                self._follow_export = 0.0
+            else:
+                self._follow_base = current
+                return
+        # Import is the part of the peak not covered, export the part overdone
+        # while the battery came back down.
+        self._follow_import += max(0.0, grid) * seconds / 3600.0
+        self._follow_export += max(0.0, -grid) * seconds / 3600.0
+        lasted = (now - self._follow_since).total_seconds()
+        base = self._follow_base or 0
+        if current <= base + self._raise_margin(base):
+            if lasted <= FOLLOWED_PEAK_S:
+                self.measure.on_followed_peak(_today(now), lasted, self._follow_import, self._follow_export)
+            self._follow_since = None
+            self._follow_base = current
+        elif lasted > FOLLOWED_PEAK_S:
+            # A load the battery covers, not a peak: start again from here.
+            self._follow_since = None
+            self._follow_base = None
 
     def _start_threshold(self, charging: bool, start: int) -> int:
         """Where a direction starts: its start threshold, or past its stop limit (v1.7.6).

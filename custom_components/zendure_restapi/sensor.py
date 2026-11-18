@@ -1065,7 +1065,21 @@ MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
         attributes=lambda m: {
             **{k: v for k, v in m.switching.get("skipped", {}).items() if k != "total"},
             "day": m.switching.get("day"),
-            "basis": "starts that Start after held back and that never came: the demand fell back in time (v1.7.4)",
+            "basis": "starts that Start after held back and that never came: the demand fell back in time (v1.7.4); "
+                     "since v1.8.3 also raises of at least 500 W of a running discharge that Raise after held back (while_running_today)",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="followed_peaks",
+        name="Followed peaks",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:chart-bell-curve-cumulative",
+        value=lambda m: m.followed_peaks,
+        attributes=lambda m: {
+            **{k: v for k, v in m.switching.get("followed", {}).items() if k != "total"},
+            "day": m.switching.get("day"),
+            "basis": "raises of at least 500 W of a running discharge that fell back within a minute: the "
+                     "battery followed a short peak; import at its start, export as it came back down (v1.8.3)",
         },
     ),
     ZendureMeasureDescription(

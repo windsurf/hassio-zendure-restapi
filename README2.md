@@ -339,7 +339,7 @@ The day plan does not try to run the house from the battery. It uses the battery
 
 **What comes from the grid, on purpose.**
 
-- **Short peaks:** a tap or kettle reheating, a coffee machine, an induction hob that pulses. From standstill the battery needs 6 to 15 seconds before it delivers, so it would arrive when the peak is over. In the smart modes *Start after* leaves them to the grid, in `standby` they come from the grid anyway; during a quick block the battery already runs at full power and covers them ([docs/low_demand.md](docs/low_demand.md)).
+- **Short peaks:** a tap or kettle reheating, a coffee machine, an induction hob that pulses. From standstill the battery needs 6 to 15 seconds before it delivers, so it would arrive when the peak is over. In the smart modes *Start after* leaves them to the grid, in `standby` they come from the grid anyway; a battery that already discharges goes up for one only after *Raise after* (15 s, v1.8.3); during a quick block the battery already runs at full power and covers them ([docs/low_demand.md](docs/low_demand.md)).
 - **Very low demand:** below the stop limits (50 W charging and discharging) the fixed loss of the converter takes most of the energy.
 - **Large loads outside the planned blocks:** a car, a heat pump, electric heating, a dryer. With `standby` between the blocks (the preset under net metering) the battery serves them only in the quarters the plan has chosen on price. With `smart_matching` between the blocks (the preset from 2027) it also covers a load that lasts, up to its power and as long as it holds energy; that can spend what the plan set aside for the dearest quarters. The plan does not see such a load coming.
 
@@ -843,6 +843,8 @@ That last bound is the connection, not the battery. This meter reads the whole h
 
 This integration steers the battery over your local network. If the Wi-Fi to the battery or Home Assistant itself goes away, the battery keeps the last limit it was given and runs on without control: in a smart mode usually at a modest power, in `quick_charge` or `quick_discharge` at full power, to or from the grid if the house does not take it. It stops only at its own *Lower SOC limit* or *Upper SOC limit*, kept in the device, or when the connection is back; then the integration takes over again. Keep the Wi-Fi to the battery reliable, and do not leave a quick mode running unattended where an outage would cost you.
 
+**The log shows "Error fetching zendure_restapi_coordinator data: timeout …" or "connection failed …", followed by "Zendure device … restarted (messageId, unreachable for 18 s)". Is something wrong?** Usually not. The battery, or a Zendure meter, did not answer for a moment. Home Assistant logs the first failed poll of an integration as an error; when the device answers again with its message counter started from the beginning, it has restarted, and the integration logs that as a warning with the limits it came back with. A gap of seconds up to a minute or two, about once a day, is normal for these devices: a Wi-Fi reconnect, a restart of the device itself or a firmware update. A restart does not change how the integration steers: in a controlling mode it sets its own limit again on the next cycle; for standby see [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade). The diagnostics download lists every restart under `restarts`. Look further when it happens several times a day or lasts for minutes: give the battery a fixed address in your router (a DHCP reservation), check the Wi-Fi signal at the battery, and check in the Zendure app whether a firmware update ran at that time.
+
 ### Standby stops the battery, once
 
 Selecting `standby` sends one command and then goes quiet:
@@ -924,6 +926,28 @@ Why it waits on both sides, with pictures of always on, hysteresis and timers, h
 #### After a short peak
 
 *Since v1.7.5.* When a short peak ends, the battery is still delivering what the peak asked for and takes a few seconds to come down; the grid shows that as export, while the battery power the integration reads lags the device by a sample. Grid + battery − buffer then comes out below zero although the house still takes its base load. Until v1.7.4 that took the limit to 0: the direction ended, and the next base load waited `Start after` before a new start — measured on a Virtual cluster after about one boiling-water peak in four, each time some 30 s of base load from the grid and an extra start. Now a running direction is ended only by two mode cycles in a row with nothing to do, or by the stop rule; the first such cycle keeps 30 W running, and the trim loop never takes a running limit to 0. When the surplus is real (the sun comes out), the change to charging follows one mode cycle later.
+
+#### Raise after
+
+*Since v1.8.3.* `Start after` holds a start from standstill; a battery that already discharges used to follow every peak at once. It arrives a few seconds late, and when a short peak ends it still delivers the peak and exports it while it comes down: measured on a 3000 Mix AC+ with a 2.2 kW boiling-water tap of about 10 s at a base load of 145 W, about 3 Wh from the grid and 2.7 Wh back to the grid per peak, and seven writes. With net metering that export is a wash; without it, every exported watt-hour is battery energy sold at the export price.
+
+`Raise after` (s, 0 to 120, default 15, 0 = at once) holds such a rise. A running discharge goes up for a demand more than a margin above its running limit only once that demand has lasted `Raise after` seconds; the margin is a fifth of the limit, at least 100 W. Lower goes at once, and so does a small rise within the margin, so the base load is still followed closely. A short peak is left to the grid and counted under *Skipped peaks* as *while running*; an oven or a hob that stays is followed after 15 s, at once at that moment. Charging is not held: a sunny spell is taken in at once. Both loops hold, the trim loop as well as the mode cycle; the status reads *discharge holds at … W: demand higher for x of y s*.
+
+![Raise after on a running battery](./images/control_raise_after.png)
+
+*Followed peaks* counts what is left: a rise of at least 500 W of a running discharge that comes back within 60 s, with the energy the grid gave and took meanwhile. The 500 W is also the floor for a held rise to count under *Skipped peaks*: a fridge starting on a low base load is held like any rise above the margin, but it is no peak, and a noisy meter that jumps 100 to 200 W between samples is none either. With `Raise after` at 0 it shows how many peaks the battery chases and what they export; with 15 s it should stay near zero.
+
+A replay of three recordings of measured house load on the controller itself, with the response of a 3000 Mix AC+ as the trace shows it (a limit written while the battery runs lands after about 4 s, then in one step): an afternoon and evening with 19 peaks (3.4 h), and two nights with 35 and 50 peaks (13 and 15 h):
+
+| Recording | Import | Export | Writes | Battery out | Cost, export at ⅓ of import |
+|---|---|---|---|---|---|
+| afternoon and evening, 3.4 h, 19 peaks | 100 → 172 Wh | 78 → 25 Wh | 1,157 → 1,006 | 828 → 703 Wh | −4.0 % |
+| night, 13 h, 35 peaks | 186 → 310 Wh | 130 → 38 Wh | 1,655 → 1,358 | 2,437 → 2,221 Wh | −2.4 % |
+| night, 15 h, 50 peaks | 250 → 467 Wh | 189 → 64 Wh | 1,456 → 1,069 | 3,416 → 3,074 Wh | −2.3 % |
+
+Each figure reads `Raise after` 0 (as before) → 15 s.
+
+The export of the peaks is two thirds gone and there are 13 to 27 % fewer writes; the peaks themselves now come from the grid, and the battery keeps that energy for later. With net metering the two cost the same; with an export price of a third of the import price the hold is 2 to 4 % cheaper. The replay of `Raise after` 0 matches what the meter recorded per peak (2.7 Wh in, 2.9 Wh out, 7 writes). Set `Raise after` to 0 to follow every peak as before. A battery cluster and a Virtual cluster have a *Raise after* of their own (15 s by default), which every battery taking part follows, the copies of a Virtual cluster included, as with *Start after*; the cluster status adds up the skipped and followed peaks of its batteries.
 
 ### Reversing direction
 
@@ -1211,7 +1235,8 @@ The sensors sit on the battery device as diagnostics; *Realized margin* sits on 
 | Response time | from a limit write of 200 W or more until the grid has moved 90 % of that step, median of the last 20; start and stop separately as attributes | every step; without a meter on the battery poll, which is only as fine as the poll interval | *Direction change delay*, buffers |
 | Grid tracking error | median distance between the grid and the buffer while a smart mode balances, last 24 hours, by time | only while the battery can still follow: not at its ceiling, not with the limit at zero | *Trim strength*, thresholds |
 | Lost writes | limit writes the device did not keep, with the checked and lost counts by the time since the command before it: under 1.3 s, 1.3 to 2 s, 2 s or more | every limit write the next report can confirm; a direction the device closes at its SOC bound does not count, nor a 0 over the small charge limit the device sets itself at its lower bound (v1.7.5) | how fast the controller may write (see below) |
-| Skipped peaks | starts that *Start after* held back and that never came, because the demand fell back in time; today per direction, the energy the grid gave meanwhile and the longest, and the total (v1.7.4) | a smart mode with *Start after* above 0 |
+| Skipped peaks | starts that *Start after* held back and that never came, because the demand fell back in time; today per direction, the energy the grid gave meanwhile and the longest, and the total (v1.7.4); since v1.8.3 also the rises *Raise after* held back on a running discharge, as *while running* | a smart mode with *Start after* or *Raise after* above 0 |
+| Followed peaks | rises of at least 500 W of a running discharge that came back within 60 s: today the count, the energy the grid gave and took meanwhile and the longest, and the total (v1.8.3) | a smart mode | *Raise after* |
 | Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4). Counted from what the integration writes, not heard: whether a relay clicks each time is not reported by the device and differs per model, and what the device switches by itself is not counted, so the count is an upper limit and the figure to compare between settings | every direction write |
 | Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
 
@@ -1264,13 +1289,13 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Per pack** (*Pack N …*) | 12 + 1 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Type, Serial number · binary sensor: Heating |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
-| **Measured** | 12 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes, Skipped peaks, Relay switches |
+| **Measured** | 13 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes, Skipped peaks, Followed peaks, Relay switches |
 | **Binary sensor** | 13 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow, Second controller · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
-| **Controller** | 23 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Charge buffer, Discharge buffer, Trim strength, SOC protection (select: off, direct, price_control), Trace recording, Mode threshold, Trim threshold |
-| **Battery cluster entry** | 18 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](./docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
+| **Controller** | 24 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Raise after, Charge buffer, Discharge buffer, Trim strength, SOC protection (select: off, direct, price_control), Trace recording, Mode threshold, Trim threshold |
+| **Battery cluster entry** | 19 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Raise after, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](./docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1447,6 +1472,7 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **Price control for a cluster** (v1.8.0): the day plan adds up the energy and the power of the batteries taking part, leaves out one that does not take part or report, and has no plan without any; it writes the cluster's Operation mode, never pauses for a cluster, finds the copies of a Virtual cluster, switched off it sets a Virtual cluster back to *Follow source* and leaves a battery cluster's mode alone; the cluster dashboard gets a *Price Control* tab with the cluster's own chart, its plan in the *Cluster* tab and its status under *Operation mode*, and is unchanged without one.
 - **Sample dashboards** (v1.8.0): the three files in `dashboard/` are what the integration's own code builds, each with the version of the manifest, and both clusters have their *Price Control* tab.
 - **SOC protection of a cluster at the cheapest price** (v1.8.1): it waits for the cheapest period within 6 hours of its own Price control, charges at once without prices, after 6 hours or 2 points under the floor, carries on once it charges, and forgets the wait when a battery is back above its floor; a fault of a battery shows as a badge on the Cluster tab, a Virtual cluster gets none.
+- **Raise after** (v1.8.3): 15 s by default; a 10 s peak on a running discharge is held at the running limit and counted as a skipped peak while running; a held rise under 500 W is not counted; a load that stays is followed after the time; lower and a rise within the margin (a fifth of the limit, at least 100 W) go at once; 0 follows at once as before; charging is not held; the trim loop holds too; a followed peak is counted with its export, a long load, a rise under 500 W and a rise while charging are not; a battery in a cluster follows the cluster's *Raise after*, alone its own; the cluster status adds up the counts of its batteries.
 
 Run them from the root of the repository:
 
@@ -1531,6 +1557,15 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 ## 📝 Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.8.3 — Raise after: no more chasing short peaks on a running battery
+
+**A battery that already discharges no longer follows a short peak, and exports it again, a few seconds later.** On by default, at 15 s; 0 gives the behaviour of v1.8.2.
+
+- **Raise after** (new, per battery and on a battery cluster and a Virtual cluster, after *Start after*): a running discharge goes up for a demand more than a margin above its running limit (a fifth of the limit, at least 100 W) only once that demand has lasted this many seconds. Lower and small rises go at once; charging is not held. A held rise that falls back in time counts under *Skipped peaks* as *while running*. See [Raise after](#raise-after).
+- **Followed peaks** (new measured diagnostic, on *History* after *Skipped peaks*): rises of at least 500 W of a running discharge that came back within 60 s, with the energy the grid gave and took meanwhile and the longest of the day. Both counters take a rise as a peak from 500 W; the hold itself keeps its margin.
+- **Cluster totals:** the status of a battery cluster and of a Virtual cluster carries `skipped_peaks`, `skipped_peaks_today`, `followed_peaks` and `followed_peaks_today`, added up over its batteries. A battery cluster and a Virtual cluster have a *Raise after* of their own (0 to 120 s, 15 by default, on the *Cluster* tab after *Start after*), which every battery taking part follows, the copies included, as with *Start after*; outside a cluster a battery uses its own. *Reset settings* of a Virtual cluster takes it back to 15 s.
+- **Reset settings** on a battery takes *Raise after* back to 15 s as well. Tick *Rebuild dashboard* on the battery for the two new tiles, and on a cluster for its *Raise after*.
 
 ### v1.8.2 — A fixed tariff by the sun, Price bands, and a shorter README
 

@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Una presa smart su un microinverter o un secondo inverter. Le serie PV della dashboard la mostrano: al posto del PV della batteria se non è in uso, accanto altrimenti. Il controllo non ne ha bisogno, il contatore di rete vede già questa potenza.",
           "solar_energy_entity": "Il suo contatore kWh, per i totali giornalieri della scheda History.",
-          "reset_settings": "Margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, potenza di carica e scarica min 0 W, Soglia modalità 10 W, Soglia di correzione 40 W, forza di correzione 80 %, Ritardo cambio direzione 10 s. Operation mode, potenza di carica e scarica max, protezione SOC, il contatore e Price Control restano come sono. In un cluster valgono le impostazioni del gruppo."
+          "reset_settings": "Margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, potenza di carica e scarica min 0 W, Soglia modalità 10 W, Soglia di correzione 40 W, forza di correzione 80 %, Ritardo cambio direzione 10 s. Operation mode, potenza di carica e scarica max, protezione SOC, il contatore e Price Control restano come sono. In un cluster valgono le impostazioni del gruppo."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Concentrate below 300 W, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
+          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, Concentrate below 300 W, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
         }
       }
     },
@@ -690,6 +690,9 @@
       "skipped_peaks": {
         "name": "Picchi saltati"
       },
+      "followed_peaks": {
+        "name": "Picchi seguiti"
+      },
       "relay_switches": {
         "name": "Commutazioni del relè"
       },
@@ -871,6 +874,9 @@
       },
       "start_after": {
         "name": "Avvia dopo"
+      },
+      "raise_after": {
+        "name": "Aumenta dopo"
       },
       "trim_factor": {
         "name": "Intensità di correzione"

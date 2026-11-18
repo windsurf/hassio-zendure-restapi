@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.2"
+INTEGRATION_VERSION = "1.8.3"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -215,6 +215,8 @@ OPT_STOP_DISCHARGE_BELOW = "stop_discharge_below"
 OPT_STOP_AFTER = "stop_after"
 # How long the demand stays past the start threshold before a direction starts (v1.7.4).
 OPT_START_AFTER = "start_after"
+# How long a higher demand lasts before a running discharge goes up for it (v1.8.3).
+OPT_RAISE_AFTER = "raise_after"
 OPT_DIRECTION_DELAY = "direction_change_delay"
 OPT_MODE_THRESHOLD = "mode_threshold"
 OPT_TRIM_THRESHOLD = "trim_threshold"
@@ -409,6 +411,8 @@ CLUSTER_KEY = "_cluster"
 COORDINATED_KEYS = frozenset({
     "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
     "stop_charge_below", "stop_discharge_below", "stop_after", "start_after",
+    # v1.8.3: Raise after, as Start after, from the cluster while a battery takes part.
+    "raise_after",
     "meter_source", "external_meter",
 })
 
@@ -547,6 +551,10 @@ DEFAULTS = {
     OPT_STOP_DISCHARGE_BELOW: 50,       # W, 0 = off
     OPT_STOP_AFTER: 30,                 # s under the stop limit before stopping
     OPT_START_AFTER: 30,                # s past the start threshold before starting, 0 = at once
+    # A running discharge follows a higher demand only once it has lasted this
+    # long (v1.8.3): a kettle or tap of about 10 s passes to the grid instead of
+    # being followed 4-5 s late and exported as the battery comes back down.
+    OPT_RAISE_AFTER: 15,                # s, 0 = at once (as until v1.8.2)
     OPT_DIRECTION_DELAY: 10,            # s to pause between directions, 0 = off
     # Smallest adjustment worth writing, per loop. Both keep the values the
     # constants used to hold, so the behaviour is unchanged until they are
@@ -621,7 +629,7 @@ DEFAULTS = {
 BATTERY_RESET_KEYS = (
     OPT_CHARGE_BUFFER, OPT_DISCHARGE_BUFFER, OPT_START_CHARGE_AT, OPT_START_DISCHARGE_AT,
     OPT_STOP_CHARGE_BELOW, OPT_STOP_DISCHARGE_BELOW, OPT_STOP_AFTER, OPT_START_AFTER,
-    OPT_MIN_CHARGE_POWER, OPT_MIN_DISCHARGE_POWER, OPT_MODE_THRESHOLD, OPT_TRIM_THRESHOLD,
+    OPT_RAISE_AFTER, OPT_MIN_CHARGE_POWER, OPT_MIN_DISCHARGE_POWER, OPT_MODE_THRESHOLD, OPT_TRIM_THRESHOLD,
     OPT_TRIM_FACTOR, OPT_DIRECTION_DELAY,
 )
 
@@ -824,3 +832,20 @@ def stop_charge_advice(import_price: float, export_price: float) -> int | None:
         return None
     watts = CHARGE_FIXED_W / room
     return max(50, int(-(-watts // 10) * 10))
+
+# Raise after (v1.8.3): a rise of the demand counts once it is more than
+# RAISE_MARGIN_W or RAISE_MARGIN_SHARE of the running limit above it, the larger;
+# under that margin a running discharge follows the house as before, so the base
+# load stays covered.
+RAISE_MARGIN_W = 100
+RAISE_MARGIN_SHARE = 0.2
+# Followed peaks (v1.8.3): a raise of a running direction that is back within
+# this many seconds was a short peak followed, not a lasting load.
+FOLLOWED_PEAK_S = 60
+# A rise counts as a peak in the diagnostics (Skipped peaks while running,
+# Followed peaks) only from this many watts: the margin above keeps the base
+# load followed, but a meter that jumps 100-200 W between samples, or a fridge
+# starting on a low base load, is not a peak worth counting. A kettle or
+# boiling-water tap is 1.5-2.5 kW. Holding a rise is not affected.
+RISE_MIN_W = 500
+

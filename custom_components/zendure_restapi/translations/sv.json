@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "En smart kontakt på en mikroväxelriktare eller en andra växelriktare. Instrumentpanelens PV-serier visar den: i stället för batteriets egen PV när den inte används, annars bredvid. Styrningen behöver den inte, nätmätaren ser redan denna effekt.",
           "solar_energy_entity": "Dess kWh-räknare, för dagstotalerna på fliken History.",
-          "reset_settings": "Buffertar och starttrösklar 5 W, Stoppa laddning under 50 W, Stoppa urladdning under 50 W, Stoppa efter 30 s, Starta efter 30 s, min laddeffekt och urladdningseffekt 0 W, Lägestroskel 10 W, Korrigeringströskel 40 W, korrigeringsstyrka 80 %, Fördröjning vid riktningsbyte 10 s. Operation mode, max laddeffekt och urladdningseffekt, SOC-skydd, mätaren och Price Control förblir som de är. I ett kluster gäller gruppens inställningar."
+          "reset_settings": "Buffertar och starttrösklar 5 W, Stoppa laddning under 50 W, Stoppa urladdning under 50 W, Stoppa efter 30 s, Starta efter 30 s, Höj efter 15 s, min laddeffekt och urladdningseffekt 0 W, Lägestroskel 10 W, Korrigeringströskel 40 W, korrigeringsstyrka 80 %, Fördröjning vid riktningsbyte 10 s. Operation mode, max laddeffekt och urladdningseffekt, SOC-skydd, mätaren och Price Control förblir som de är. I ett kluster gäller gruppens inställningar."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopior 3, Load factor 1, SoC-förskjutningar 0 / -20 / 15 %, extra svarstid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffertar och starttrösklar 5 W, Stoppa laddning under 50 W, Stoppa urladdning under 50 W, Stoppa efter 30 s, Starta efter 30 s, Concentrate below 300 W, Redistribute every 30 s. Kopiorna fortsätter att gå; kryssa även i Återställ kopior för att starta dem med de nya förskjutningarna. Ditt eget batteri och Price Control påverkas inte."
+          "reset_settings": "Kopior 3, Load factor 1, SoC-förskjutningar 0 / -20 / 15 %, extra svarstid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffertar och starttrösklar 5 W, Stoppa laddning under 50 W, Stoppa urladdning under 50 W, Stoppa efter 30 s, Starta efter 30 s, Höj efter 15 s, Concentrate below 300 W, Redistribute every 30 s. Kopiorna fortsätter att gå; kryssa även i Återställ kopior för att starta dem med de nya förskjutningarna. Ditt eget batteri och Price Control påverkas inte."
         }
       }
     },
@@ -690,6 +690,9 @@
       "skipped_peaks": {
         "name": "Hoppade toppar"
       },
+      "followed_peaks": {
+        "name": "Följda toppar"
+      },
       "relay_switches": {
         "name": "Reläomkopplingar"
       },
@@ -871,6 +874,9 @@
       },
       "start_after": {
         "name": "Starta efter"
+      },
+      "raise_after": {
+        "name": "Höj efter"
       },
       "trim_factor": {
         "name": "Korrigeringsstyrka"

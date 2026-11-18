@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Et smartstik på en mikroinverter eller en anden inverter. Dashboardets PV-serier viser det: i stedet for batteriets egen PV, når den ikke bruges, ellers ved siden af. Styringen behøver det ikke, netmåleren ser allerede denne effekt.",
           "solar_energy_entity": "Dens kWh-tæller, til dagstotalerne på fanen History.",
-          "reset_settings": "Buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Min. opladeeffekt og Min. afladeeffekt 0 W, Tilstandstærskel 10 W, Korrektionstærskel 40 W, korrektionsstyrke 80 %, Forsinkelse ved retningsskift 10 s. Operation mode, Maks. opladeeffekt og Maks. afladeeffekt, SOC-beskyttelse, måleren og Price Control forbliver uændret. I en klynge gælder gruppens indstillinger."
+          "reset_settings": "Buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Min. opladeeffekt og Min. afladeeffekt 0 W, Tilstandstærskel 10 W, Korrektionstærskel 40 W, korrektionsstyrke 80 %, Forsinkelse ved retningsskift 10 s. Operation mode, Maks. opladeeffekt og Maks. afladeeffekt, SOC-beskyttelse, måleren og Price Control forbliver uændret. I en klynge gælder gruppens indstillinger."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopier 3, Load factor 1, SoC-forskydninger 0 / -20 / 15 %, ekstra svartid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Concentrate below 300 W, Redistribute every 30 s. Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
+          "reset_settings": "Kopier 3, Load factor 1, SoC-forskydninger 0 / -20 / 15 %, ekstra svartid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Concentrate below 300 W, Redistribute every 30 s. Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
         }
       }
     },
@@ -690,6 +690,9 @@
       "skipped_peaks": {
         "name": "Oversprungne spidser"
       },
+      "followed_peaks": {
+        "name": "Fulgte spidser"
+      },
       "relay_switches": {
         "name": "Relæskift"
       },
@@ -871,6 +874,9 @@
       },
       "start_after": {
         "name": "Start efter"
+      },
+      "raise_after": {
+        "name": "Hæv efter"
       },
       "trim_factor": {
         "name": "Korrektionsstyrke"

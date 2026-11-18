@@ -28,6 +28,7 @@ from homeassistant.const import PERCENTAGE, EntityCategory, Platform, UnitOfPowe
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -44,6 +45,7 @@ from .const import (
     OPT_DISCHARGE_BUFFER,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
+    OPT_RAISE_AFTER,
     OPT_REDISTRIBUTE,
     OPT_SOC_PROTECTION,
     OPT_START_CHARGE_AT,
@@ -94,6 +96,13 @@ CLUSTER_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         native_min_value=10, native_max_value=120, native_step=5, mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG, icon="mdi:timer-play-outline",
     ), OPT_START_AFTER),
+    # v1.8.3: how long a running discharge waits before it follows a rise, for
+    # every battery taking part, the copies of a Virtual cluster included.
+    (NumberEntityDescription(
+        key="raise_after", name="Raise after", native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0, native_max_value=120, native_step=5, mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG, icon="mdi:timer-arrow-up-outline",
+    ), OPT_RAISE_AFTER),
     (_watts("concentrate_below", "Concentrate below", 0, 1000, 50, "mdi:arrow-collapse-horizontal", category=False),
      OPT_CONCENTRATE_BELOW),
     (NumberEntityDescription(
@@ -284,7 +293,28 @@ class ClusterStatus(ClusterEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {**self._cluster.attributes, "integration_version": INTEGRATION_VERSION}
+        return {**self._cluster.attributes, **peak_totals(self._cluster), "integration_version": INTEGRATION_VERSION}
+
+
+def peak_totals(cluster: Any) -> dict[str, int]:
+    """Skipped and followed peaks of the group: the sum over its batteries (v1.8.3).
+
+    Each battery counts its own; a cluster has no counter of its own, so the
+    status carries the totals, for a battery cluster and a Virtual cluster alike.
+    """
+    runtime = getattr(cluster, "cluster", cluster)
+    members = getattr(runtime, "members", None) or {}
+    today = dt_util.now().date().isoformat()
+    keys = ("skipped_peaks", "skipped_peaks_today", "followed_peaks", "followed_peaks_today")
+    totals = dict.fromkeys(keys, 0)
+    for member in members.values():
+        measure = getattr(getattr(member, "controller", None), "measure", None)
+        if measure is None:
+            continue
+        summary = measure.switching_summary(today)
+        for key in keys:
+            totals[key] += int(summary.get(key, 0))
+    return totals
 
 
 class ClusterValue(ClusterEntity, SensorEntity):

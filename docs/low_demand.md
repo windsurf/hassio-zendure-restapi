@@ -116,9 +116,31 @@ Starting at once bought nothing: the same 24.5 Wh from the grid as not starting 
 
 **The same choice in the day plan.** Price Control's day plan works the same way: it uses the battery where the invoice gains from it and leaves short peaks, very low demand and large loads outside its blocks to the grid. See [A cherry picker, not a whole-house battery](../README2.md#a-cherry-picker-not-a-whole-house-battery).
 
-**Seeing it on your own installation.** Two measured diagnostics count what happens: *Skipped peaks*, the starts that `Start after` held back and that never came (per direction, with the energy the grid gave meanwhile and the longest), and *Relay switches*, the starts from standstill and changes of direction the battery did make, with the *short* runs that stopped or turned again within 2 minutes. Many short runs mean hunting; with `Start after` they should be rare.
+**Seeing it on your own installation.** Three measured diagnostics count what happens: *Skipped peaks*, the starts that `Start after` held back and that never came (per direction, with the energy the grid gave meanwhile and the longest; since v1.8.3 also the rises that `Raise after` held back on a running battery), *Followed peaks*, the peaks of at least 500 W a running battery did follow and came back from within 60 s (v1.8.3), and *Relay switches*, the starts from standstill and changes of direction the battery did make, with the *short* runs that stopped or turned again within 2 minutes. Many short runs mean hunting; with `Start after` they should be rare.
 
 **What a relay switch is here.** The counter follows what this integration writes: a limit above zero after both were at zero, or another `acMode`. The device does not report its relays, so whether each of these is an audible click is not known; a change of direction may well be handled inside the inverter without one. It also differs per model: on one a change of `acMode` is a click, on another it is not. What the device does by itself, such as the small charge it takes at its own lower SOC limit, is not counted, because the integration did not write it. Read the figure as an upper limit and as the number to compare between two settings, not as a count of relay operations. A counter that takes every change of sign in the measured power (as some automations do) counts far more, because the power swings around zero by a few watts while nothing switches.
+
+## A peak on a running battery
+
+*Since v1.8.3.* `Start after` keeps a battery at rest from starting for a short peak. A battery that already runs, say at the night's base load, is a different case: it has no start to make and used to follow every peak at once. It arrives about 4 to 5 seconds late, and when the peak ends it still delivers it and exports while it comes down. Measured on a 3000 Mix AC+ at 145 W with a 2.2 kW boiling-water tap of about 10 s: about 3 Wh from the grid while it caught up, about 2.7 Wh back to the grid after, and seven writes, every peak again.
+
+**Raise after** (15 s by default) holds such a rise. A running discharge goes up for a demand more than a margin above its running limit only once that demand has lasted `Raise after` seconds; the margin is a fifth of the limit, at least 100 W, so the base load is still followed closely. Lower goes at once. Charging is not held: a sunny spell is taken in at once. A load that stays, an oven or a hob, is followed after 15 s; a short peak is left to the grid and counted under *Skipped peaks* as *while running*.
+
+![Raise after on a running battery](../images/control_raise_after.png)
+
+A replay of three recordings of measured house load on the controller itself, with the response of a 3000 Mix AC+ as the trace shows it: a limit written while the battery runs lands after about 4 s and then in one step, from standstill after 6 to 7 s. An afternoon and evening with 19 peaks (3.4 h) and two nights with 35 and 50 peaks (13 and 15 h):
+
+| Recording | Import | Export | Writes | Battery out | Cost, export at ⅓ of import |
+|---|---|---|---|---|---|
+| afternoon and evening, 3.4 h, 19 peaks | 100 → 172 Wh | 78 → 25 Wh | 1,157 → 1,006 | 828 → 703 Wh | −4.0 % |
+| night, 13 h, 35 peaks | 186 → 310 Wh | 130 → 38 Wh | 1,655 → 1,358 | 2,437 → 2,221 Wh | −2.4 % |
+| night, 15 h, 50 peaks | 250 → 467 Wh | 189 → 64 Wh | 1,456 → 1,069 | 3,416 → 3,074 Wh | −2.3 % |
+
+Each figure reads `Raise after` 0 (as before) → 15 s.
+
+Per peak the battery used to take about 2.7 Wh from the grid and give 2.9 Wh back (the meter recorded the same, and 7 writes); held, the whole peak of 5 to 7 Wh comes from the grid and nothing goes back. The battery keeps 125 to 340 Wh a night it would otherwise have spent on the peaks, and the grid sees two thirds less export. In money it is close: with net metering import and export cancel out and the two cost the same; with an export price of a third of the import price the hold is 2 to 4 % cheaper, because a watt-hour exported after a peak is battery energy sold cheaply. Rises of the base load by more than the margin wait too, which adds a little import there and saves the same in the battery; they are not counted as peaks (the counters start at 500 W).
+
+*Followed peaks* shows what is left to chase. With `Raise after` at 0 it counts every peak the battery follows and what it exported after; with 15 s it should stay near zero. Compare the two over a few days on your own installation before you choose.
 
 ## Not flooding the battery
 

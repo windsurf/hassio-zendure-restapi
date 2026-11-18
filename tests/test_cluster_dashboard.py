@@ -40,7 +40,7 @@ def group() -> dict:
                            ("start_discharge_at", "start_discharging_at_import"),
                            ("stop_charge_below", "stop_charging_below"),
                            ("stop_discharge_below", "stop_discharging_below"), ("stop_after", "stop_after"),
-                           ("start_after", "start_after"),
+                           ("start_after", "start_after"), ("raise_after", "raise_after"),
                            ("concentrate_below", "concentrate_below"), ("redistribute_every", "redistribute_every")):
         g[key] = f"number.virtual_cluster_{object_id}"
     # The settings of each copy, on the copy's device (v1.7.3).

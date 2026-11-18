@@ -1,5 +1,5 @@
 # ============================================================
-# VIRTUAL CLUSTER DASHBOARD - v1.8.2
+# VIRTUAL CLUSTER DASHBOARD - v1.8.3
 # ============================================================
 #
 # The dashboard "Virtual Cluster" as the integration builds it
@@ -319,6 +319,17 @@ views:
         rows: 2
     - type: tile
       entity: number.virtual_cluster_start_after
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.virtual_cluster_raise_after
       name:
         type: entity
       features_position: bottom
