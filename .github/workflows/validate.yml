@@ -29,3 +29,18 @@ jobs:
     steps:
       - uses: "actions/checkout@v7"
       - uses: "home-assistant/actions/hassfest@master"
+
+  # The repository tests (v1.8.4): the controller, the day plan, the clusters
+  # and the sample dashboards against the code, on the Home Assistant release
+  # they were written for.
+  tests:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v7"
+      - uses: "actions/setup-python@v6"
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: pip install homeassistant==2026.2.3 pytest==9.1.1
+      - name: Tests
+        run: python -m pytest -q tests

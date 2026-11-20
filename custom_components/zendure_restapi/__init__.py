@@ -90,6 +90,7 @@ from .const import (
     OPT_SOLAR_POWER,
     OWN_PV_MIN_KWH,
     OPT_DASHBOARD_OFFERED,
+    OPT_DASHBOARD_URL,
     OPT_EXTERNAL_METER,
     SIGNAL_EXTERNALS_CHANGED,
     CONF_EXPORT_ENTITY,
@@ -121,7 +122,16 @@ from .const import (
     CLUSTER_KEY,
 )
 from .controller import ZendureController
-from .dashboard import EXISTS, async_create_dashboard, notify
+from .dashboard import (
+    DASHBOARD_TITLE,
+    DASHBOARD_URL,
+    EXISTS,
+    FAILED,
+    async_create_dashboard,
+    async_retitle_dashboard,
+    dashboard_url,
+    notify,
+)
 from .pricecontrol import PriceControl
 from .coordinator import ZendureCoordinator
 from .entity import migrate_pack_entity_ids
@@ -244,6 +254,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await _async_dashboard(hass, entry)
 
         entry.async_on_unload(async_at_started(hass, _create))
+    if coordinator.device_type != DEVICE_TYPE_METER:
+        # A battery added or removed changes the titles of the others (v1.8.4).
+
+        async def _retitle(_hass: HomeAssistant) -> None:
+            await _async_dashboard_titles(hass)
+
+        entry.async_on_unload(async_at_started(hass, _retitle))
     return True
 
 
@@ -1029,6 +1046,48 @@ def dashboard_args(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     }
 
 
+def _batteries(hass: HomeAssistant) -> list[ConfigEntry]:
+    """The battery entries of this installation; meters and clusters do not count."""
+    return [
+        other for other in hass.config_entries.async_entries(DOMAIN)
+        if other.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_BATTERY) == DEVICE_TYPE_BATTERY
+    ]
+
+
+def _dashboard_address(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: Any = None
+) -> tuple[str, str]:
+    """This battery's dashboard address and title (v1.8.4).
+
+    One battery: /zendure-restapi, titled Zendure RestAPI. More than one: each
+    its own /zendure-restapi-<last four of the serial>, titled with its name and
+    the last four, as a cluster names its members. A dashboard keeps the address
+    it was made at (a second battery added later does not move the first one's);
+    only its title follows the number of batteries.
+    """
+    serial = str(entry.data.get(CONF_SN) or getattr(coordinator, "device_id", None) or "")
+    own = dashboard_url(serial, entry.entry_id)
+    if len(_batteries(hass)) <= 1:
+        return entry.options.get(OPT_DASHBOARD_URL) or DASHBOARD_URL, DASHBOARD_TITLE
+    tail = serial[-4:] if serial else own.rsplit("-", 1)[-1]
+    return entry.options.get(OPT_DASHBOARD_URL) or own, f"{entry.title} (…{tail})"
+
+
+def _made_title(title: str, entry: ConfigEntry) -> bool:
+    """Whether a dashboard title is one this integration gave it, not the user's own."""
+    return title in (DASHBOARD_TITLE, entry.title) or title.startswith(f"{entry.title} (…")
+
+
+async def _async_dashboard_titles(hass: HomeAssistant) -> None:
+    """Give every battery's dashboard the title for the number of batteries (v1.8.4).
+
+    A title the user chose is left alone; only one the integration gave changes.
+    """
+    for battery in _batteries(hass):
+        url, title = _dashboard_address(hass, battery)
+        await async_retitle_dashboard(hass, url, title, lambda current, b=battery: _made_title(current, b))
+
+
 async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle a request for the dashboard once, then clear the request."""
     store = hass.data.get(DOMAIN, {})
@@ -1040,15 +1099,19 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     ):
         return
     hass.data[DASHBOARD_BUSY] = True
+    made: str | None = None
     replace = bool(entry.options.get(OPT_REBUILD_DASHBOARD))
     requested = bool(entry.options.get(OPT_CREATE_DASHBOARD)) or replace
     try:
+        url, title = _dashboard_address(hass, entry, coordinator)
         args = dashboard_args(hass, entry)
         battery = args["battery"]
-        result = await async_create_dashboard(hass, replace=replace, **args)
+        result = await async_create_dashboard(hass, replace=replace, url=url, title=title, **args)
         # Unasked, a dashboard that is already there needs no message.
         if requested or result != EXISTS:
-            notify(hass, result, battery)
+            notify(hass, result, battery, url=url, title=title)
+        if result != FAILED:
+            made = url
     finally:
         hass.data.pop(DASHBOARD_BUSY, None)
         hass.config_entries.async_update_entry(
@@ -1058,5 +1121,6 @@ async def _async_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
                 OPT_CREATE_DASHBOARD: False,
                 OPT_REBUILD_DASHBOARD: False,
                 OPT_DASHBOARD_OFFERED: True,
+                **({OPT_DASHBOARD_URL: made} if made else {}),
             },
         )

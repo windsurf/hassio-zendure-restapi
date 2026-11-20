@@ -65,6 +65,7 @@ from .const import (
     OPT_SOLAR_ENERGY,
     OPT_SOLAR_POWER,
     OPT_DASHBOARD_OFFERED,
+    NEW_PRICE_CONTAINS,
     OPT_PRICE_CONTAINS,
     OPT_PRICE_ENTITY,
     PRICE_CONTAINS_OPTIONS,
@@ -511,7 +512,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 options={
                     # Optional since v1.8.2: the fixed tariff needs no price sensor.
                     OPT_PRICE_ENTITY: user_input.get(OPT_PRICE_ENTITY, ""),
-                    OPT_PRICE_CONTAINS: user_input.get(OPT_PRICE_CONTAINS, DEFAULTS[OPT_PRICE_CONTAINS]),
+                    OPT_PRICE_CONTAINS: user_input.get(OPT_PRICE_CONTAINS, NEW_PRICE_CONTAINS),
                 },
             )
         schema = vol.Schema(
@@ -528,7 +529,7 @@ class ZendureConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(OPT_PRICE_ENTITY): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(OPT_PRICE_CONTAINS, default=DEFAULTS[OPT_PRICE_CONTAINS]): _contains_selector(),
+                vol.Required(OPT_PRICE_CONTAINS, default=NEW_PRICE_CONTAINS): _contains_selector(),
             }
         )
         return self.async_show_form(step_id="price_control", data_schema=schema)

@@ -176,7 +176,7 @@ The meter reports a flat payload with a `deviceId` and **no serial number at all
 
 ## 📊 Dashboard
 
-`dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the switch, its status and decision, the day plan with its charge and discharge periods and the expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the cheap and the expensive price and the three modes per band (used by both Price bands and the day plan), the fixed tariff when it is chosen, the tariff, losses and margin — every setting a tile with a slider, a select or a toggle (see [Price control](#price-control)) — and the battery and grid now. The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed) and, under them, the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, and control with the realized margin (one section since v1.7.4). The view **Zendure RestAPI** has fifteen sections:
+With one battery the dashboard is **Zendure RestAPI** at `/zendure-restapi`. With more than one, every battery has a dashboard of its own at `/zendure-restapi-<last four characters of the serial number>`, titled with its name and the last four — for example **Zendure SolarFlow 3000 Mix AC+ (…a1b2)** at `/zendure-restapi-a1b2` — as a cluster names its members (v1.8.4). A dashboard keeps the address it was made at: when a second battery is added, the first one's dashboard stays at `/zendure-restapi` and only its title changes, at the next start; back to one battery, the title is **Zendure RestAPI** again. A title you gave a dashboard yourself is left alone. *Rebuild dashboard* on a battery rebuilds that battery's own. `dashboard/zendure_restapi.yaml` is the dashboard **Zendure RestAPI** in three views, built from standard Home Assistant cards only. The view **Price Control** holds the Price Control device: the switch, its status and decision, the day plan with its charge and discharge periods and the expected margin, a chart of the plan for today and tomorrow (with apexcharts-card), the cheap and the expensive price and the three modes per band (used by both Price bands and the day plan), the fixed tariff when it is chosen, the tariff, losses and margin — every setting a tile with a slider, a select or a toggle (see [Price control](#price-control)) — and the battery and grid now. The view **History** holds four charts (with [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed) and, under them, the [measured diagnostics](#measured-diagnostics), each with its trend: efficiency, battery, and control with the realized margin (one section since v1.7.4). The view **Zendure RestAPI** has fifteen sections:
 
 | Section | Content |
 |---|---|
@@ -823,6 +823,8 @@ Two things remain, and neither describes the device:
 
 Both are settings rather than constants because the right value is a property of the house: the wander measured on this one varied between 4 and 146 W median over a single afternoon, a factor of thirty-five. Raising them is worth trying and easy to undo — see the notes under [v1.3.0–v1.3.5](#v130v135--two-write-thresholds-you-can-set) for what was measured at 125 and 350 W, and why it is not the recommendation it first appeared to be.
 
+**On a noisy meter the threshold follows the noise** (v1.8.4). Some meters jump by a hundred watts or more from one reading to the next while the house does not change. Below that, every reading looks like an error, and the battery chases the noise with a write almost every second. The trim loop therefore keeps the median step of the meter over its last 300 readings and ignores a correction smaller than twice that step; `Trim threshold` stays the floor, and a higher value you set yourself always wins. A quiet meter, a step of a few watts, keeps 40 W; a meter with steps of about 90 W gets about 180 W. The controller status shows both as attributes: `meter_noise_w`, the median step, and `trim_threshold_w`, the threshold in use. A change of meter starts the count again. The mode loop and starting are not affected.
+
 **A gain**, `Trim strength`, default 80%. Below 100 for the reason any feedback loop is: the bookkeeping removes double-counting, not the meter's own delay.
 
 That setting kept its name and its entity id through the rewrite, but its meaning changed: it used to be 80% of the *deviation*, applied upward only, with downward corrections always at full strength. It is now 80% of the *remaining* error — remaining after subtracting what is already on order — in both directions. The asymmetry is gone because the bookkeeping makes it unnecessary: a downward correction can no more be ordered twice than an upward one. The id was left alone deliberately; renaming it would break every dashboard and template that references it, and this integration has been bitten by that before.
@@ -891,6 +893,20 @@ Both buffers mean the same thing: how many watts of grid **import** to aim for. 
 Both start thresholds are a distance from zero, expressed as a positive number of watts. Which side of zero they sit on is in the name: `Start discharging at import` counts import, `Start charging at export` counts export.
 
 Keep each start threshold further from zero than its buffer, or the direction never starts.
+
+**All buffers, thresholds and waiting times together** (v1.8.4), with what each one holds back:
+
+| Setting | Default | What it holds back |
+|---|---|---|
+| `Discharge buffer`, `Charge buffer` | 5 W | the aim of the loop: this much import, so it settles just on the consuming side of zero |
+| `Start discharging at import`, `Start charging at export` | 5 W | a start on a few watts of import or export |
+| `Stop discharging below`, `Stop charging below` | 50 W | running at a power where the battery mostly feeds its own converter ([Stopping at low demand](#stopping-at-low-demand)) |
+| `Start after` | 30 s | a start on a peak shorter than this (a kettle, a toaster) |
+| `Stop after` | 30 s | a stop on a dip shorter than this |
+| `Raise after` | 15 s | a running discharge going up for a peak shorter than this ([Raise after](#raise-after)) |
+| `Direction change delay` | 10 s | reversing at once: the limit is cleared and this many seconds pass before the other direction is written |
+| `Mode threshold` | 10 W | a write of the mode loop smaller than this |
+| `Trim threshold` | 40 W, or twice the meter's noise | a write of the trim loop smaller than this ([the threshold](#one-rule-never-order-the-same-watts-twice)) |
 
 ### Minimum power
 
@@ -1471,6 +1487,9 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **Stopping at low demand** (v1.7.4): 50 W charging and discharging, `Stop after` and `Start after` 30 s on a battery and on a cluster, `Stop after` and `Start after` on a cluster 10–120 s; `Start after` holds a start from stand-still and after a stop, per direction, and at 0 s starts at once; a stop only after `Stop after` seconds under the limit, with both limits in one request; demand back above the limit starts the time again; after a stop a short peak does not start it again, the demand above the larger threshold for the time does; the other direction starts as always; a changed mode or a limit at 0 ends the stop; in a cluster the limit is capped at `Concentrate below`.
 - **Price control for a cluster** (v1.8.0): the day plan adds up the energy and the power of the batteries taking part, leaves out one that does not take part or report, and has no plan without any; it writes the cluster's Operation mode, never pauses for a cluster, finds the copies of a Virtual cluster, switched off it sets a Virtual cluster back to *Follow source* and leaves a battery cluster's mode alone; the cluster dashboard gets a *Price Control* tab with the cluster's own chart, its plan in the *Cluster* tab and its status under *Operation mode*, and is unchanged without one.
 - **Sample dashboards** (v1.8.0): the three files in `dashboard/` are what the integration's own code builds, each with the version of the manifest, and both clusters have their *Price Control* tab.
+- **Adaptive trim threshold** (v1.8.4): a quiet meter keeps *Trim threshold*, a noisy one gets twice its median step, not before 60 readings; one large peak does not move it; a higher setting wins; a change of meter starts again; the trim loop ignores a step within the noise and follows a real one.
+- **A dashboard per battery** (v1.8.4): one battery `/zendure-restapi` titled Zendure RestAPI; more than one each at the last four of the serial, titled with the name and the last four; an address kept when a battery is added, only the title follows; a title of your own left alone; not made unasked where no dashboard was wanted.
+- **SOC protection in the status** (v1.8.4): a wait is added to the status text once, not while charging.
 - **SOC protection of a cluster at the cheapest price** (v1.8.1): it waits for the cheapest period within 6 hours of its own Price control, charges at once without prices, after 6 hours or 2 points under the floor, carries on once it charges, and forgets the wait when a battery is back above its floor; a fault of a battery shows as a badge on the Cluster tab, a Virtual cluster gets none.
 - **Raise after** (v1.8.3): 15 s by default; a 10 s peak on a running discharge is held at the running limit and counted as a skipped peak while running; a held rise under 500 W is not counted; a load that stays is followed after the time; lower and a rise within the margin (a fifth of the limit, at least 100 W) go at once; 0 follows at once as before; charging is not held; the trim loop holds too; a followed peak is counted with its export, a long load, a rise under 500 W and a rise while charging are not; a battery in a cluster follows the cluster's *Raise after*, alone its own; the cluster status adds up the counts of its batteries.
 
@@ -1557,6 +1576,17 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 ## 📝 Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.8.4 — A noisy meter, a dashboard per battery
+
+**A meter that jumps by a hundred watts from one reading to the next no longer makes the battery chase its noise.** Nothing changes on a quiet meter.
+
+- **Trim threshold follows the noise:** the trim loop keeps the median step of the meter over its last 300 readings and ignores a correction smaller than twice that; `Trim threshold` stays the floor. On a noisy meter far fewer writes, with as much or slightly less import and export; on a quiet meter the same as v1.8.3. The controller status shows `meter_noise_w` and `trim_threshold_w`. See [the threshold](#one-rule-never-order-the-same-watts-twice).
+- **A dashboard per battery:** with more than one battery, every battery gets a dashboard of its own at `/zendure-restapi-<last four of the serial>`, titled with its name and the last four, for example *Zendure SolarFlow 3000 Mix AC+ (…a1b2)*, as a cluster names its members. One battery keeps the dashboard Zendure RestAPI at `/zendure-restapi`. Adding a battery moves nothing: a dashboard keeps its address, and its title follows the number of batteries at the next start; a title you chose yourself is left alone. See [Dashboard](#dashboard).
+- **SOC protection that waits says so in the status:** with *SOC protection* `price_control`, the wait for the cheapest quarter or, under the fixed tariff, for the sun is now part of the status text, not only of the attribute `soc_protection_waits`.
+- **Buffers, thresholds and waiting times in one table:** under [Buffers and thresholds](#buffers-and-thresholds), with what each holds back; `docs/low_demand.md` adds *Raise after*, *Direction change delay* and the buffers to its table.
+- **Spot price excl. VAT by default:** a new Price Control expects a price sensor with the spot price excl. VAT, as the recommended EPEX Spot *Market price* gives it. An existing Price Control keeps its choice.
+- **Tests on GitHub:** the workflow *Validate* runs the repository tests as well.
 
 ### v1.8.3 — Raise after: no more chasing short peaks on a running battery
 

@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.3"
+INTEGRATION_VERSION = "1.8.4"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -259,6 +259,9 @@ OPT_CREATE_DASHBOARD = "create_dashboard"
 # Set once the dashboard was created, found, or tried without being asked
 # (v1.6.3): it is made by default, once, and never again after a user deleted it.
 OPT_DASHBOARD_OFFERED = "dashboard_offered"
+# The address this battery's dashboard was made or found at (v1.8.4): it keeps
+# that address when a second battery is added, only its title changes.
+OPT_DASHBOARD_URL = "dashboard_url"
 # A one-off request to replace the existing dashboard with a fresh one (v1.6.6);
 # the tick reads *Rebuild dashboard* on a battery as on a cluster since v1.7.4.
 # The user's own edits to it are lost; the options say so.
@@ -482,6 +485,10 @@ def decision_choice(value: object) -> str:
     return value if value in PRICE_DECISIONS else DECISION_BANDS
 # What the price sensor holds; the formulas need the bare spot price.
 OPT_PRICE_CONTAINS = "price_contains"
+# What a new Price Control expects of its price sensor (v1.8.4): the spot price
+# excl. VAT, as the recommended EPEX Spot *Market price* gives it. DEFAULTS
+# keeps spot_vat for an entry that never stored a choice.
+NEW_PRICE_CONTAINS = "spot"
 PRICE_CONTAINS_OPTIONS = ("spot_vat", "spot", "import_price")
 OPT_NET_METERING = "net_metering"
 OPT_IMPORT_FACTOR = "import_factor"
@@ -848,4 +855,13 @@ FOLLOWED_PEAK_S = 60
 # starting on a low base load, is not a peak worth counting. A kettle or
 # boiling-water tap is 1.5-2.5 kW. Holding a rise is not affected.
 RISE_MIN_W = 500
+
+# Adaptive trim threshold (v1.8.4): the trim loop ignores a step smaller than
+# NOISE_FACTOR times the median step of the meter per sample, taken over the
+# last NOISE_WINDOW samples and only once NOISE_MIN_SAMPLES are in; Trim
+# threshold stays the floor. A quiet meter (a step of a few watts) keeps the
+# setting; a noisy one stops the battery from chasing its noise.
+NOISE_FACTOR = 2.0
+NOISE_WINDOW = 300
+NOISE_MIN_SAMPLES = 60
 

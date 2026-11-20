@@ -402,6 +402,44 @@ def _dashboards(hass: HomeAssistant) -> dict[str, Any] | None:
     return dashboards
 
 
+def dashboard_url(serial: str | None, fallback: str) -> str:
+    """The address of a battery's own dashboard when there are several (v1.8.4): zendure-restapi-<last four>.
+
+    The last four characters of the serial number, as in the trace file names;
+    without a serial the last four of the entry id. Lower case: a dashboard
+    address takes no capitals.
+    """
+    tail = "".join(ch for ch in str(serial or "")[-4:] if ch.isalnum()).lower()
+    if not tail:
+        tail = "".join(ch for ch in fallback[-4:] if ch.isalnum()).lower() or "1"
+    return f"{DASHBOARD_URL}-{tail}"
+
+
+async def async_retitle_dashboard(
+    hass: HomeAssistant, url: str, title: str, ours: Any
+) -> bool:
+    """Give the dashboard at `url` the title `title` (v1.8.4).
+
+    Only when `ours(current title)` says the current title is one the integration
+    gave it; a dashboard the user renamed keeps its name. Returns whether it changed.
+    """
+    try:
+        collection = _collection(hass)
+        if collection is None:
+            return False
+        for item_id, item in list(getattr(collection, "data", {}).items()):
+            if item.get("url_path") != url:
+                continue
+            current = item.get("title") or ""
+            if current == title or not ours(current):
+                return False
+            await collection.async_update_item(item_id, {"title": title})
+            return True
+    except Exception:  # noqa: BLE001 - a title is never worth a failed setup
+        _LOGGER.debug("Could not retitle the dashboard at /%s", url, exc_info=True)
+    return False
+
+
 def _load_template() -> dict[str, Any]:
     return json.loads(TEMPLATE.read_text(encoding="utf-8"))
 
@@ -421,8 +459,13 @@ async def async_create_dashboard(
     own_pv: bool = False,
     replace: bool = False,
     grid: str | None = None,
+    url: str = DASHBOARD_URL,
+    title: str = DASHBOARD_TITLE,
 ) -> str:
     """Create the dashboard unless one exists at its address.
+
+    One battery has /zendure-restapi, titled Zendure RestAPI; with more than one
+    each battery has its own `url` and `title` (v1.8.4).
 
     With `replace`, an existing one gets a fresh configuration instead: the
     user asked for it in the options, which say that their edits are lost.
@@ -431,7 +474,7 @@ async def async_create_dashboard(
         dashboards = _dashboards(hass)
         if dashboards is None:
             return FAILED
-        existing = dashboards.get(DASHBOARD_URL)
+        existing = dashboards.get(url)
         if existing is not None and not replace:
             return EXISTS
         collection = None if existing is not None else _collection(hass)
@@ -454,15 +497,15 @@ async def async_create_dashboard(
             return REPLACED
         await collection.async_create_item(
             {
-                "url_path": DASHBOARD_URL,
-                "title": DASHBOARD_TITLE,
+                "url_path": url,
+                "title": title,
                 "icon": DASHBOARD_ICON,
                 "show_in_sidebar": True,
                 "require_admin": False,
                 "mode": "storage",
             }
         )
-        store = dashboards.get(DASHBOARD_URL)
+        store = dashboards.get(url)
         if store is None:
             return FAILED
         await store.async_save(config)
@@ -472,21 +515,28 @@ async def async_create_dashboard(
     return CREATED
 
 
-def notify(hass: HomeAssistant, result: str, battery: str) -> None:
-    """Tell the user what happened, in one notification."""
+def notify(
+    hass: HomeAssistant,
+    result: str,
+    battery: str,
+    *,
+    url: str = DASHBOARD_URL,
+    title: str = DASHBOARD_TITLE,
+) -> None:
+    """Tell the user what happened, in one notification per battery."""
     if result == CREATED:
         message = (
-            f"The dashboard **{DASHBOARD_TITLE}** is in the sidebar. It is an ordinary "
+            f"The dashboard **{title}** is in the sidebar, at `/{url}`. It is an ordinary "
             "dashboard: edit it as you like; the integration will not touch it again."
         )
     elif result == REPLACED:
         message = (
-            f"The dashboard **{DASHBOARD_TITLE}** was replaced by a fresh one. "
+            f"The dashboard **{title}** was replaced by a fresh one. "
             "Refresh the browser to see it."
         )
     elif result == EXISTS:
         message = (
-            f"A dashboard at `/{DASHBOARD_URL}` already exists and was left as it is. "
+            f"A dashboard at `/{url}` already exists and was left as it is. "
             "To rebuild it, tick *Rebuild dashboard* in the battery's options."
         )
     else:
@@ -496,5 +546,5 @@ def notify(hass: HomeAssistant, result: str, battery: str) -> None:
             f"configuration editor and replace `{TEMPLATE_BATTERY}` with `{battery}`."
         )
     persistent_notification.async_create(
-        hass, message, title=DASHBOARD_TITLE, notification_id=NOTIFICATION_ID
+        hass, message, title=title, notification_id=f"{NOTIFICATION_ID}_{url}"
     )

@@ -51,6 +51,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import logging
+import statistics
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -77,6 +78,9 @@ from .const import (
     OPT_RAISE_AFTER,
     RAISE_MARGIN_SHARE,
     RAISE_MARGIN_W,
+    NOISE_FACTOR,
+    NOISE_MIN_SAMPLES,
+    NOISE_WINDOW,
     RISE_MIN_W,
     SOC_REARM_POINTS,
     SOC_PROTECT_HARD_POINTS,
@@ -241,6 +245,12 @@ class ZendureController:
     _raise_ref = 0
     _raise_wh = 0.0
     _raise_peak = 0
+    # The meter's own step per sample (v1.8.4): what the trim threshold rises
+    # to on a noisy meter. Per source, emptied on a change of meter; made on
+    # the first sample, so a controller built without __init__ has it too.
+    _noise: deque | None = None
+    _noise_prev: float | None = None
+    _noise_source = "none"
     _raise_last: datetime | None = None
     _raise_done = False
     # Followed peaks (v1.8.3): the limit a running direction held before it
@@ -752,8 +762,33 @@ class ZendureController:
         finally:
             self._trim_busy = False
 
+    def _sample_noise(self) -> None:
+        """Note the step of the meter since its last sample (v1.8.4).
+
+        Every sample, running or not, so the threshold is ready when a direction
+        starts. A step between two meters is their offset, not noise: a change
+        of source empties the window.
+        """
+        grid, source = self._meter_reading()
+        if grid is None:
+            return
+        if self._noise is None or source != self._noise_source:
+            self._noise = deque(maxlen=NOISE_WINDOW)
+            self._noise_prev = None
+            self._noise_source = source
+        if self._noise_prev is not None:
+            self._noise.append(abs(grid - self._noise_prev))
+        self._noise_prev = grid
+
+    def meter_noise(self) -> float | None:
+        """Median step of the meter per sample, once enough samples are in."""
+        if self._noise is None or len(self._noise) < NOISE_MIN_SAMPLES:
+            return None
+        return float(statistics.median(self._noise))
+
     async def _trim(self) -> None:
         """Adjust the running limit against the meter, within one direction."""
+        self._sample_noise()
         self._write_source = "trim"
         direction = self._trim_direction
         if direction is None:
@@ -2195,7 +2230,13 @@ class ZendureController:
         those does not settle the grid, it moves the battery to where the house
         no longer is.
         """
-        return max(CONTROL_MIN_STEP, self.settings.get_int(OPT_TRIM_THRESHOLD))
+        floor = max(CONTROL_MIN_STEP, self.settings.get_int(OPT_TRIM_THRESHOLD))
+        # On a noisy meter the threshold follows the noise (v1.8.4): a step the
+        # meter makes by itself every second is no error to correct.
+        noise = self.meter_noise()
+        if noise is None:
+            return floor
+        return max(floor, int(round(NOISE_FACTOR * noise)))
 
     def _cap(self, data: dict[str, Any], charging: bool) -> int:
         """Effective power ceiling: the lower of the setting and the device.
@@ -2935,6 +2976,11 @@ class ZendureController:
         direction: str = "none",
         blocked: bool = False,
     ) -> None:
+        # SOC protection that waits, for a cheaper quarter or for the sun, says
+        # so in the status itself (v1.8.4), not only in an attribute: the mode
+        # that runs meanwhile would otherwise hide why nothing charges.
+        if self.protect_note and status != "protecting" and self.protect_note not in reason:
+            reason = f"{reason}; {self.protect_note}"
         self.state.status = status
         self.state.reason = reason
         self.state.target_power = target
@@ -2956,6 +3002,10 @@ class ZendureController:
             "trim_writes": self._trim_writes,
             "trim_gain": self._trim_factor(),
             "trim_pending": round(self._pending),
+            # Adaptive trim threshold (v1.8.4): the meter's median step per
+            # sample and the threshold the trim loop uses now.
+            "meter_noise_w": None if self.meter_noise() is None else round(self.meter_noise()),
+            "trim_threshold_w": self._trim_threshold(),
             # Limits moved by something other than this controller. Zero in
             # normal operation; the count is what makes an on-device manager
             # visible while the operation mode sits in standby.

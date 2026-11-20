@@ -3,7 +3,7 @@
 A dashboard of its own per kind (v1.7.3): `/zendure-cluster/zendure-cluster`
 for the battery cluster, *Cluster*, and `/virtual-cluster/virtual-cluster` for
 the Virtual cluster, *Virtual Cluster*. Dashboard and first tab share the name,
-like the battery dashboard `/zendure-restapi/zendure-restapi`. Each kind
+like a battery's dashboard `/zendure-restapi-<last four>/zendure-restapi`. Each kind
 creates, rebuilds and removes only its own. Until v1.7.2 both used
 `/zendure-cluster`; one a Virtual cluster made there stays until the user
 removes it, and a notification says so.

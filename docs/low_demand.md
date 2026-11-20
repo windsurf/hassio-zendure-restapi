@@ -48,6 +48,11 @@ So of the three: always on drains the battery at its worst efficiency, hysteresi
 | `Stop charging below` | 50 W | 0 = off; on a dynamic contract from 2027, 80 W ([why](#why-50-w-both-ways)) |
 | `Stop after` | 30 s | how long the demand stays under the limit before the battery stops (on a cluster 10–120 s) |
 | `Start after` | 30 s | how long the demand stays above the threshold before the battery starts (on a cluster 10–120 s) |
+| `Raise after` | 15 s | how long a higher demand lasts before a running discharge goes up for it ([A peak on a running battery](#a-peak-on-a-running-battery)) |
+| `Direction change delay` | 10 s | the pause between one direction and the other |
+| `Discharge buffer`, `Charge buffer` | 5 W | the import the loop aims for while it runs |
+
+All buffers, thresholds and waiting times together, with what each holds back: [Buffers and thresholds](../README2.md#buffers-and-thresholds).
 
 - The threshold for a start is always the larger of the start threshold (`Start discharging at import`, `Start charging at export`) and the stop limit plus a gap: a start below the stop limit would only stop again. The gap (v1.7.6) is a fifth of the stop limit, at least 20 W, so 50 W stops and 70 W starts: a load hovering just above the stop limit no longer starts and stops the battery in turn. That also holds after a restart of Home Assistant, when the controller knows of no stop of its own. With a stop limit of 150 W the battery starts again only above 180 W, so a night base load of 120–150 W stays on the grid until the demand has been above 180 W for `Start after`.
 - A stop writes both limits to 0 in one request; the battery then rests at about 5 W.
