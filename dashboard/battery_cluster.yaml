@@ -1,5 +1,5 @@
 # ============================================================
-# BATTERY CLUSTER DASHBOARD - v1.8.4
+# BATTERY CLUSTER DASHBOARD - v1.8.5
 # ============================================================
 #
 # The dashboard "Cluster" as the integration builds it for a
@@ -316,6 +316,17 @@ views:
         rows: 2
     - type: tile
       entity: number.battery_cluster_concentrate_below
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: numeric-input
+        style: slider
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: number.battery_cluster_soc_balance
       name:
         type: entity
       features_position: bottom

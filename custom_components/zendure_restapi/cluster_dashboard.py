@@ -482,7 +482,7 @@ def cluster_view(
             *(_control(group.get(k)) for k in (
                 "charge_buffer", "discharge_buffer", "start_charge_at", "start_discharge_at",
                 "stop_charge_below", "stop_discharge_below", "stop_after", "start_after", "raise_after",
-                "concentrate_below", "redistribute_every",
+                "concentrate_below", "soc_balance", "redistribute_every",
             )),
         ]),
         _section("Today and tomorrow", "mdi:chart-line", [chart], span=4),
@@ -648,7 +648,7 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
                 "response_offset_1", "response_offset_2", "response_offset_3",
                 "max_share_clone_1", "max_share_clone_2", "max_share_clone_3", "charge_buffer", "discharge_buffer",
                 "start_charge_at", "start_discharge_at", "stop_charge_below", "stop_discharge_below",
-                "stop_after", "start_after", "raise_after", "concentrate_below", "redistribute_every"):
+                "stop_after", "start_after", "raise_after", "concentrate_below", "soc_balance", "redistribute_every"):
         group[key] = _entity(registry, "number", f"{eid}_{key}")
 
     views: list[dict[str, Any]] = []

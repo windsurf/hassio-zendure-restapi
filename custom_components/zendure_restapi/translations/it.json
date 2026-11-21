@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, Concentrate below 300 W, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
+          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
         }
       }
     },
@@ -892,6 +892,9 @@
       },
       "redistribute_every": {
         "name": "Ridistribuisci ogni"
+      },
+      "soc_balance": {
+        "name": "Bilanciamento SoC"
       },
       "clones": {
         "name": "Copies"

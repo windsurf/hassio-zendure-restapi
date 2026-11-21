@@ -83,7 +83,7 @@ On the device *Virtual cluster*, and per copy on the copy's own device (*Virtual
 | Charge/Discharge buffer, Start discharging at import, Start charging at export | as on a battery | your battery's | |
 | Stop charging below, Stop discharging below, Stop after, Start after | 0–500 W; 10–120 s (v1.7.4) | 50 W, 50 W, 30 s, 30 s | capped at *Concentrate below*, as on a battery cluster; *Start after* also holds the secondaries back on a short peak (see [Peaks](cluster.md#how-it-regulates)) |
 | Raise after | 0–120 s (v1.8.3) | 15 s | as on a battery: a running discharge of a copy goes up for a rise of more than the margin only once it has lasted this long; every copy follows this value |
-| Concentrate below, Redistribute every | as on the cluster | 300 W, 30 s | |
+| Concentrate below, SoC balance, Redistribute every | as on the cluster | 300 W, 15 points (v1.8.5), 30 s | |
 | Rebuild dashboard | button, and since v1.7.3 a tick under *Configure* | | builds *Virtual Cluster* again |
 | Reset settings | tick under *Configure* (v1.7.3), not stored | | every setting above and on the copies back to its default: Copies 3, Load factor 1, the offsets, response times and Max share of the table, Operation mode *Follow source*, buffers, start thresholds, stop limits, *Stop after*, *Start after* and *Raise after*, *Concentrate below* and *Redistribute every*; your battery and Price Control are not touched; the copies keep running, tick *Reset copies* as well to start them with the new offsets |
 

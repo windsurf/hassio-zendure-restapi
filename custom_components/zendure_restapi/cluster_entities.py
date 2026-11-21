@@ -47,6 +47,7 @@ from .const import (
     OPT_OPERATION_MODE,
     OPT_RAISE_AFTER,
     OPT_REDISTRIBUTE,
+    OPT_SOC_BALANCE,
     OPT_SOC_PROTECTION,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
@@ -110,6 +111,13 @@ CLUSTER_NUMBERS: tuple[tuple[NumberEntityDescription, str], ...] = (
         native_min_value=10, native_max_value=120, native_step=5, mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG, icon="mdi:timer-sync-outline",
     ), OPT_REDISTRIBUTE),
+    # v1.8.5: points of SoC by which another battery must lead before it takes
+    # over as primary at the start of a direction; 0 = the choice of v1.8.4.
+    (NumberEntityDescription(
+        key="soc_balance", name="SoC balance", native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0, native_max_value=50, native_step=5, mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG, icon="mdi:scale-balance",
+    ), OPT_SOC_BALANCE),
 )
 
 CLUSTER_SELECTS: tuple[tuple[SelectEntityDescription, str], ...] = (

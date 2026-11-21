@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "De kopieën stoppen, beide limieten gaan naar 0, en elke kopie begint opnieuw op de laadtoestand van je batterij plus zijn SoC-afwijking.",
-          "reset_settings": "Kopieën 3, Load factor 1, SoC-afwijkingen 0 / -20 / 15 %, extra responstijd 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Verhogen na 15 s, Concentrate below 300 W, Redistribute every 30 s. De kopieën blijven doorlopen; vink ook Kopieën resetten aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
+          "reset_settings": "Kopieën 3, Load factor 1, SoC-afwijkingen 0 / -20 / 15 %, extra responstijd 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Verhogen na 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. De kopieën blijven doorlopen; vink ook Kopieën resetten aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
         }
       }
     },
@@ -892,6 +892,9 @@
       },
       "redistribute_every": {
         "name": "Herverdelen elke"
+      },
+      "soc_balance": {
+        "name": "SoC-balans"
       },
       "clones": {
         "name": "Kopieën"

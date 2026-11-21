@@ -1311,7 +1311,7 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
 | **Switch** | 2 | Skip flash write · *disabled by default:* Fan forced on |
 | **Controller** | 24 | Operation mode, Meter source, External meter, Controller status, Manual power, Direction change delay, Max charge power, Max discharge power, Min charge power, Min discharge power, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Raise after, Charge buffer, Discharge buffer, Trim strength, SOC protection (select: off, direct, price_control), Trace recording, Mode threshold, Trim threshold |
-| **Battery cluster entry** | 19 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Raise after, Concentrate below, Redistribute every, Rebuild dashboard — see [docs/cluster.md](./docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
+| **Battery cluster entry** | 20 | Operation mode, Meter source, SOC protection (select: off, direct), Status, Battery power, State of charge, Batteries taking part, Charge buffer, Discharge buffer, Start discharging at import, Start charging at export, Stop charging below, Stop discharging below, Stop after, Start after, Raise after, Concentrate below, SoC balance, Redistribute every, Rebuild dashboard — see [docs/cluster.md](./docs/cluster.md#entities). On each battery in the group: *Take part* (switch). |
 | **Price Control entry** | 24 | Price Control (switch), Net metering (export = import price), Decision, Status, Plan, Expected margin, Realized margin, Electricity price, Import price, Export price, Cheap price, Expensive price, Cheap price mode, Expensive price mode, In-between mode, Import factor, Import surcharge, Export factor, Export surcharge, Wear cost, Minimum margin, Expected house load, Charge efficiency, Discharge efficiency |
 | **P1 meter entry** | 6 | Grid power total, Phase A/B/C apparent power, Meter type · *disabled by default:* Protocol type |
 | **External P1 meter entry** | 2–4 | Power, Status · *HomeWizard and YouLess:* Energy imported, Energy exported. One entry per meter; a meter from Home Assistant gets the first two. *Status* carries `update_interval`, *Power* the phases where the meter has them. |
@@ -1490,6 +1490,7 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **Adaptive trim threshold** (v1.8.4): a quiet meter keeps *Trim threshold*, a noisy one gets twice its median step, not before 60 readings; one large peak does not move it; a higher setting wins; a change of meter starts again; the trim loop ignores a step within the noise and follows a real one.
 - **A dashboard per battery** (v1.8.4): one battery `/zendure-restapi` titled Zendure RestAPI; more than one each at the last four of the serial, titled with the name and the last four; an address kept when a battery is added, only the title follows; a title of your own left alone; not made unasked where no dashboard was wanted.
 - **SOC protection in the status** (v1.8.4): a wait is added to the status text once, not while charging.
+- **SoC balance** (v1.8.5): discharge starts on the fullest, charge on the emptiest, priority first; the primary stays within the balance and changes beyond it only when a direction starts, never while it runs, but an empty one is still replaced; 0 is the choice of before; the secondaries share the same total by energy; energy counts the lower SOC limit and the capacity.
 - **SOC protection of a cluster at the cheapest price** (v1.8.1): it waits for the cheapest period within 6 hours of its own Price control, charges at once without prices, after 6 hours or 2 points under the floor, carries on once it charges, and forgets the wait when a battery is back above its floor; a fault of a battery shows as a badge on the Cluster tab, a Virtual cluster gets none.
 - **Raise after** (v1.8.3): 15 s by default; a 10 s peak on a running discharge is held at the running limit and counted as a skipped peak while running; a held rise under 500 W is not counted; a load that stays is followed after the time; lower and a rise within the margin (a fifth of the limit, at least 100 W) go at once; 0 follows at once as before; charging is not held; the trim loop holds too; a followed peak is counted with its export, a long load, a rise under 500 W and a rise while charging are not; a battery in a cluster follows the cluster's *Raise after*, alone its own; the cluster status adds up the counts of its batteries.
 
@@ -1576,6 +1577,18 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 ## 📝 Changelog
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
+
+### v1.8.5 — SoC balance: the battery with the most energy works
+
+**In a battery cluster or a Virtual cluster the SoC now decides which battery works; how many work at once stays as it was.** Nothing changes for a single battery.
+
+- **SoC balance** (new, on the battery cluster and the Virtual cluster, after *Concentrate below*, 0–50 points, default 15): when a direction starts, the battery with the most energy for it becomes primary — discharging the fullest, charging the emptiest — if its SoC leads the current primary by more than this. A primary that runs is not replaced for its SoC. 0 gives the choice of v1.8.4.
+- **Secondaries by energy:** above *Concentrate below* the secondaries share the same total as before, by the energy each has for the direction.
+- **Efficiency first:** a low load is not spread over more inverters to even out faster; the batteries even out over days. Replay of a night of house load on the cluster's own distribution: the same energy lost, the same number of starts, the spread falling instead of rising; on a sunny day the surplus goes to the emptiest first.
+- **Status:** `soc_spread` and `primary_changes_today` on the cluster status; a change of primary names both SoCs.
+- *Reset settings* of a Virtual cluster takes *SoC balance* back to 15. Tick *Rebuild dashboard* on the cluster for its tile.
+
+See [SoC balance](./docs/cluster.md#how-it-regulates).
 
 ### v1.8.4 — A noisy meter, a dashboard per battery
 

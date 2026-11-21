@@ -96,12 +96,24 @@ class Decision:
     attributes: dict[str, Any] = field(default_factory=dict)
 
 
+def _spread(readings: list[Reading]) -> float | None:
+    """Highest minus lowest SoC of the batteries taking part (v1.8.5)."""
+    socs = [r.soc for r in readings if r.available and r.soc is not None]
+    return round(max(socs) - min(socs), 1) if len(socs) > 1 else None
+
+
 def _round(value: float) -> int:
     return int(round(value / ROUND_W) * ROUND_W)
 
 
-def split(total: float, rooms: dict[str, int], floor: bool = False) -> dict[str, int]:
+def split(
+    total: float, rooms: dict[str, int], floor: bool = False, weights: dict[str, float] | None = None,
+) -> dict[str, int]:
     """`total` over the batteries in proportion to their room, never past it.
+
+    With `weights` (v1.8.5) in proportion to those instead, still never past
+    the room: the cluster weighs the room by the energy each battery has for
+    the direction, so the fullest gives most and the emptiest takes most.
 
     What one battery cannot take (its share above its room) goes to the
     others, so the sum is min(total, sum of rooms) before rounding.
@@ -116,12 +128,18 @@ def split(total: float, rooms: dict[str, int], floor: bool = False) -> dict[str,
     """
     shares = {key: 0.0 for key in rooms}
     left = max(0.0, float(total))
-    open_ = {key: room for key, room in rooms.items() if room > 0}
+    weight_of = weights if weights is not None else rooms
+    open_ = {key: float(weight_of.get(key, 0)) for key, room in rooms.items() if room > 0}
+    if weights is not None and not any(w > 0 for w in open_.values()):
+        open_ = {key: float(room) for key, room in rooms.items() if room > 0}
     while left > 0.5 and open_:
         weight = sum(open_.values())
+        if weight <= 0:
+            break
         spill = 0.0
-        for key, room in list(open_.items()):
-            share = left * room / weight
+        for key, w in list(open_.items()):
+            room = rooms[key]
+            share = left * w / weight
             free = room - shares[key]
             if share >= free:
                 shares[key] = float(room)
@@ -153,6 +171,10 @@ class Distributor:
         self.idle_since: float | None = None
         self.above_since: float | None = None
         self.demand: float = 0.0
+        # Primary changes by SoC balance (v1.8.5), counted per day.
+        self.primary_changes_today = 0
+        self._changes_day: int | None = None
+        self.change_reason: str | None = None
         # SOC protection of the group runs (v1.7.6).
         self.protecting = False
         # With Price Control (v1.8.1): since when every battery is under its
@@ -184,9 +206,55 @@ class Distributor:
             return CHARGE
         return NONE
 
-    def _choose_primary(self, active: list[Reading], wanted: str) -> str | None:
+    @staticmethod
+    def _energy(r: Reading, direction: str) -> float:
+        """Energy a battery has for a direction, in % x kWh (v1.8.5).
+
+        Discharging: above its lower SOC limit; charging: up to full. A battery
+        without a capacity counts as 1 kWh, so SoC alone decides between them.
+        """
+        if r.soc is None:
+            return 0.0
+        capacity = r.capacity_kwh or 1.0
+        if direction == CHARGE:
+            return max(0.0, 100.0 - r.soc) * capacity
+        if direction == DISCHARGE:
+            return max(0.0, r.soc - (r.floor or 0.0)) * capacity
+        return 0.0
+
+    def _choose_by_soc(self, active: list[Reading], wanted: str, balance: int) -> str | None:
+        """SoC balance (v1.8.5): the primary by energy, only when a direction starts.
+
+        A primary that runs is never replaced for its SoC: a change costs a stop
+        and a cold start. Nothing wanted keeps the primary as it is. When a
+        direction starts, the battery with the most energy for it leads, after
+        priority; the current primary stays unless the leader's SoC is more than
+        `balance` points better. One that cannot serve the direction is replaced
+        as before.
+        """
+        self.change_reason = None
+        current = next((r for r in active if r.key == self.primary), None)
+        if current is not None and (wanted == NONE or current.direction != NONE):
+            if wanted == NONE or not current.closed(wanted):
+                return current.key
+        if wanted == NONE:
+            return min(active, key=lambda r: self._rank(r, wanted)).key
+        candidates = [r for r in active if r.room(wanted) > 0] or active
+        best = min(candidates, key=lambda r: (-r.priority, -self._energy(r, wanted)) + self._rank(r, wanted)[1:])
+        if current is None or current.key == best.key:
+            return best.key
+        if current in candidates and current.priority == best.priority and not current.closed(wanted):
+            gap = abs((best.soc or 0.0) - (current.soc or 0.0))
+            if gap <= balance:
+                return current.key
+            self.change_reason = f"{best.soc:g} % against {current.soc:g} %"
+        return best.key
+
+    def _choose_primary(self, active: list[Reading], wanted: str, balance: int = 0) -> str | None:
         if not active:
             return None
+        if balance > 0:
+            return self._choose_by_soc(active, wanted, balance)
         current = next((r for r in active if r.key == self.primary), None)
         if current is not None:
             # Kept unless it cannot serve what is wanted and another can: a
@@ -356,7 +424,7 @@ class Distributor:
 
         wanted = self._wanted(active, s, grid)
         previous = self.primary
-        self.primary = self._choose_primary(active, wanted)
+        self.primary = self._choose_primary(active, wanted, s.soc_balance)
         primary = next(r for r in active if r.key == self.primary)
         roles[primary.key] = Role(ROLE_PRIMARY)
         secondaries = [r for r in active if r.key != primary.key]
@@ -382,6 +450,12 @@ class Distributor:
             return self._finish(roles, status, reason, readings, grid)
 
         if previous is not None and previous != self.primary:
+            if self.change_reason:
+                day = int(now // 86400)
+                if day != self._changes_day:
+                    self._changes_day, self.primary_changes_today = day, 0
+                self.primary_changes_today += 1
+                return stop_all("regulating", f"{primary.name} takes over as primary: {self.change_reason}")
             return stop_all("regulating", f"{primary.name} takes over as primary")
 
         # The primary wants the other direction while secondaries still run. That
@@ -476,7 +550,14 @@ class Distributor:
             # its share at the first split after it runs again.
             share = PRIMARY_SHARE * primary_cap if primary_limit > CAP_MARGIN_W else 0.0
             total = min(sum(rooms.values()), max(0.0, demand - share))
-            targets = split(total, rooms, floor=share == 0.0)
+            weights = None
+            if s.soc_balance > 0:
+                # SoC balance (v1.8.5): the same total, shared by energy.
+                energy = {r.key: self._energy(r, direction) for r in secondaries}
+                top = max(energy.values(), default=0.0)
+                if top > 0:
+                    weights = {key: rooms[key] * energy[key] / top for key in rooms}
+            targets = split(total, rooms, floor=share == 0.0, weights=weights)
 
         for r in secondaries:
             old = roles[r.key]
@@ -524,6 +605,10 @@ class Distributor:
             "demand": round(self.demand),
             "grid": None if grid is None else round(grid),
             "concentrated": self.concentrated,
+            # SoC balance (v1.8.5): the spread of the batteries taking part and
+            # the primary changes it made today.
+            "soc_spread": _spread(readings),
+            "primary_changes_today": self.primary_changes_today,
             "batteries": {
                 names[key]: {
                     "role": role.role,

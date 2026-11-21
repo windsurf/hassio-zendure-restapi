@@ -110,6 +110,7 @@ from .const import (
     OPT_DISCHARGE_BUFFER,
     OPT_OPERATION_MODE,
     OPT_REDISTRIBUTE,
+    OPT_SOC_BALANCE,
     OPT_START_AFTER,
     OPT_SOC_PROTECTION,
     SOC_PROTECT_OFF,
@@ -377,6 +378,7 @@ async def _async_setup_cluster(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             concentrate_below=settings.get_int(OPT_CONCENTRATE_BELOW),
             redistribute_s=settings.get_int(OPT_REDISTRIBUTE),
             start_after=settings.get_int(OPT_START_AFTER),
+            soc_balance=settings.get_int(OPT_SOC_BALANCE),
             **protection_settings(hass, entry.entry_id, settings),
         )
 

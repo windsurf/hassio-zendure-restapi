@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopier 3, Load factor 1, SoC-forskydninger 0 / -20 / 15 %, ekstra svartid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Concentrate below 300 W, Redistribute every 30 s. Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
+          "reset_settings": "Kopier 3, Load factor 1, SoC-forskydninger 0 / -20 / 15 %, ekstra svartid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
         }
       }
     },
@@ -892,6 +892,9 @@
       },
       "redistribute_every": {
         "name": "Omfordel hver"
+      },
+      "soc_balance": {
+        "name": "SoC-udligning"
       },
       "clones": {
         "name": "Copies"

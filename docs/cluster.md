@@ -66,7 +66,7 @@ Later, under the cluster in *Devices & services*:
 | **Delete** (on a battery) | the battery leaves the group and stays in standby until you choose a mode |
 | **Configure** (on the cluster) | which external meter the group uses |
 
-**Priority** (1–9, default 5) decides which battery is primary. Among equals the fastest measured battery is primary (*Response time* in the Measured tab), then the one with the most room. **Max share** caps what a battery takes on in the group, in both directions; 0 is its own maximum.
+**Priority** (1–9, default 5) decides which battery is primary. Among equals, since v1.8.5, the one with the most energy for the direction that starts: discharging the fullest, charging the emptiest (see *SoC balance* below); with *SoC balance* at 0, as before, the fastest measured battery (*Response time* in the Measured tab), then the one with the most room. **Max share** caps what a battery takes on in the group, in both directions; 0 is its own maximum.
 
 Removing the cluster returns every battery to its own settings, in standby.
 
@@ -88,6 +88,8 @@ Removing the cluster returns every battery to its own settings, in standby.
 
 **Why concentrate at all.** Every inverter that converts costs a fixed loss of about 33 W on top of a few per cent, whatever it delivers; at rest it takes about 5 W (both measured on a SolarFlow 3000 Mix AC+). At 300 W one battery loses about 41 W, three batteries at 100 W each about 107 W: two thirds more loss for the same output, about 1.6 kWh a day at a steady 300 W. Spreading a low load over several batteries throws that away, which is why the primary works alone below *Concentrate below* and why the secondaries are held back on a short peak. Above a few hundred watts per battery the fixed loss matters little and spreading costs next to nothing.
 
+**SoC balance** (v1.8.5, default 15 points). As few batteries at once as before — that is where the efficiency is — but the SoC decides which one works. When a direction starts, the battery with the most energy for it becomes primary: discharging the most above its lower SOC limit, charging the most room to full, in kWh, so a small battery and a large one compare fairly. The primary of before stays unless the other's SoC leads by more than *SoC balance* points (40 % against 25 % is 15 points). A primary that runs is never replaced for its SoC — a change costs a stop and a cold start — only, as before, when it cannot serve the direction any more. The secondaries share the same total as before, by energy: the fullest gives most, the emptiest takes most. So no battery sits empty on its floor while another is full, surplus goes to the emptiest first, and the batteries even out over days rather than within one night. Spreading a low load over more inverters to even them out faster is deliberately not done (see *Why concentrate at all*). The status shows `soc_spread` and `primary_changes_today`, and a change reads "Virtual copy 3 takes over as primary: 39 % against 13 %". 0 gives the choice of v1.8.4.
+
 **Direction change.** All batteries in the group always go the same way. Only when the group has nothing left to do in the running direction — the secondaries' share would be about zero — and the primary wants to turn, do the secondaries stop (`reversing`), one request each, and the primary turns with its own hold.
 
 **Quick modes.** In `quick_charge` and `quick_discharge` every battery runs at its own maximum; there is no primary.
@@ -108,6 +110,7 @@ Removing the cluster returns every battery to its own settings, in standby.
 | Stop charging below / Stop discharging below / Stop after / Start after | number | as on a battery (v1.7.4), with the same defaults: 50 W charging and discharging, *Stop after* and *Start after* 30 s (each 10–120 s); *Start after* also holds the secondaries back on a short peak; the primary stops, only while it works alone: capped at *Concentrate below*, off with *Concentrate below* at 0 |
 | Raise after | number | as on a battery (v1.8.3): 0–120 s, 15 s by default; a running discharge of the primary goes up for a rise of more than the margin only once it has lasted this long; the batteries taking part follow the cluster's value |
 | Concentrate below | number | 0–1000 W, default 300 |
+| SoC balance | number | 0–50 points of SoC, default 15 (v1.8.5); 0 = the choice of v1.8.4 |
 | Redistribute every | number | 10–120 s, default 30 |
 | Meter source | select | as on a battery |
 | Status | sensor | see below; attributes: primary, demand, `grid` (the reading the group steers on), role, direction and limit per battery |

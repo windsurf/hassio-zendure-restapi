@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.4"
+INTEGRATION_VERSION = "1.8.5"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -386,6 +386,9 @@ MAX_MEMBERS = 6
 DEFAULT_PRIORITY = 5
 OPT_CONCENTRATE_BELOW = "concentrate_below"
 OPT_REDISTRIBUTE = "redistribute_every"
+# SoC balance (v1.8.5), percentage points: at the start of a direction the
+# battery with the most energy for it becomes primary when it leads by more.
+OPT_SOC_BALANCE = "soc_balance"
 # On a battery: off takes it out of the group for a while, without deleting
 # its subentry. Only while the battery belongs to a cluster.
 OPT_TAKE_PART = "take_part"
@@ -624,6 +627,7 @@ DEFAULTS = {
     # Battery cluster (v1.7.0)
     OPT_CONCENTRATE_BELOW: 300,         # W, below this one battery works alone
     OPT_REDISTRIBUTE: 30,               # s between two splits over the secondaries
+    OPT_SOC_BALANCE: 15,                # points of SoC; 0 = the choice of v1.8.4
     OPT_TAKE_PART: True,
     # Virtual cluster (v1.7.1)
     **VIRTUAL_DEFAULTS,

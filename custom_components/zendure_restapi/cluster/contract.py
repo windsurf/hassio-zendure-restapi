@@ -117,6 +117,11 @@ class GroupSettings:
     # Seconds the demand stays above Concentrate below before a secondary is
     # added (v1.7.4); 0 adds them at the first split, as before.
     start_after: int = 0
+    # SoC balance (v1.8.5), in percentage points of SoC: at the start of a
+    # direction the battery with the most energy for it becomes primary when it
+    # leads the current one by more than this; the secondaries share by energy.
+    # 0 keeps the choice of v1.8.4 (priority, running, speed, room).
+    soc_balance: int = 0
     # SOC protection of the group (v1.7.6): with every battery under its floor
     # they charge from the grid to their floor + 5. Off unless set.
     soc_protection: bool = False

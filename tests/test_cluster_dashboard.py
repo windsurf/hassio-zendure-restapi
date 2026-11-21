@@ -41,7 +41,8 @@ def group() -> dict:
                            ("stop_charge_below", "stop_charging_below"),
                            ("stop_discharge_below", "stop_discharging_below"), ("stop_after", "stop_after"),
                            ("start_after", "start_after"), ("raise_after", "raise_after"),
-                           ("concentrate_below", "concentrate_below"), ("redistribute_every", "redistribute_every")):
+                           ("concentrate_below", "concentrate_below"), ("soc_balance", "soc_balance"),
+                           ("redistribute_every", "redistribute_every")):
         g[key] = f"number.virtual_cluster_{object_id}"
     # The settings of each copy, on the copy's device (v1.7.3).
     for n in (1, 2, 3):
