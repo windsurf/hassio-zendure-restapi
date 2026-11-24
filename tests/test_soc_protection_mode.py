@@ -87,27 +87,27 @@ def test_off_does_nothing(monkeypatch):
 
 def test_a_stored_true_charges_directly(monkeypatch):
     c, _ = battery(monkeypatch, mode=True, prices=curve(0.40, 0.10))
-    assert run(c, 9) is True and charged(c)
+    assert run(c, 8) is True and charged(c)
 
 
 def test_direct_charges_at_once(monkeypatch):
     c, _ = battery(monkeypatch, mode=SOC_PROTECT_DIRECT, prices=curve(0.40, 0.10))
-    assert run(c, 9) is True and charged(c)
+    assert run(c, 8) is True and charged(c)
 
 
 def test_price_control_waits_for_the_cheapest_quarter(monkeypatch):
     c, clock = battery(monkeypatch, prices=curve(0.40, 0.30, 0.10, 0.20))
-    assert run(c, 9) is False, "the strategy carries on meanwhile"
+    assert run(c, 8) is False, "the strategy carries on meanwhile"
     assert not charged(c) and not c._protecting
     assert "charges at" in c.protect_note and "0.1 per kWh" in c.protect_note and "now 0.4" in c.protect_note
     clock.now = T0 + 2 * Q
-    assert run(c, 9) is True and charged(c)
+    assert run(c, 8) is True and charged(c)
     assert c.protect_note is None
 
 
 def test_once_charging_it_carries_on_whatever_the_price(monkeypatch):
     c, clock = battery(monkeypatch, prices=curve(0.10, 0.90, 0.90))
-    assert run(c, 9) is True
+    assert run(c, 8) is True
     clock.now = T0 + Q
     assert run(c, 12) is True, "past the floor, not yet at floor + 5"
     assert run(c, 15) is False and not c._protecting
@@ -115,16 +115,16 @@ def test_once_charging_it_carries_on_whatever_the_price(monkeypatch):
 
 def test_of_equal_prices_the_first(monkeypatch):
     c, _ = battery(monkeypatch, prices=curve(0.20, 0.20, 0.20))
-    assert run(c, 9) is True
+    assert run(c, 8) is True
 
 
 def test_without_prices_direct(monkeypatch):
     c, _ = battery(monkeypatch, prices=[])
-    assert run(c, 9) is True and charged(c)
+    assert run(c, 8) is True and charged(c)
     assert "no prices" in c._protect_why
 
 
-def test_two_points_under_the_floor_direct(monkeypatch):
+def test_three_points_under_the_floor_direct(monkeypatch):
     c, _ = battery(monkeypatch, prices=curve(0.40, 0.10))
     assert run(c, 10 - SOC_PROTECT_HARD_POINTS) is True and charged(c)
 
@@ -132,16 +132,16 @@ def test_two_points_under_the_floor_direct(monkeypatch):
 def test_after_the_window_direct(monkeypatch):
     late = T0 + timedelta(hours=7)
     c, clock = battery(monkeypatch, prices=curve(0.40, 0.40, 0.05) + [(late, late + Q, 0.01)])
-    assert run(c, 9) is False, "waits for the 0.05 quarter; the 0.01 one lies past 6 h"
+    assert run(c, 8) is False, "waits for the 0.05 quarter; the 0.01 one lies past 6 h"
     assert "0.05" in c.protect_note
     clock.now = T0 + timedelta(hours=SOC_PROTECT_WINDOW_H)
-    assert run(c, 9) is True
+    assert run(c, 8) is True
     assert "waited" in c._protect_why
 
 
 def test_above_the_floor_it_forgets_the_wait(monkeypatch):
     c, _ = battery(monkeypatch, prices=curve(0.40, 0.10))
-    run(c, 9)
+    run(c, 8)
     assert c._protect_since is not None
     assert run(c, 10) is False
     assert c._protect_since is None and c.protect_note is None
@@ -151,9 +151,9 @@ def test_in_a_cluster_only_the_role_protect_charges(monkeypatch):
     c, _ = battery(monkeypatch, mode=SOC_PROTECT_DIRECT)
     c.settings.coordinated = True
     c.settings.role = "primary"
-    assert run(c, 9) is False and not charged(c)
+    assert run(c, 8) is False and not charged(c)
     c.settings.role = ROLE_PROTECT
-    assert run(c, 9) is True and charged(c)
+    assert run(c, 8) is True and charged(c)
     assert c._set_state.call_args.args[0] == "protecting"
     assert "cluster" in c._set_state.call_args.args[1]
 
@@ -169,3 +169,21 @@ def test_price_control_hands_out_the_periods_ahead(monkeypatch):
     periods = pc.import_periods()
     assert [p[2] for p in periods] == [0.2, 0.4], "the past one is left out"
     assert periods[0][0] == T0 + timedelta(minutes=5), "the current one from now"
+
+
+# ── v1.8.6: the point the device drops at rest is no reason to charge ─────
+
+
+def test_one_point_under_the_floor_does_not_charge(monkeypatch):
+    # The device closes discharging at its floor and then reports one point
+    # lower at rest, and stays there (measured five times on a 3000 Mix AC+).
+    for mode in (SOC_PROTECT_DIRECT, SOC_PROTECT_PRICE):
+        c, _ = battery(monkeypatch, mode=mode, prices=curve(0.40, 0.10))
+        assert run(c, 9) is False and not charged(c) and not c._protecting
+        assert c.protect_note is None
+
+
+def test_the_thresholds():
+    from custom_components.zendure_restapi.const import SOC_PROTECT_START_POINTS
+
+    assert (SOC_PROTECT_START_POINTS, SOC_PROTECT_HARD_POINTS) == (2, 3)

@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.5"
+INTEGRATION_VERSION = "1.8.6"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -688,7 +688,13 @@ RUN_FLOOR_W = 30
 # the cheapest quarter, and never while the battery sits this many points
 # under its floor: then it charges at once.
 SOC_PROTECT_WINDOW_H = 6
-SOC_PROTECT_HARD_POINTS = 2
+SOC_PROTECT_HARD_POINTS = 3
+# SOC protection starts (v1.8.6) only this many points under the floor. The
+# device closes discharging at its floor and then reports one point lower at
+# rest, and stays there: measured five times on a 3000 Mix AC+, twelve hours
+# at floor - 1 without falling further. A charge at floor - 1 bought energy
+# from the grid only to discharge it again.
+SOC_PROTECT_START_POINTS = 2
 
 # Hysteresis at a start (v1.7.6): with a stop limit set, a direction starts
 # only past the stop limit plus this share of it, at least START_GAP_MIN_W.

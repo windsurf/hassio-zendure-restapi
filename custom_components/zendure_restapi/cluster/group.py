@@ -68,7 +68,10 @@ PROTECT_REARM_POINTS = 5
 # cheapest period, and not at all once a battery sits this many points under
 # its floor: SOC_PROTECT_WINDOW_H and SOC_PROTECT_HARD_POINTS in const.py.
 PROTECT_WINDOW_S = 6 * 3600
-PROTECT_HARD_POINTS = 2
+PROTECT_HARD_POINTS = 3
+# The group starts only with every battery this many points under its floor
+# (v1.8.6): SOC_PROTECT_START_POINTS in const.py.
+PROTECT_START_POINTS = 2
 # The primary is "at its cap" within this of it, and "at nothing" below this.
 CAP_MARGIN_W = 50
 # Peaks (v1.7.4): the secondaries are added only once the demand has stayed
@@ -94,6 +97,13 @@ class Decision:
     # Batteries whose role or limit changed, in the order to write them.
     changed: list[str] = field(default_factory=list)
     attributes: dict[str, Any] = field(default_factory=dict)
+
+
+def _deep(r: Reading) -> bool:
+    """Under its floor by PROTECT_START_POINTS or more (v1.8.6); without a SoC, under its floor."""
+    if r.soc is None or r.floor is None:
+        return r.below_floor
+    return r.soc <= r.floor - PROTECT_START_POINTS
 
 
 def _spread(readings: list[Reading]) -> float | None:
@@ -295,7 +305,7 @@ class Distributor:
             self._protect_reset()
             return None
         if not self.protecting:
-            if not all(r.below_floor for r in active):
+            if not all(_deep(r) for r in active):
                 self._protect_reset()
                 return None
             waits = self._protect_wait(active, s, now)

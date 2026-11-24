@@ -88,7 +88,8 @@ def test_soc_protection_charges_on_to_min_soc_plus_five(monkeypatch):
         return asyncio.run(c._handle_soc_protection(data(level, input_limit=0), C.MODE_SMART_MATCHING))
 
     assert run(12) is False, "above the floor and not protecting: nothing to do"
-    assert run(9) is True and c._protecting
+    assert run(9) is False, "one point under the floor: the device's own drop (v1.8.6)"
+    assert run(8) is True and c._protecting
     assert ("inputLimit", 800) in [kv for req in sent(c) for kv in req]
     assert run(12) is True, "carries on past the floor"
     assert run(14) is True

@@ -3,7 +3,7 @@
 With every battery under its floor and SOC protection on price_control, the
 cluster waits for the cheapest period of its own Price Control within 6 hours,
 as a single battery does since v1.7.6. Directly without a price list, after 6
-hours, or once a battery sits 2 points or more under its floor. Once it
+hours, or once a battery sits 3 points or more under its floor (2 until v1.8.5). Once it
 charges it carries on to the floor + 5, whatever the price.
 """
 
@@ -27,7 +27,7 @@ def prices(*rows) -> tuple:
 
 PRICED = replace(SETTINGS, soc_protection_price=True,
                  price_periods=prices((0, 0.30), (1, 0.30), (3, 0.12), (5, 0.20), (7, 0.05)))
-EMPTY = [reading("a", 9), reading("b", 9)]
+EMPTY = [reading("a", 8), reading("b", 8)]
 
 
 def test_the_limits_match_a_single_battery():
@@ -62,10 +62,10 @@ def test_without_prices_at_once():
     assert decision.status == "protecting" and "direct: no prices from Price Control" in decision.reason
 
 
-def test_two_points_under_the_floor_at_once():
+def test_three_points_under_the_floor_at_once():
     d = Distributor()
-    decision = d.decide([reading("a", 8), reading("b", 9)], PRICED, grid=300.0, now=60.0)
-    assert decision.status == "protecting" and "direct: 2 points or more under the floor" in decision.reason
+    decision = d.decide([reading("a", 7), reading("b", 8)], PRICED, grid=300.0, now=60.0)
+    assert decision.status == "protecting" and "direct: 3 points or more under the floor" in decision.reason
 
 
 def test_after_six_hours_at_once():

@@ -84,6 +84,7 @@ from .const import (
     RISE_MIN_W,
     SOC_REARM_POINTS,
     SOC_PROTECT_HARD_POINTS,
+    SOC_PROTECT_START_POINTS,
     SOC_PROTECT_PRICE,
     SOC_PROTECT_WINDOW_H,
     START_GAP_MIN_W,
@@ -975,10 +976,11 @@ class ZendureController:
         # Charge from under the floor to the floor + SOC_REARM_POINTS (v1.7.5):
         # stopping at the floor itself left the battery on the edge, where it
         # swings across it. The planner does the same with a quarter at full
-        # power. A start needs the battery under the floor; once charging it
-        # carries on to the margin.
+        # power. Once charging it carries on to the margin.
         target = floor + SOC_REARM_POINTS
-        if soc >= target or (not self._protecting and soc >= floor):
+        # A start needs the battery SOC_PROTECT_START_POINTS under its floor
+        # (v1.8.6): the point the device drops at rest after closing is no reason.
+        if soc >= target or (not self._protecting and soc > floor - SOC_PROTECT_START_POINTS):
             self._stand_down()
             return False
 

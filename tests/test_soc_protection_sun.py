@@ -106,9 +106,13 @@ def test_a_battery_with_a_price_list_keeps_the_cheapest_quarter(monkeypatch):
     assert c._protect_why == "direct: no prices from Price Control"
 
 
-def test_two_points_under_the_floor_does_not_wait(monkeypatch):
-    c = battery(monkeypatch, datetime(2026, 10, 31, 13, 0, tzinfo=timezone.utc), WINDOWS)
-    assert c._protect_waits({}, 3, 5) is None and "2 points or more" in c._protect_why
+def test_three_points_under_the_floor_does_not_wait(monkeypatch):
+    base = datetime(2026, 10, 31, 0, 0, tzinfo=timezone.utc)
+    windows = tuple((base.timestamp() + w[0], base.timestamp() + w[1], w[2], w[3]) for w in WINDOWS)
+    c = battery(monkeypatch, base + timedelta(hours=13), windows)
+    assert c._protect_waits({}, 3, 5) is not None, "two points under: still waits (v1.8.6)"
+    c._protect_since = None
+    assert c._protect_waits({}, 2, 5) is None and "3 points or more" in c._protect_why
 
 
 # ── A cluster ────────────────────────────────────────────────────────────
@@ -116,11 +120,11 @@ def test_two_points_under_the_floor_does_not_wait(monkeypatch):
 def test_a_cluster_under_the_fixed_tariff_waits_for_solar():
     sun = replace(SETTINGS, soc_protection_price=True, solar_windows=WINDOWS)
     d = Distributor()
-    decision = d.decide([reading("a", 9), reading("b", 9)], sun, grid=300.0, now=13 * H)
+    decision = d.decide([reading("a", 8), reading("b", 8)], sun, grid=300.0, now=13 * H)
     assert decision.status != "protecting"
     assert decision.attributes["soc_protection_waits"] == (
         "every battery under its SOC floor: charges from solar, from the grid at 16:40 at the latest")
-    decision = d.decide([reading("a", 9), reading("b", 9)], sun, grid=300.0, now=DAY[1])
+    decision = d.decide([reading("a", 8), reading("b", 8)], sun, grid=300.0, now=DAY[1])
     assert decision.status == "protecting" and "no solar surplus by the end of the day" in decision.reason
 
 
