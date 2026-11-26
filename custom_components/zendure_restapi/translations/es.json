@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Un enchufe inteligente en un microinversor o un segundo inversor. Las series PV del panel lo muestran: en lugar del PV propio de la batería si no se usa, junto a él en otro caso. El control no lo necesita, el contador de red ya ve esta potencia.",
           "solar_energy_entity": "Su contador de kWh, para los totales diarios de la pestaña History.",
-          "reset_settings": "Márgenes y umbrales de inicio 5 W, Detener carga por debajo de 50 W, Detener descarga por debajo de 50 W, Detener tras 30 s, Iniciar tras 30 s, Aumentar después de 15 s, potencia de carga y descarga mín. 0 W, Umbral del modo 10 W, Umbral de corrección 40 W, fuerza de corrección 80 %, Retardo de cambio de sentido 10 s. Operation mode, potencia de carga y descarga máx., protección de SOC, el medidor y Price Control se quedan como están. En un clúster rigen los ajustes del grupo."
+          "reset_settings": "Márgenes, umbrales, tiempos de espera, potencias mínimas e intensidad de corrección vuelven a sus valores predeterminados (véase la documentación). Operation mode, potencia de carga y descarga máx., protección de SOC, el medidor y Price Control se quedan como están. En un clúster rigen los ajustes del grupo."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copias 3, Load factor 1, desviaciones de SoC 0 / -20 / 15 %, tiempo de respuesta adicional 0 / 1 / 3 s, Max share 0, Operation mode Follow source, márgenes y umbrales de inicio 5 W, Detener carga por debajo de 50 W, Detener descarga por debajo de 50 W, Detener tras 30 s, Iniciar tras 30 s, Aumentar después de 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Las copias siguen funcionando; marca también Restablecer copias para arrancarlas con las nuevas desviaciones. Tu propia batería y Price Control no se modifican."
+          "reset_settings": "Cada ajuste del Virtual cluster y de sus copias vuelve a su valor predeterminado (véase la documentación). Las copias siguen funcionando; marca también Restablecer copias para arrancarlas con las nuevas desviaciones. Tu propia batería y Price Control no se modifican."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Conmutaciones del relé"
       },
+      "house_load_profile": {
+        "name": "Perfil de carga de la casa"
+      },
+      "usage_profile": {
+        "name": "Perfil de uso"
+      },
       "group_power": {
         "name": "Potencia de la batería"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} informa de propiedades nuevas",
       "description": "{device} informa de {keys}, que antes no enviaba. Suele ocurrir tras una actualización de firmware. Esta versión aún no tiene entidad para ellas. Descarga los diagnósticos (página del dispositivo → Descargar diagnósticos) e infórmalas en un issue para que puedan añadirse. Ignora este mensaje para cerrarlo."
+    },
+    "stale_limit": {
+      "title": "{device} mantiene un límite en espera",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Detener {device}",
+            "description": "Operation mode está en espera, pero {device} mantiene carga {input} W, descarga {output} W, fijados por algo distinto de esta integración: otra automatización, la app de Zendure, un gestor del dispositivo u otro Home Assistant. En espera, esta integración no fija límites propios: pasar a espera envía una sola parada, y un arranque de Home Assistant en espera no escribe nada. Así que la batería mantiene el límite que recibió. Confirme para detener la batería una vez, como lo haría elegir espera de nuevo. Si el límite vuelve, otra cosa está controlando: consulte la documentación sobre un segundo controlador."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

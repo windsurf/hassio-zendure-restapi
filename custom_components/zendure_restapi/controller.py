@@ -65,6 +65,7 @@ from homeassistant.util import dt as dt_util
 from .api import ZendureApiError
 from .cluster.contract import solar_wait
 from .const import (
+    DEFAULTS,
     DOMAIN,
     CLUSTER_KEY,
     PACK_PREFIX,
@@ -78,6 +79,9 @@ from .const import (
     OPT_RAISE_AFTER,
     RAISE_MARGIN_SHARE,
     RAISE_MARGIN_W,
+    MODE_ADVICE_SHARE,
+    MODE_ADVICE_STEP,
+    STALE_LIMIT_S,
     NOISE_FACTOR,
     NOISE_MIN_SAMPLES,
     NOISE_WINDOW,
@@ -252,6 +256,10 @@ class ZendureController:
     _noise: deque | None = None
     _noise_prev: float | None = None
     _noise_source = "none"
+    # A limit left behind in standby (v1.8.7): since when, and whether the repair is up.
+    _stale_since: datetime | None = None
+    _stale_issue = False
+    _restart_issue_up = False
     _raise_last: datetime | None = None
     _raise_done = False
     # Followed peaks (v1.8.3): the limit a running direction held before it
@@ -413,6 +421,13 @@ class ZendureController:
         # device refuses one.
         self._multi_write = True
         self.measure.price_source = self._prices
+        # Profiles in local time, judged against this battery's own stop
+        # threshold and Start after (v1.8.7).
+        self.measure.local = dt_util.as_local
+        self.measure.house_settings = lambda: (
+            float(self.settings.get_int(OPT_STOP_DISCHARGE_BELOW)),
+            float(self.settings.get_int(OPT_START_AFTER)),
+        )
         self._measure_store: Store | None = None
         self._measure_saved_at: datetime | None = None
         self._standby_alert = False
@@ -787,6 +802,19 @@ class ZendureController:
             return None
         return float(statistics.median(self._noise))
 
+    def mode_threshold_advice(self) -> int | None:
+        """A Mode threshold for this meter (v1.8.7): the upper quartile of its step
+        per sample, rounded up to MODE_ADVICE_STEP, never under the default.
+
+        Advice only: the setting is the user's. A quiet meter gets the default.
+        """
+        if self._noise is None or len(self._noise) < NOISE_MIN_SAMPLES:
+            return None
+        steps = sorted(self._noise)
+        upper = steps[min(len(steps) - 1, int(MODE_ADVICE_SHARE * len(steps)))]
+        rounded = -(-int(round(upper)) // MODE_ADVICE_STEP) * MODE_ADVICE_STEP
+        return max(int(DEFAULTS[OPT_MODE_THRESHOLD]), rounded)
+
     async def _trim(self) -> None:
         """Adjust the running limit against the meter, within one direction."""
         self._sample_noise()
@@ -1160,11 +1188,15 @@ class ZendureController:
     def _rest_limits(self, data: dict[str, Any], direction: str = "none") -> list[tuple[str, int]]:
         """Both limits to 0, except a small charge limit the device set itself
         at its lower bound (its own SOC protection): writing 0 against it every
-        cycle only fights the device (v1.7.5)."""
+        cycle only fights the device (v1.7.5). A limit of that size that this
+        integration wrote itself is not the device's and goes to 0 (v1.8.7):
+        a battery whose small charge was ended by its group would otherwise
+        keep charging at its lower bound."""
         items = [("inputLimit", 0), ("outputLimit", 0)]
         if direction != "charge" and _soc_bounds(data)[1]:
             held = _as_int(data.get("inputLimit")) or 0
-            if 0 < held <= DEVICE_SELF_CHARGE_W:
+            ours = any(w[0] == held for w in self._last_written.get("inputLimit", ()))
+            if 0 < held <= DEVICE_SELF_CHARGE_W and not ours:
                 items = [("outputLimit", 0)]
         return items
 
@@ -1238,6 +1270,7 @@ class ZendureController:
             return
 
         self._reverse_until = None
+        self._check_stale_limit(data)
         self._set_state("standby", "passive, writing nothing")
 
 
@@ -2782,6 +2815,7 @@ class ZendureController:
         if entry is None or hass is None:
             return
         issue_id = f"restart_limits_{entry.entry_id}"
+        self._restart_issue_up = create
         if create:
             ir.async_create_issue(
                 hass,
@@ -2803,6 +2837,61 @@ class ZendureController:
         """Which battery `_OPEN_LIMITS` means: its entry, else its device."""
         coordinator = self.coordinator
         return str(getattr(coordinator, "entry_id", None) or getattr(coordinator, "device_id", None) or id(coordinator))
+
+    def _check_stale_limit(self, data: dict[str, Any]) -> None:
+        """A limit left behind in standby (v1.8.7): a repair, never a write.
+
+        Standby writes nothing after its one stop, so a limit another
+        automation or a manager left behind keeps the battery running. After
+        STALE_LIMIT_S the repair says so and offers to stop the battery once;
+        a restart holding a limit has its own repair.
+        """
+        limits = (_as_int(data.get("inputLimit")) or 0, _as_int(data.get("outputLimit")) or 0)
+        stale = (
+            max(limits) > 0 and not self._owns_limits and self._restore is None and not self._restart_issue_up
+        )
+        now = dt_util.utcnow()
+        if not stale:
+            if self._stale_since is not None or self._stale_issue:
+                self._stale_since = None
+                self._stale_limit_issue(False)
+            return
+        if self._stale_since is None:
+            self._stale_since = now
+        if not self._stale_issue and (now - self._stale_since).total_seconds() >= STALE_LIMIT_S:
+            self._stale_limit_issue(True, *limits)
+
+    def _stale_limit_issue(self, create: bool, limit_in: int = 0, limit_out: int = 0) -> None:
+        entry = getattr(self.coordinator, "config_entry", None)
+        hass = self.coordinator.hass
+        self._stale_issue = create
+        if entry is None or hass is None:
+            return
+        issue_id = f"stale_limit_{entry.entry_id}"
+        if create:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="stale_limit",
+                translation_placeholders={
+                    "device": entry.title,
+                    "input": str(limit_in),
+                    "output": str(limit_out),
+                },
+                data={"entry_id": entry.entry_id},
+            )
+        else:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+    def stop_once(self) -> None:
+        """Stop the battery once from standby (v1.8.7): the repair's button."""
+        self._standby_sent = False
+        self._owns_limits = True
+        self._stale_since = None
+        self._stale_limit_issue(False)
 
     def reapply_mode(self) -> None:
         """Choosing the current mode again: send its command again (v1.6.8).
@@ -3008,6 +3097,8 @@ class ZendureController:
             # sample and the threshold the trim loop uses now.
             "meter_noise_w": None if self.meter_noise() is None else round(self.meter_noise()),
             "trim_threshold_w": self._trim_threshold(),
+            # Mode threshold advice from the same samples (v1.8.7); never set.
+            "mode_threshold_advice_w": self.mode_threshold_advice(),
             # Limits moved by something other than this controller. Zero in
             # normal operation; the count is what makes an on-device manager
             # visible while the operation mode sits in standby.

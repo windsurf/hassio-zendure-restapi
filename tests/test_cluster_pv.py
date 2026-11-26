@@ -5,7 +5,7 @@ solar sensor chosen under Configure, else the device's own PV once it has
 produced something; with both, the external one as a series of its own. A
 Virtual cluster shows the real battery's PV; its copies have none. An external
 sensor chosen for more batteries of a battery cluster shows once. Without a
-source no series.
+source no series and no PV bars.
 """
 
 from custom_components.zendure_restapi import cluster_dashboard as CD
@@ -18,9 +18,14 @@ OWN_ENERGY = f"sensor.{PREFIX}pv_energy"
 EXT_POWER = "sensor.roof_solar_power"
 EXT_ENERGY = "sensor.roof_solar_energy"
 KNOWN = {OWN_POWER, OWN_ENERGY}
+MEMBERS = [
+    {"name": "Battery A", "power": "sensor.a_battery_power", "soc": "sensor.a_state_of_charge",
+     "charged": "sensor.a_energy_charged", "discharged": "sensor.a_energy_discharged"},
+]
+
+
 def args(own_pv=False, power=None, energy=None) -> dict:
     return {"own_pv": own_pv, "solar_power": power, "solar_energy": energy}
-
 
 
 def with_solar(*sources) -> dict:
@@ -31,10 +36,12 @@ def with_solar(*sources) -> dict:
     return g
 
 
-
 def pv(series) -> list:
     return [s for s in series if "pv_" in s["entity"] or "solar" in s["entity"]]
 
+
+def history_cards(view: dict) -> dict:
+    return {s["cards"][0]["heading"]: s["cards"][1:] for s in view["sections"]}
 
 
 def test_own_pv_only_once_it_has_produced():
@@ -43,16 +50,13 @@ def test_own_pv_only_once_it_has_produced():
     assert (own["power"], own["energy"], own["external"]) == (OWN_POWER, OWN_ENERGY, False)
 
 
-
 def test_own_pv_without_the_entity_is_left_out():
     assert CD.solar_sources("A", PREFIX, args(own_pv=True), set()) == []
-
 
 
 def test_external_sensor_takes_over_without_own_pv():
     (ext,) = CD.solar_sources("A", PREFIX, args(power=EXT_POWER, energy=EXT_ENERGY), KNOWN)
     assert (ext["power"], ext["energy"], ext["external"]) == (EXT_POWER, EXT_ENERGY, True)
-
 
 
 def test_external_sensor_follows_own_pv():
@@ -61,12 +65,10 @@ def test_external_sensor_follows_own_pv():
     assert sources[1]["energy"] is None
 
 
-
 def test_an_external_sensor_of_two_batteries_shows_once():
     g = with_solar(CD.solar_sources("A", "a_", args(power=EXT_POWER), set()),
                    CD.solar_sources("B", "b_", args(power=EXT_POWER), set()))
     assert [s["power"] for s in g["solar"]] == [EXT_POWER]
-
 
 
 def test_day_chart_pv_after_charging_in_amber():
@@ -78,23 +80,22 @@ def test_day_chart_pv_after_charging_in_amber():
     assert (serie["entity"], serie["color"], serie["type"]) == (OWN_POWER, "#FFB300", "area")
 
 
-
 def test_no_source_no_series():
     g = with_solar()
     assert all(s["name"] != "PV" for s in CD.day_chart(g, "sensor.grid", None, None, 1)["series"])
-
+    view = CD.history_view(g, MEMBERS, [], False)
+    assert len(history_cards(view)["Last 30 days"]) == 2
+    assert "PV" not in str(view)
 
 
 def test_a_group_without_the_key_is_as_before():
     assert all(s["name"] != "PV" for s in CD.day_chart(group(), "sensor.grid", None, None, 1)["series"])
 
 
-
 def test_both_sources_named_and_the_external_dashed():
     g = with_solar(CD.solar_sources("A", PREFIX, args(own_pv=True, power=EXT_POWER), KNOWN))
     series = pv(CD.day_chart(g, None, None, None, 1)["series"])
     assert [(s["name"], s.get("stroke_dash")) for s in series] == [("PV", None), ("PV external", 4)]
-
 
 
 def test_two_batteries_each_with_own_pv_named_by_battery():
@@ -105,9 +106,35 @@ def test_two_batteries_each_with_own_pv_named_by_battery():
     assert names == ["PV Battery A", "PV Battery B"]
 
 
+def test_every_history_span_carries_pv():
+    g = with_solar(CD.solar_sources("A", PREFIX, args(own_pv=True), KNOWN))
+    tabs = history_cards(CD.history_view(g, [{**MEMBERS[0], "charged": None}], [], True))
+    for heading, period in (("Last 30 minutes", None), ("Last 4 hours", None),
+                            ("Last 24 hours", "5minute"), ("Last 30 days", "hour")):
+        (card,) = tabs[heading]
+        (serie,) = pv(card["series"])
+        if period is None:
+            assert "statistics" not in serie and serie["curve"] == "straight"
+        else:
+            assert serie["statistics"]["period"] == period
+
+
+def test_thirty_days_a_pv_bar_per_day_next_to_charged_and_discharged():
+    g = with_solar(CD.solar_sources("A", PREFIX, args(own_pv=True), KNOWN))
+    charged, discharged, solar = history_cards(CD.history_view(g, MEMBERS, [], False))["Last 30 days"]
+    assert solar["header"]["title"] == "PV"
+    (serie,) = solar["series"]
+    assert (serie["entity"], serie["type"], serie["color"]) == (OWN_ENERGY, "column", "#FFB300")
+    assert serie["statistics"] == {"type": "change", "period": "day", "align": "middle"}
+
+
+def test_thirty_days_no_pv_bar_without_an_energy_sensor():
+    g = with_solar(CD.solar_sources("A", PREFIX, args(power=EXT_POWER), KNOWN))
+    assert len(history_cards(CD.history_view(g, MEMBERS, [], False))["Last 30 days"]) == 2
+
+
 def test_without_apexcharts_pv_in_the_history_graph():
     g = with_solar(CD.solar_sources("A", PREFIX, args(own_pv=True), KNOWN))
-    batteries = [{"name": "Battery A", "power": "sensor.a_battery_power", "soc": "sensor.a_state_of_charge"}]
-    view = CD.cluster_view(g, batteries, [], False, custom_cards=set())
-    cards = [c for s in view["sections"] for c in s["cards"] if c.get("type") == "history-graph"]
+    cards = [c for s in CD.history_view(g, MEMBERS, [], False, custom_cards=set())["sections"]
+             for c in s["cards"] if c.get("type") == "history-graph"]
     assert cards and all({"entity": OWN_POWER} in c["entities"] for c in cards)

@@ -336,6 +336,10 @@ class VirtualP1Sensor(ClusterEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self._field == "house":
+            # Phantom peaks (v1.8.7): jumps the real battery's next reading took back.
+            meter = self._cluster.meter
+            return meter.phantom_summary() if meter is not None and hasattr(meter, "phantom_summary") else None
         if self._field != "power":
             return None
         # The Load factor is an attribute here since v1.7.3: the

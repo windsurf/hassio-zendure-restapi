@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "A smart plug on a micro inverter or a second inverter. The dashboard's PV series show it: instead of the battery's own PV when that is not in use, beside it otherwise. Control does not need it, the grid meter already sees this power.",
           "solar_energy_entity": "Its kWh counter, for the daily totals on the History tab.",
-          "reset_settings": "Buffers and start thresholds 5 W, Stop charging below 50 W, Stop discharging below 50 W, Stop after 30 s, Start after 30 s, Raise after 15 s, Min charge power and Min discharge power 0 W, Mode threshold 10 W, Trim threshold 40 W, Trim strength 80 %, Direction change delay 10 s. Operation mode, Max charge power and Max discharge power, SOC protection, the meter and Price Control stay as they are. In a cluster the group's settings apply."
+          "reset_settings": "Buffers, thresholds, waiting times, minimum powers and trim strength back to their defaults (see the documentation). Operation mode, Max charge power and Max discharge power, SOC protection, the meter and Price Control stay as they are. In a cluster the group's settings apply."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, SoC offsets 0 / -20 / 15 %, extra response time 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffers and start thresholds 5 W, Stop charging below 50 W, Stop discharging below 50 W, Stop after 30 s, Start after 30 s, Raise after 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. The copies keep running; tick Reset copies as well to start them with the new offsets. Your own battery and Price Control are not touched."
+          "reset_settings": "Every setting of the Virtual cluster and its copies back to its default (see the documentation). The copies keep running; tick Reset copies as well to start them with the new offsets. Your own battery and Price Control are not touched."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Relay switches"
       },
+      "house_load_profile": {
+        "name": "House load profile"
+      },
+      "usage_profile": {
+        "name": "Usage profile"
+      },
       "group_power": {
         "name": "Battery power"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} reports new properties",
       "description": "{device} reports {keys}, which it did not report before. This usually follows a firmware upgrade. This version has no entity for them yet. Download the diagnostics (device page → Download diagnostics) and report them in an issue, so they can be added. Ignore this message to dismiss it."
+    },
+    "stale_limit": {
+      "title": "{device} keeps a limit in standby",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Stop {device}",
+            "description": "Operation mode is standby, yet {device} holds charge {input} W, discharge {output} W, set by something other than this integration: another automation, the Zendure app, a manager on the device or another Home Assistant. In standby this integration sets no limits of its own: switching to standby sends one stop, and a start of Home Assistant in standby writes nothing at all. So the battery keeps the limit it was given. Submit to stop the battery once, as choosing standby again would. If the limit comes back, something else is steering: see the documentation on a second controller."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

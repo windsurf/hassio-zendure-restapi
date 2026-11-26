@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Et smartstik på en mikroinverter eller en anden inverter. Dashboardets PV-serier viser det: i stedet for batteriets egen PV, når den ikke bruges, ellers ved siden af. Styringen behøver det ikke, netmåleren ser allerede denne effekt.",
           "solar_energy_entity": "Dens kWh-tæller, til dagstotalerne på fanen History.",
-          "reset_settings": "Buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Min. opladeeffekt og Min. afladeeffekt 0 W, Tilstandstærskel 10 W, Korrektionstærskel 40 W, korrektionsstyrke 80 %, Forsinkelse ved retningsskift 10 s. Operation mode, Maks. opladeeffekt og Maks. afladeeffekt, SOC-beskyttelse, måleren og Price Control forbliver uændret. I en klynge gælder gruppens indstillinger."
+          "reset_settings": "Buffere, tærskler, ventetider, minimumseffekter og korrektionsstyrke tilbage til deres standardværdier (se dokumentationen). Operation mode, Maks. opladeeffekt og Maks. afladeeffekt, SOC-beskyttelse, måleren og Price Control forbliver uændret. I en klynge gælder gruppens indstillinger."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopier 3, Load factor 1, SoC-forskydninger 0 / -20 / 15 %, ekstra svartid 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffere og starttærskler 5 W, Stop opladning under 50 W, Stop afladning under 50 W, Stop efter 30 s, Start efter 30 s, Hæv efter 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
+          "reset_settings": "Hver indstilling af Virtual cluster og dets kopier tilbage til standardværdien (se dokumentationen). Kopierne kører videre; sæt også flueben ved Nulstil kopier for at starte dem med de nye forskydninger. Dit eget batteri og Price Control røres ikke."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Relæskift"
       },
+      "house_load_profile": {
+        "name": "Husets belastningsprofil"
+      },
+      "usage_profile": {
+        "name": "Brugsprofil"
+      },
       "group_power": {
         "name": "Batterieffekt"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} rapporterer nye egenskaber",
       "description": "{device} rapporterer {keys}, som den ikke rapporterede før. Det følger som regel efter en firmwareopdatering. Denne version har endnu ingen entitet for dem. Download diagnostikken (enhedssiden → Download diagnostik) og rapportér dem i et issue, så de kan tilføjes. Ignorér meddelelsen for at lukke den."
+    },
+    "stale_limit": {
+      "title": "{device} holder en grænse i standby",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Stop {device}",
+            "description": "Operation mode er standby, men {device} holder opladning {input} W, afladning {output} W, sat af noget andet end denne integration: en anden automatisering, Zendure-appen, en styring på enheden eller en anden Home Assistant. I standby sætter denne integration ingen egne grænser: skift til standby sender ét stop, og en start af Home Assistant i standby skriver intet. Batteriet beholder altså den grænse, det fik. Bekræft for at stoppe batteriet én gang, som et nyt valg af standby ville. Kommer grænsen tilbage, styrer noget andet: se dokumentationen om en anden styring."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Inteligentne gniazdko przy mikrofalowniku lub drugi falownik. Serie PV pulpitu pokazują je: zamiast własnego PV magazynu, gdy nie jest używane, w przeciwnym razie obok. Sterowanie go nie potrzebuje, licznik sieciowy już widzi tę moc.",
           "solar_energy_entity": "Jego licznik kWh, dla sum dziennych na karcie History.",
-          "reset_settings": "Bufory i progi startu 5 W, Zatrzymaj ładowanie poniżej 50 W, Zatrzymaj rozładowanie poniżej 50 W, Zatrzymaj po 30 s, Uruchom po 30 s, Zwiększ po 15 s, min. moc ładowania i rozładowania 0 W, Próg trybu 10 W, Próg korekty 40 W, siła korekty 80 %, Opóźnienie zmiany kierunku 10 s. Operation mode, maks. moc ładowania i rozładowania, ochrona SOC, licznik i Price Control pozostają bez zmian. W klastrze obowiązują ustawienia grupy."
+          "reset_settings": "Bufory, progi, czasy oczekiwania, moce minimalne i siła korekty wracają do wartości domyślnych (zob. dokumentację). Operation mode, maks. moc ładowania i rozładowania, ochrona SOC, licznik i Price Control pozostają bez zmian. W klastrze obowiązują ustawienia grupy."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopie 3, Load factor 1, przesunięcia SoC 0 / -20 / 15 %, dodatkowy czas reakcji 0 / 1 / 3 s, Max share 0, Operation mode Follow source, bufory i progi startu 5 W, Zatrzymaj ładowanie poniżej 50 W, Zatrzymaj rozładowanie poniżej 50 W, Zatrzymaj po 30 s, Uruchom po 30 s, Zwiększ po 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Kopie działają dalej; zaznacz też Resetuj kopie, aby uruchomić je z nowymi przesunięciami. Twoja własna bateria i Price Control pozostają bez zmian."
+          "reset_settings": "Każde ustawienie Virtual cluster i jego kopii wraca do wartości domyślnej (zob. dokumentację). Kopie działają dalej; zaznacz też Resetuj kopie, aby uruchomić je z nowymi przesunięciami. Twoja własna bateria i Price Control pozostają bez zmian."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Przełączenia przekaźnika"
       },
+      "house_load_profile": {
+        "name": "Profil obciążenia domu"
+      },
+      "usage_profile": {
+        "name": "Profil użytkowania"
+      },
       "group_power": {
         "name": "Moc baterii"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} zgłasza nowe właściwości",
       "description": "{device} zgłasza {keys}, których wcześniej nie zgłaszał. Zwykle dzieje się tak po aktualizacji firmware. Ta wersja nie ma jeszcze dla nich encji. Pobierz diagnostykę (strona urządzenia → Pobierz diagnostykę) i zgłoś je w issue, aby można je było dodać. Zignoruj ten komunikat, aby go zamknąć."
+    },
+    "stale_limit": {
+      "title": "{device} trzyma limit w trybie gotowości",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Zatrzymaj {device}",
+            "description": "Operation mode to tryb gotowości, a {device} trzyma ładowanie {input} W, rozładowanie {output} W, ustawione przez coś innego niż ta integracja: inną automatyzację, aplikację Zendure, menedżera w urządzeniu lub inny Home Assistant. W trybie gotowości ta integracja nie ustawia własnych limitów: przejście do trybu gotowości wysyła jedno zatrzymanie, a start Home Assistant w trybie gotowości nie zapisuje niczego. Bateria zachowuje więc limit, który dostała. Zatwierdź, aby jednorazowo zatrzymać baterię, tak jak ponowny wybór trybu gotowości. Jeśli limit wróci, steruje coś innego: zob. dokumentację o drugim regulatorze."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

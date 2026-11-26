@@ -1,7 +1,7 @@
 """Constants for the Zendure RestAPI integration."""
 
 DOMAIN = "zendure_restapi"
-INTEGRATION_VERSION = "1.8.6"
+INTEGRATION_VERSION = "1.8.7"
 MANUFACTURER = "Zendure"
 
 # ── Config entry keys ────────────────────────────────────────────────────
@@ -874,4 +874,13 @@ RISE_MIN_W = 500
 NOISE_FACTOR = 2.0
 NOISE_WINDOW = 300
 NOISE_MIN_SAMPLES = 60
+# Mode threshold advice (v1.8.7): the upper quartile of the meter's step per
+# sample, rounded up to MODE_ADVICE_STEP watts, never under the default. Shown
+# in the controller status, never set.
+MODE_ADVICE_SHARE = 0.75
+MODE_ADVICE_STEP = 5
+# A limit left behind in standby (v1.8.7): above zero, not written by this
+# integration and still there after this many seconds; a repair offers to stop
+# the battery once. Standby itself still writes nothing.
+STALE_LIMIT_S = 300
 

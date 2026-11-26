@@ -124,7 +124,7 @@ def test_energy_without_measurements_is_nominal():
 
 
 def test_conversion_has_a_fixed_part_as_measured():
-    # The measured pairs on a 3000 Mix AC+ (README2), within a few watts.
+    # The measured pairs on a 3000 Mix AC+ (README2.md, Conversion efficiency), within a few watts.
     for ac, dc in ((31, 68), (131, 170), (190, 227)):
         assert cells(ac) == pytest.approx(dc, abs=4)
     # charging at 3 kW: 2856 W into the cells, as measured three times

@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.8.6
+# ZENDURE RESTAPI DASHBOARD - v1.8.7
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -2366,6 +2366,60 @@ views:
         rows: 2
     - type: tile
       entity: sensor.price_control_realized_margin
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 168
+      grid_options:
+        columns: 12
+        rows: 2
+  - type: grid
+    column_span: 2
+    cards:
+    - type: heading
+      heading: Reference and profiles
+      heading_style: title
+      icon: mdi:scale-balance
+    - type: markdown
+      content: |-
+        {% set b = 'sensor.zendure_solarflow_3000_mix_ac_' %}{% set ref = {'SolarFlow 3000 Mix AC+': {'charge': '95.2 %', 'discharge': '95.0 %', 'rt_ac': '86.2 %', 'rt_dc': '95.9 %', 'capacity': '7.92 kWh (100 to 5 %)', 'standby': '5 W', 'response': '8 s to start, 3 s to stop'}} %}{% set r = ref.get(device_attr(b ~ 'measured_charge_efficiency', 'model'), {}) %}{% macro own(key, unit) %}{% set v = states(b ~ key) %}{{ v ~ ' ' ~ unit if v not in ['unknown', 'unavailable'] else '–' }}{% endmacro %}
+        | | Reference | This battery |
+        |---|---|---|
+        | Charge efficiency | {{ r.get('charge', '–') }} | {{ own('measured_charge_efficiency', '%') }} |
+        | Discharge efficiency | {{ r.get('discharge', '–') }} | {{ own('measured_discharge_efficiency', '%') }} |
+        | Round trip AC | {{ r.get('rt_ac', '–') }} | {{ own('round_trip_efficiency_ac', '%') }} |
+        | Round trip DC | {{ r.get('rt_dc', '–') }} | {{ own('round_trip_efficiency_dc', '%') }} |
+        | Usable capacity | {{ r.get('capacity', '–') }} | {{ own('usable_capacity', 'kWh') }} |
+        | Standby draw (backup closed) | {{ r.get('standby', '–') }} | {{ own('standby_draw', 'W') }} |
+        | Response time | {{ r.get('response', '–') }} | {{ own('response_time', 's') }} |
+
+        Reference: measured on the model named, see the measurements in the documentation; – where there is no measurement.
+      grid_options:
+        columns: full
+    - type: markdown
+      content: |-
+        {% set b = 'sensor.zendure_solarflow_3000_mix_ac_' %}{% set c = state_attr(b ~ 'measured_charge_efficiency', 'curve') or [] %}{% set d = state_attr(b ~ 'measured_discharge_efficiency', 'curve') or [] %}{% if c or d %}| Power | Charging | Discharging |
+        |---|---|---|
+        {% set bands = ((c | map(attribute='band_w') | list) + (d | map(attribute='band_w') | list)) | unique | sort %}{% for w in bands %}{% set x = c | selectattr('band_w', 'eq', w) | list %}{% set y = d | selectattr('band_w', 'eq', w) | list %}| from {{ w }} W | {{ (x[0].efficiency ~ ' %') if x else '–' }} | {{ (y[0].efficiency ~ ' %') if y else '–' }} |
+        {% endfor %}
+        Spot efficiency per band of AC power, from stable stretches of your own use; the corrected stages are in the attribute `stages`.{% else %}The efficiency per power appears once the battery has run at least 0.2 kWh steadily in a band of power.{% endif %}
+      grid_options:
+        columns: full
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_house_load_profile
+      name:
+        type: entity
+      features_position: bottom
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      grid_options:
+        columns: 12
+        rows: 2
+    - type: tile
+      entity: sensor.zendure_solarflow_3000_mix_ac_usage_profile
       name:
         type: entity
       features_position: bottom

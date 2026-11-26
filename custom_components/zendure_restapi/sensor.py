@@ -937,7 +937,12 @@ class ZendureMeasureDescription(SensorEntityDescription):
 
 
 def _blocks(direction: str):
-    return lambda m: {"blocks": list(m.blocks[direction]), "basis": "AC/DC per block of at least 1 kWh, last 5"}
+    # The efficiency per band of power and its fit since v1.8.7 (profiles.py).
+    return lambda m: {
+        "blocks": list(m.blocks[direction]),
+        "basis": "AC/DC per block of at least 1 kWh, last 5",
+        **m.curve_attributes(direction),
+    }
 
 
 MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
@@ -1109,6 +1114,39 @@ MEASURE_SENSORS: tuple[ZendureMeasureDescription, ...] = (
             "basis": "median |grid - buffer| while a smart mode balances and the battery can follow, last 24 h, by time",
         },
     ),
+    # Profiles of the battery's own use (v1.8.7).
+    ZendureMeasureDescription(
+        key="house_load_profile",
+        name="House load profile",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-clock-outline",
+        value=lambda m: m.expected_house_load(),
+        attributes=lambda m: {
+            **m.house.attributes(),
+            "expected_from": m.expected_house_from(),
+            "basis": "house load (grid + battery) per quarter of the day, workdays and weekends apart; base = the low "
+                     "quartile within the quarter; coverable = stretches above Stop discharging below that lasted "
+                     "Start after or longer; covered = what the battery gave to the house; older days count less; "
+                     "expected = this quarter, else this quarter of the other kind of day, else the last quarter "
+                     "filled in the two hours before",
+        },
+    ),
+    ZendureMeasureDescription(
+        key="usage_profile",
+        name="Usage profile",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
+        icon="mdi:battery-clock-outline",
+        value=lambda m: round(m.usage.today["discharged_kwh"], 2),
+        attributes=lambda m: {
+            **m.usage.attributes(),
+            "basis": "AC charged and discharged per hour of the day, as a share of the day; older days count less",
+        },
+    ),
 )
 
 
@@ -1127,7 +1165,11 @@ class ZendureMeasureSensor(ZendureEntity, SensorEntity):
 
     entity_description: ZendureMeasureDescription
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _unrecorded_attributes = frozenset({"blocks", "cycles", "measurements", "basis", "recent"})
+    _unrecorded_attributes = frozenset({
+        "blocks", "cycles", "measurements", "basis", "recent", "curve", "stages", "loss_fit",
+        "workday_w", "weekend_w", "workday_base_w", "weekend_base_w", "today", "yesterday",
+        "charge_share_by_hour", "discharge_share_by_hour",
+    })
 
     def __init__(self, coordinator, description, device_id, model, controller) -> None:
         super().__init__(coordinator, description, device_id, model)

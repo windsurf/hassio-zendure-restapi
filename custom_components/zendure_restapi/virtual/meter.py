@@ -9,6 +9,11 @@ The real battery's power comes from its last poll, so for up to one poll
 after the real battery changes its power the house load is off by that
 change: it is the real battery's own step, not the house.
 
+How often that happens is counted (v1.8.7): a jump of the house load of at
+least PHANTOM_MIN_W while the real battery's reading stayed the same, that a
+new reading of the battery takes back within PHANTOM_S, is a phantom peak, not
+the house. The count and its energy are attributes of the house load.
+
 The meter offers what the controller reads from an external meter — data,
 updated_at, listeners — and is attached to every clone as its external
 meter. It reads; it never writes anything.
@@ -27,6 +32,10 @@ from homeassistant.util import dt as dt_util
 from ..const import EXTERNAL_STATUS_LIVE, EXTERNAL_STATUS_STALE, METER_FALLBACK_AGE
 
 _LOGGER = logging.getLogger(__name__)
+
+PHANTOM_MIN_W = 300         # a jump of the house load at least this large ...
+PHANTOM_S = 15.0            # ... taken back by the battery's next reading within this
+PHANTOM_BACK = 0.3          # back within this share of the jump
 
 
 class VirtualMeter:
@@ -54,6 +63,10 @@ class VirtualMeter:
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._subscribed: tuple[Any, Any] = (None, None)
+        # Phantom peaks (v1.8.7): a jump the battery's next reading takes back.
+        self.phantom = {"day": None, "today": 0, "total": 0, "wh_today": 0.0}
+        self._candidate: dict[str, Any] | None = None
+        self._last: tuple[datetime, float, float] | None = None   # time, house, battery
 
     # ── What the controller reads ───────────────────────────────────────
 
@@ -140,6 +153,7 @@ class VirtualMeter:
             device.step()
             delivered += device.power
         virtual = house * self._factor() - delivered
+        self._phantom(dt_util.utcnow(), house, float(battery))
         self.real_grid = float(grid)
         self.house = house
         self.data = {"power": round(virtual, 1), "house": round(house, 1), "real_grid": round(float(grid), 1)}
@@ -148,5 +162,36 @@ class VirtualMeter:
         for listener in list(self._listeners):
             listener()
 
+    def _phantom(self, now: datetime, house: float, battery: float) -> None:
+        """Count a jump of the house load that the battery's next reading takes back."""
+        day = dt_util.as_local(now).date().isoformat()
+        if self.phantom["day"] != day:
+            self.phantom.update(day=day, today=0, wh_today=0.0)
+        last, self._last = self._last, (now, house, battery)
+        candidate = self._candidate
+        if candidate is not None:
+            age = (now - candidate["at"]).total_seconds()
+            if age > PHANTOM_S:
+                self._candidate = candidate = None
+            elif battery != candidate["battery"]:
+                if abs(house - candidate["before"]) <= PHANTOM_BACK * abs(candidate["jump"]):
+                    self.phantom["today"] += 1
+                    self.phantom["total"] += 1
+                    self.phantom["wh_today"] += abs(candidate["jump"]) * age / 3600
+                self._candidate = candidate = None
+        if last is None or candidate is not None:
+            return
+        jump = house - last[1]
+        if abs(jump) >= PHANTOM_MIN_W and battery == last[2]:
+            self._candidate = {"at": now, "before": last[1], "jump": jump, "battery": battery}
+
+    def phantom_summary(self) -> dict[str, Any]:
+        return {
+            "phantom_peaks_today": self.phantom["today"],
+            "phantom_peaks": self.phantom["total"],
+            "phantom_wh_today": round(self.phantom["wh_today"], 1),
+        }
+
     def diagnostics(self) -> dict[str, Any]:
-        return {"type": self.kind, "status": self.status, "telegrams": self.telegrams, **self.data}
+        return {"type": self.kind, "status": self.status, "telegrams": self.telegrams, **self.data,
+                **self.phantom_summary()}

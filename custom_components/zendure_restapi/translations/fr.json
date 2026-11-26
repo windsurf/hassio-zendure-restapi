@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Une prise connectée sur un micro-onduleur ou un second onduleur. Les séries PV du tableau de bord l'affichent : à la place du PV de la batterie s'il n'est pas utilisé, à côté sinon. La régulation n'en a pas besoin, le compteur réseau voit déjà cette puissance.",
           "solar_energy_entity": "Son compteur kWh, pour les totaux journaliers de l'onglet History.",
-          "reset_settings": "Marges et seuils de démarrage 5 W, Arrêter la charge en dessous de 50 W, Arrêter la décharge en dessous de 50 W, Arrêter après 30 s, Démarrer après 30 s, Augmenter après 15 s, puissance de charge et de décharge min. 0 W, Seuil du mode 10 W, Seuil de correction 40 W, force de correction 80 %, Délai de changement de sens 10 s. Operation mode, puissance de charge et de décharge max., protection SOC, le compteur et Price Control restent tels quels. Dans un cluster, les réglages du groupe s'appliquent."
+          "reset_settings": "Marges, seuils, temps d'attente, puissances minimales et force de correction reviennent à leurs valeurs par défaut (voir la documentation). Operation mode, puissance de charge et de décharge max., protection SOC, le compteur et Price Control restent tels quels. Dans un cluster, les réglages du groupe s'appliquent."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copies 3, Load factor 1, écarts de SoC 0 / -20 / 15 %, temps de réponse supplémentaire 0 / 1 / 3 s, Max share 0, Operation mode Follow source, marges et seuils de démarrage 5 W, Arrêter la charge en dessous de 50 W, Arrêter la décharge en dessous de 50 W, Arrêter après 30 s, Démarrer après 30 s, Augmenter après 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Les copies continuent de tourner ; cochez aussi Réinitialiser les copies pour les démarrer avec les nouveaux écarts. Votre propre batterie et Price Control ne sont pas modifiés."
+          "reset_settings": "Chaque réglage du Virtual cluster et de ses copies revient à sa valeur par défaut (voir la documentation). Les copies continuent de tourner ; cochez aussi Réinitialiser les copies pour les démarrer avec les nouveaux écarts. Votre propre batterie et Price Control ne sont pas modifiés."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Commutations du relais"
       },
+      "house_load_profile": {
+        "name": "Profil de charge de la maison"
+      },
+      "usage_profile": {
+        "name": "Profil d'utilisation"
+      },
       "group_power": {
         "name": "Puissance de la batterie"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} signale de nouvelles propriétés",
       "description": "{device} signale {keys}, qu'il ne signalait pas auparavant. Cela suit généralement une mise à jour du firmware. Cette version n'a pas encore d'entité pour elles. Téléchargez les diagnostics (page de l'appareil → Télécharger les diagnostics) et signalez-les dans un issue pour qu'elles puissent être ajoutées. Ignorez ce message pour le fermer."
+    },
+    "stale_limit": {
+      "title": "{device} garde une limite en veille",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Arrêter {device}",
+            "description": "Operation mode est en veille, mais {device} garde charge {input} W, décharge {output} W, réglées par autre chose que cette intégration : une autre automatisation, l'app Zendure, un gestionnaire de l'appareil ou un autre Home Assistant. En veille, cette intégration ne fixe aucune limite elle-même : passer en veille envoie un seul arrêt, et un démarrage de Home Assistant en veille n'écrit rien du tout. La batterie garde donc la limite qu'elle a reçue. Validez pour arrêter la batterie une fois, comme le ferait un nouveau choix de la veille. Si la limite revient, autre chose pilote : voir la documentation sur un second régulateur."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

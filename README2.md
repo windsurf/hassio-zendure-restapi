@@ -58,16 +58,19 @@ Every SolarFlow on the local zenSDK API speaks the same protocol, so every model
 
 ### ✅ Tested setups
 
-| Device | Firmware (local API) | Meter | Home Assistant | Reported by |
-|---|---|---|---|---|
-| SolarFlow 3000 Mix AC+ | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
-| SolarFlow 2400 AC, two packs | 2.0.3 (local API 3), pack 4109 | Shelly Pro 3EM | 2026.10 | user report (issue #4) |
-| SolarFlow 2400 AC+, one pack | 2.0.2, pack 4355 | Zendure Smart Meter 3CT (V1.0.1) | 2026.10 | user report (issue #7) |
-| SolarFlow 2400 AC+, one pack | 2.0.4 | Zendure P1 meter | – | user report (issue #15), runs daily; the device sits at the edge of the Wi-Fi range |
-| SolarFlow 2400 AC+, four extra packs | – | – | – | user report (issue #18), runs with dynamic prices |
-| SolarFlow 800 Plus, two devices, AC-coupled, one phase | – | Zendure P1 meter (the smart meter behind it updates every 10 s) | – | user report (issue #8), runs as a cluster |
-| SolarFlow 3000 Mix AC+ | – | – | – | user report (discussion #11), Wi-Fi, Enphase micro-inverters |
-| SolarFlow 2400 Pro, panels on the device | 2.0.4 | Shelly Pro 3EM | – | two user reports (issues #17, #9), **experimental**: behaviour at the SOC limits is still being worked out |
+Three levels: **Validated** — measured with a trace on the device itself; **Family-supported** — the same platform as a validated model, not measured here; **User-reported** — a user ran it and reported back, with the issue or discussion.
+
+| Device | Level | Firmware (local API) | Meter | Home Assistant | Reported by |
+|---|---|---|---|---|---|
+| SolarFlow 3000 Mix AC+ | **Validated** | 3, pack 4142 | Zendure P1 meter, YouLess LS120 | 2026.10 | maintainer, daily |
+| SolarFlow 4000 Mix AC+ | **Family-supported** | – | – | – | same platform and pack as the 3000 Mix AC+ |
+| SolarFlow 2400 AC, two packs | **User-reported** | 2.0.3 (local API 3), pack 4109 | Shelly Pro 3EM | 2026.10 | user report (issue #4) |
+| SolarFlow 2400 AC+, one pack | **User-reported** | 2.0.2, pack 4355 | Zendure Smart Meter 3CT (V1.0.1) | 2026.10 | user report (issue #7) |
+| SolarFlow 2400 AC+, one pack | **User-reported** | 2.0.4 | Zendure P1 meter | – | user report (issue #15), runs daily; the device sits at the edge of the Wi-Fi range |
+| SolarFlow 2400 AC+, four extra packs | **User-reported** | – | – | – | user report (issue #18), runs with dynamic prices |
+| SolarFlow 800 Plus, two devices, AC-coupled, one phase | **User-reported** | – | Zendure P1 meter (the smart meter behind it updates every 10 s) | – | user report (issue #8), runs as a cluster |
+| SolarFlow 3000 Mix AC+ | **User-reported** | – | – | – | user report (discussion #11), Wi-Fi, Enphase micro-inverters |
+| SolarFlow 2400 Pro, panels on the device | **User-reported** | 2.0.4 | Shelly Pro 3EM | – | two user reports (issues #17, #9), **experimental**: behaviour at the SOC limits is still being worked out |
 
 Running it on another setup? Add yours in the [forum topic](https://community.home-assistant.io/t/zendure-restapi-local-zero-export-control-for-solarflow-batteries/1029076) or with a model report.
 
@@ -156,7 +159,7 @@ Model naming prefers the `product` field in the report payload, which is authori
 
 The confidence per model is listed under [Supported products](#-supported-products) at the top of this page.
 
-**Why PV on the device is experimental.** The loop reads the battery's contribution as `outputHomePower − gridInputPower`. On an AC-coupled device that is the battery and nothing else. With panels on the device's own inputs it includes their output, so what the loop treats as battery power is battery plus PV. That may well be the right quantity for holding the grid at zero, but it has not been tested, and a trace from such a device is what would settle it.
+**Why PV on the device is experimental.** The loop reads the battery's contribution as `outputHomePower − gridInputPower`. On an AC-coupled device that is the battery and nothing else. With panels on the device's own inputs it includes their output, so what the loop treats as battery power is battery plus PV. That may well be the right quantity for holding the grid at zero, but it has not been tested, and a trace from such a device is what would settle it. A user observation on a SolarFlow 2400 Pro (not measured here): with a full battery and export blocked, a model with panels on the device throttles its MPPTs down to the output limit, so a lower output limit also caps the harvest.
 
 **One battery steers at a time, unless a battery cluster steers them.** Two batteries in a smart mode would each see the whole grid deviation and correct it twice between them, so the second battery to enter a smart mode is stopped with status `blocked` and a reason naming the first. Manual, quick and standby are unaffected. One Home Assistant instance is assumed to be one grid connection. Since v1.7.0 several batteries can steer together under a **battery cluster** — up to four since v1.7.2, on any phase — see [Several batteries](#several-batteries).
 
@@ -309,7 +312,7 @@ Price control is a device of its own, linked to one battery or, since v1.8.0, to
 | Expected margin | day plan: what the plan earns over the prices known, after losses and wear | — |
 | Status | `off`, `no_price`, `no_plan`, `cheap`, `between` or `expensive`, with the fixed tariff `sun_up` or `sun_down`; the target mode and both prices as attributes, and `prices_held` / `prices_held_until` while it runs on a held price list | — |
 
-The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus two cents, without VAT. Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
+The tariff defaults are a Dutch dynamic contract in 2026: VAT of 21 % over the spot price, plus supplier surcharge and energy tax; and for export, from 2027, the spot price plus two cents, without VAT. The defaults do not change by themselves on 1 January: from 2027, set *Import surcharge* to the energy tax of 2027 plus your purchase cost ([table](#import-surcharge-per-supplier-netherlands)). Set them to your own contract, as [below](#your-tariff). Surcharges, wear and margin are per kWh including VAT.
 
 **What the price sensor holds.** The day plan works back to the bare spot price, because the formulas start there; tell it whether the sensor gives the spot price with or without VAT, or the whole import price. See [Setting up spot prices for the day plan](#setting-up-spot-prices-for-the-day-plan).
 
@@ -520,27 +523,27 @@ Import price = spot × *import factor* + *import surcharge*; export price = spot
 | Contract | Import factor | Import surcharge | Export | Net metering |
 |---|---|---|---|---|
 | Dutch dynamic contract, 2026 (default tariff) | 1.21 | energy tax + your supplier's purchase cost, incl. VAT: 0.1108481 + the [purchase cost](#import-surcharge-per-supplier-netherlands); default 0.1308481 | — | **switch on** until 31 December 2026 (default off) |
-| The same from 2027 | 1.21 | the energy tax of 2027 incl. VAT + the purchase cost | factor and surcharge from your contract, default 1.00 and 0.02 (spot + 0.02, no VAT) | off |
+| The same from 2027 | 1.21 | energy tax + purchase cost, incl. VAT: 0.10648 + the [purchase cost](#import-surcharge-per-supplier-netherlands), for instance 0.12648; set by hand, the default stays the 2026 value | factor and surcharge from your contract, default 1.00 and 0.02 (spot + 0.02, no VAT) | off |
 | Other country | 1 + VAT rate, see [other countries](#other-countries) | grid fees, taxes and supplier surcharge per kWh, incl. VAT | factor and surcharge from your contract | off |
 
 Your supplier's price page or invoice lists the surcharge and the energy tax per kWh. A supplier that adds a percentage on top of the spot price instead of a fixed amount: multiply it into the import factor, for instance 1.21 × 1.02. Contract bonuses (such as a bonus on solar feed-in) are paid on the invoice and are left out of the day plan.
 
 ##### Import surcharge per supplier (Netherlands)
 
-On a Dutch dynamic contract the import price per kWh is **spot price × 1.21 + energy tax + purchase cost**. The spot price is the day-ahead price excl. VAT (EPEX Spot *Market price*), and 1.21 adds 21 % VAT. The energy tax is the same for every supplier: in 2026 € 0.09161 per kWh excl. VAT, **€ 0.1108481 incl. VAT**. The purchase cost is your supplier's fixed fee per kWh, incl. VAT. Enter the last two columns in Price Control. **Valid until 31 December 2026.**
+On a Dutch dynamic contract the import price per kWh is **spot price × 1.21 + energy tax + purchase cost**. The spot price is the day-ahead price excl. VAT (EPEX Spot *Market price*), and 1.21 adds 21 % VAT. The energy tax is the same for every supplier: in 2026 € 0.09161 per kWh excl. VAT, **€ 0.1108481 incl. VAT**; in 2027 € 0.08800 per kWh excl. VAT, **€ 0.10648 incl. VAT** (Tax Plan 2027 as presented in September 2026; check the final rate on your supplier's price page in January). The purchase cost is your supplier's fixed fee per kWh, incl. VAT. Enter the import factor and the surcharge of the year in Price Control; the 2027 column applies from 1 January 2027 and is not switched by the integration.
 
-| Supplier | Purchase cost per kWh | Import factor | Import surcharge |
-|---|---|---|---|
-| Budget Thuis | 0.0170 | 1.21 | 0.1278481 |
-| Zonneplan | 0.0200 | 1.21 | 0.1308481 |
-| Pure Energie | 0.0200 | 1.21 | 0.1308481 |
-| Vandebron | 0.0260 | 1.21 | 0.1368481 |
-| Powerpeers | 0.0090 | 1.21 | 0.1198481 |
-| Vattenfall | 0.0260 | 1.21 | 0.1368481 |
-| Energiedirect | 0.0210 | 1.21 | 0.1318481 |
-| Essent | 0.0250 | 1.21 | 0.1358481 |
-| Noord Energie | 0.0190 | 1.21 | 0.1298481 |
-| Energiek | 0.0180 | 1.21 | 0.1288481 |
+| Supplier | Purchase cost per kWh | Import factor | Import surcharge 2026 | Import surcharge 2027 |
+|---|---|---|---|---|
+| Budget Thuis | 0.0170 | 1.21 | 0.1278481 | 0.12348 |
+| Zonneplan | 0.0200 | 1.21 | 0.1308481 | 0.12648 |
+| Pure Energie | 0.0200 | 1.21 | 0.1308481 | 0.12648 |
+| Vandebron | 0.0260 | 1.21 | 0.1368481 | 0.13248 |
+| Powerpeers | 0.0090 | 1.21 | 0.1198481 | 0.11548 |
+| Vattenfall | 0.0260 | 1.21 | 0.1368481 | 0.13248 |
+| Energiedirect | 0.0210 | 1.21 | 0.1318481 | 0.12748 |
+| Essent | 0.0250 | 1.21 | 0.1358481 | 0.13148 |
+| Noord Energie | 0.0190 | 1.21 | 0.1298481 | 0.12548 |
+| Energiek | 0.0180 | 1.21 | 0.1288481 | 0.12448 |
 
 Source: [energievergelijk.nl, dynamic energy contracts](https://www.energievergelijk.nl/dynamisch-energiecontract), purchase costs per kWh as published in October 2026, the ten lowest monthly costs. Prices change; what counts is your own contract. Standing charges and the tax reduction (*heffingskorting*) are per month or per year and do not change a plan per quarter, so they are left out. From 1 January 2027 the energy tax changes: the import surcharge becomes the new energy tax incl. VAT + the purchase cost, and *Net metering* goes off.
 
@@ -756,7 +759,7 @@ Everything about it — setting up, how it regulates, its entities, its status a
 
 *v1.7.1.* A **Virtual cluster** shows what a cluster would do in your house without a second battery: up to three copies of one of your batteries under a cluster of their own, steering on a virtual P1 meter — a device of its own: the house load times a *Load factor*, minus what the copies deliver. Each copy runs this integration's own controller on a model of the device, with the real battery's tuning. Nothing is written to the real battery and it is never `blocked`; the test costs only computing power. Add it under *Add integration → Zendure RestAPI → Virtual cluster (simulated)*. Guide: **[docs/virtual_cluster.md](./docs/virtual_cluster.md)**.
 
-The cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster`): a *Cluster* tab in the layout of the battery dashboard (v1.7.2) — tiles, one status text, gauges, the distribution over primary and secondaries, the group's settings as sliders and a chart of today and tomorrow — and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets a dashboard of its own, **Virtual Cluster** (`/virtual-cluster/virtual-cluster`, v1.7.3), with a tab per copy (*Virtual copy 1, 2, 3*) and none for the real battery, which keeps its own. The tabs carry an icon, numbered for the batteries and copies. Each is made once; after a change in the group a notification offers *Rebuild dashboard*, which touches only that kind's dashboard. Two sample files show both dashboards as the integration builds them, with the default entity ids and each with its *Price Control* tab: `dashboard/battery_cluster.yaml` for a battery cluster of one SolarFlow 3000 Mix AC+ (since v1.8.0) and `dashboard/virtual_cluster.yaml` (since v1.7.4) for three copies. A reference of the layout, or to paste into the raw configuration editor by hand; `scripts/build_dashboard_yaml.py` generates them with the integration's own code.
+The cluster gets the dashboard **Cluster** (`/zendure-cluster/zendure-cluster`): a *Cluster* tab in the layout of the battery dashboard (v1.7.2) — tiles, one status text, gauges, the distribution over primary and secondaries and the group's settings as sliders — then *Price Control* when the cluster has its own, *History* with the group over 30 minutes to 30 days (v1.8.7), and a tab per battery like the first page of the battery dashboard. The Virtual cluster gets a dashboard of its own, **Virtual Cluster** (`/virtual-cluster/virtual-cluster`, v1.7.3), with a tab per copy (*Virtual copy 1, 2, 3*) and none for the real battery, which keeps its own. The tabs carry an icon, numbered for the batteries and copies. Each is made once; after a change in the group a notification offers *Rebuild dashboard*, which touches only that kind's dashboard. Two sample files show both dashboards as the integration builds them, with the default entity ids and each with its *Price Control* tab. The chart of today and tomorrow is on the *Price Control* tab; a cluster without one has it on top of *History* (v1.8.7): `dashboard/battery_cluster.yaml` for a battery cluster of one SolarFlow 3000 Mix AC+ (since v1.8.0) and `dashboard/virtual_cluster.yaml` (since v1.7.4) for three copies. A reference of the layout, or to paste into the raw configuration editor by hand; `scripts/build_dashboard_yaml.py` generates them with the integration's own code.
 
 <a id="how-the-controller-works"></a>
 
@@ -825,6 +828,8 @@ Both are settings rather than constants because the right value is a property of
 
 **On a noisy meter the threshold follows the noise** (v1.8.4). Some meters jump by a hundred watts or more from one reading to the next while the house does not change. Below that, every reading looks like an error, and the battery chases the noise with a write almost every second. The trim loop therefore keeps the median step of the meter over its last 300 readings and ignores a correction smaller than twice that step; `Trim threshold` stays the floor, and a higher value you set yourself always wins. A quiet meter, a step of a few watts, keeps 40 W; a meter with steps of about 90 W gets about 180 W. The controller status shows both as attributes: `meter_noise_w`, the median step, and `trim_threshold_w`, the threshold in use. A change of meter starts the count again. The mode loop and starting are not affected.
 
+**Advice for `Mode threshold`** (v1.8.7). From the same readings the controller status shows `mode_threshold_advice_w`: the upper quartile of the meter's step per reading, rounded up to 5 W and never under the default 10 W. It is advice only; the setting stays yours. A quiet meter shows 10 W.
+
 **A gain**, `Trim strength`, default 80%. Below 100 for the reason any feedback loop is: the bookkeeping removes double-counting, not the meter's own delay.
 
 That setting kept its name and its entity id through the rewrite, but its meaning changed: it used to be 80% of the *deviation*, applied upward only, with downward corrections always at full strength. It is now 80% of the *remaining* error — remaining after subtracting what is already on order — in both directions. The asymmetry is gone because the bookkeeping makes it unnecessary: a downward correction can no more be ordered twice than an upward one. The id was left alone deliberately; renaming it would break every dashboard and template that references it, and this integration has been bitten by that before.
@@ -864,6 +869,8 @@ The limits go to zero whether or not this controller set them — selecting stan
 That is also what keeps the `writer` column in the trace meaningful: outside that one command, every limit change in `standby` came from somewhere else. A change across a device restart reads `restart` (v1.6.8): those are the limits the battery kept in flash, see [What happens with a Zendure firmware upgrade](#what-happens-with-a-zendure-firmware-upgrade).
 
 **Choosing standby again sends the command again** (v1.6.8). It skips what the battery already holds, so it writes nothing when nothing is wrong.
+
+**A limit left behind in standby** (v1.8.7). In standby this integration sets no limits of its own: switching to standby sends one stop, and a start of Home Assistant in standby writes nothing at all. So a limit that another automation, the Zendure app, a manager on the device or another Home Assistant leaves behind keeps the battery running. When a limit above zero that this integration did not write is still there after five minutes, a repair appears under *Settings → Repairs*: *… keeps a limit in standby*. Submitting it stops the battery once, as choosing standby again would; standby itself still writes nothing by itself. A restart holding a limit has a repair of its own. If the limit comes back, something else is steering: see *Second controller* above. A second Home Assistant on the same battery, such as a test installation next to your own, counts as something else: do not submit the notification there, as that stops the battery under the other one.
 
 **A limit this integration wrote is stopped even if the report does not show it yet** (v1.7.0; v1.6.10 on the stable line). The report can lag behind a write. If you switch to standby right after the integration wrote a limit, the last report may still read 0; skipping the command as a no-op would leave the battery running at that limit while the status reads *passive*. When this integration wrote a limit, the command is therefore sent in full (both limits and `smartMode`), whatever the last report shows. A battery this integration wrote nothing to is still left alone when it already rests.
 
@@ -994,7 +1001,7 @@ Below the lower SOC bound the battery is charged back regardless of strategy, ex
 - **Full stays full until the upper bound − 5.** Likewise, after *upper limit* the smart modes charge again only from *socSet* − 5 (95 % with an upper bound of 100 %). Discharging stays open. The cost: up to 5 % of the capacity that a little more sun could have filled goes to the grid instead.
 - **In a battery cluster** a battery held empty or full counts as such for the distribution: it gets no discharging or charging share until it is past the margin.
 - **The status says where it opens again:** `discharging blocked: battery empty (lower limit), discharges again from 15 %`.
-- **The device's own protection is left alone.** At its lower bound the device may set a small charge limit itself (about 27 W measured on a SolarFlow 800 Plus) to charge from the grid. A battery held at 0 no longer writes 0 over that every cycle, and such a 0 does not count as a *lost write*.
+- **The device's own protection is left alone.** At its lower bound the device may set a small charge limit itself (about 27 W measured on a SolarFlow 800 Plus) to charge from the grid. A battery held at 0 no longer writes 0 over that every cycle, and such a 0 does not count as a *lost write*. A limit of that size the integration wrote itself is not the device's: that one goes to 0 (v1.8.7).
 - **What does not change:** `quick_*` and `manual` keep the operator's order at a bound, as before; an automation or planner that steers with those modes keeps its own limits. The 5 points are fixed.
 
 #### SOC protection: when and at what price
@@ -1230,6 +1237,9 @@ Which of the two you want depends on the question. Planning purchases in metered
 
 Short windows are unreliable here: window 2 spans nine points, where rounding of the whole-percent scale weighs heavily. The two long windows, 60 and 91 points, are the ones to trust.
 
+<a id="measured-diagnostics"></a>
+
+
 ---
 
 <a id="measured-diagnostics"></a>
@@ -1256,6 +1266,11 @@ The sensors sit on the battery device as diagnostics; *Realized margin* sits on 
 | Followed peaks | rises of at least 500 W of a running discharge that came back within 60 s: today the count, the energy the grid gave and took meanwhile and the longest, and the total (v1.8.3) | a smart mode | *Raise after* |
 | Relay switches | starts from standstill and changes of direction the integration ordered, in every mode; today per kind, and *short*: runs that stopped or turned again within 2 minutes, the trace of hunting (v1.7.4). Counted from what the integration writes, not heard: whether a relay clicks each time is not reported by the device and differs per model, and what the device switches by itself is not counted, so the count is an upper limit and the figure to compare between settings | every direction write |
 | Realized margin | today: what discharging brought in minus what charging cost, at the prices of each moment, plus the change in stored energy at the day's average import price after discharge loss | with a Price Control entry that has a price, whoever steers the battery | against *Expected margin* |
+| Efficiency per power (attributes of Measured charge and discharge efficiency, v1.8.7) | `curve`: the spot efficiency per band of AC power (from 50 W up to 3000 W and above, a power counting at the nearest band edge), only from stretches where the AC power held within 5 % (or 20 W) for 15 s; `loss_fit`: the loss as a + b·P + c·P² over the bands, weighted by energy; `round_trip_factor`: the square root of the measured round trip against the product of the spot figures, applied to both sides; `stages`: power and corrected efficiency from 250 W, only within the bands measured, the format a planner that takes stages per power reads | a band from 0.2 kWh AC; the fit from two bands of which the highest power is at least twice the lowest (linear), or three bands and four times (quadratic); bands closer together give no fit and no stages; the correction once there is a round trip | which power is worth charging and discharging at; the efficiency settings of Price Control |
+| House load profile (v1.8.7) | the house load (grid plus battery) per quarter of the day, workdays and weekends apart: the average and the low quartile within the quarter (base load); per day the house energy, the energy above *Stop discharging below* in stretches that lasted *Start after* or longer (coverable), and what the battery gave to the house (covered); state: what the profile expects for this quarter, else for this quarter of the other kind of day, else the last quarter filled in the two hours before; `expected_from` says which (`profile`, `other_days`, `earlier_quarter`) | every meter reading with a battery reading less than a minute old; a quarter from ten minutes of readings | the expected house load of Price Control; how much of the house a battery can cover at all |
+| Usage profile (v1.8.7) | AC charged and discharged per hour of the day, as a share; state: discharged today | every battery poll | when the battery works; on a cluster the status carries the group's hours |
+
+The three profiles of v1.8.7 learn while the battery runs and let older days count less: every sum fades with a half-life of 30 days, the quarters and hours of the profiles take a new day in at one seventh. On the History tab of the battery dashboard, *Reference and profiles* shows the reference figures of the model next to this battery's own, and the efficiency per band of power as a table.
 
 **Blocks and cycles.** A block is a stretch of charging or discharging; a pause of up to two minutes does not end it. A SOC bound counts when the device flags it (*SOC limit status*) or when the battery stands still at its lower or upper SOC limit. The day plan stops at the lower limit itself, so the device never flags it there.
 
@@ -1306,7 +1321,7 @@ Until v1.6.3 a direction change went out as up to four requests a few millisecon
 | **Per pack** (*Pack N …*) | 12 + 1 | Model, Current, Max cell voltage, Min cell voltage, Power, State, State of charge, Temperature, Voltage · *disabled by default:* Firmware version, Type, Serial number · binary sensor: Heating |
 | **Energy** | 5 | Energy charged, Energy discharged, PV energy, Energy imported, Energy exported |
 | **Efficiency** | 2 | Charge efficiency, Discharge efficiency |
-| **Measured** | 13 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes, Skipped peaks, Followed peaks, Relay switches |
+| **Measured** | 15 | Measured charge efficiency, Measured discharge efficiency, Round trip efficiency AC, Round trip efficiency DC, Usable capacity, Full cycles, Standby draw, Response time, Grid tracking error, Lost writes, Skipped peaks, Followed peaks, Relay switches, House load profile, Usage profile |
 | **Binary sensor** | 13 | Data ready, Dry contact, Error, Fan, Grid connected, Heating, Lamp, Pass-through, Reverse flow, Second controller · *disabled by default:* HV battery control, PV-AC coupling, SOC compensation |
 | **Number** | 7 | Charge limit (AC), Charge power limit, Discharge limit, Inverter power limit, Lower SOC limit, Upper SOC limit · *disabled by default:* Calibration interval |
 | **Select** | 5 | Backup mode, Converter mode, PV export · *disabled by default:* Fan speed mode, Grid standard |
@@ -1492,6 +1507,11 @@ Since v1.6.8 the repository has a `tests/` folder. The tests pin thirteen things
 - **A dashboard per battery** (v1.8.4): one battery `/zendure-restapi` titled Zendure RestAPI; more than one each at the last four of the serial, titled with the name and the last four; an address kept when a battery is added, only the title follows; a title of your own left alone; not made unasked where no dashboard was wanted.
 - **SOC protection in the status** (v1.8.4): a wait is added to the status text once, not while charging.
 - **SoC balance** (v1.8.5): discharge starts on the fullest, charge on the emptiest, priority first; the primary stays within the balance and changes beyond it only when a direction starts, never while it runs, but an empty one is still replaced; 0 is the choice of before; the secondaries share the same total by energy; energy counts the lower SOC limit and the capacity.
+- **What goes to GitHub** (v1.8.7): no work codes, paragraph signs or local paths in any file; only fictional serial numbers; no private addresses or email; one version in the manifest, the code and the example dashboards; a changelog section for that version; every text in every language; every link to a heading finds it.
+- **Adding an entry** (v1.8.7): a battery gets its data and the dashboard request, or is never offered one when unticked; a meter is added as a meter; a Price Control expects the spot price excl. VAT.
+- **One source for the defaults** (v1.8.7): the day plan takes its defaults from the settings; the tables in this document show the same numbers; the reset texts name no numbers in any language; Price Control keeps a surcharge to seven decimals.
+- **Profiles** (v1.8.7): the efficiency per band of power only from stable stretches, the fit of the loss on a published curve, the round-trip correction, fading with the days; the house load per quarter with its base load; coverable load only after *Start after*; usage per hour, and the group's sum; *Mode threshold* advice.
+- **Visible** (v1.8.7): the reference section on History and its removal without measured diagnostics; the cluster's History tab; the repair for a limit left behind in standby and its one stop; phantom peaks in the virtual P1 meter.
 - **SOC protection thresholds** (v1.8.6): one point under the floor charges nothing, with `direct` and `price_control`, on a battery and on a cluster; two points under starts (direct, or the wait of `price_control`); three points under charges at once.
 - **SOC protection of a cluster at the cheapest price** (v1.8.1): it waits for the cheapest period within 6 hours of its own Price control, charges at once without prices, after 6 hours or 2 points under the floor, carries on once it charges, and forgets the wait when a battery is back above its floor; a fault of a battery shows as a badge on the Cluster tab, a Virtual cluster gets none.
 - **Raise after** (v1.8.3): 15 s by default; a 10 s peak on a running discharge is held at the running limit and counted as a skipped peak while running; a held rise under 500 W is not counted; a load that stays is followed after the time; lower and a rise within the margin (a fifth of the limit, at least 100 W) go at once; 0 follows at once as before; charging is not held; the trim loop holds too; a followed peak is counted with its export, a long load, a rise under 500 W and a rise while charging are not; a battery in a cluster follows the cluster's *Raise after*, alone its own; the cluster status adds up the counts of its batteries.
@@ -1580,6 +1600,24 @@ Nothing breaks, but two things follow. In `quick_charge` at the top the discharg
 
 Recent releases are listed in full. Earlier ones are grouped by minor version, keeping the findings and the fixes that changed behaviour and dropping the housekeeping.
 
+### v1.8.7 — Measured profiles, a History tab for the cluster, sturdier releases
+
+**One change in the control: at its lower bound a battery stops a small charge the integration wrote itself.** Besides that, the battery measures more of its own use, the cluster gets its history, a limit left behind in standby gets a repair, and the documentation is split up.
+
+- **A small charge of its own does not linger at the lower bound:** a battery held at 0 at its lower bound left a charge limit of up to 50 W standing, as the device's own protection (since v1.7.5). A limit of that size the integration wrote itself — a battery of a cluster that was given 50 W to charge and then 0 — now goes to 0 as well, within one poll; before, it kept charging at that limit until the cluster gave it something else. A limit the device set itself is still left alone. Seen on the copies of a Virtual cluster at 4 % with a floor of 5 %. Replay of that case: before, the battery charged on for all 11 minutes; now it stops at the next poll; the cluster nights of the replay are unchanged.
+- **Efficiency per power:** *Measured charge efficiency* and *Measured discharge efficiency* carry the efficiency per band of AC power (`curve`), only from stable stretches; a fit of the loss as a + b·P + c·P² (`loss_fit`); and the curve corrected by the measured round trip (`round_trip_factor`, `stages`). A fit only from bands that differ in power, stages only within the bands measured. See [Measured diagnostics](#measured-diagnostics).
+- **House load profile** (new sensor): the house load per quarter of the day, workdays and weekends apart, with the base load; on a quarter not yet learned the same quarter of the other kind of day or the quarter before (`expected_from`); per day the load the battery could cover and what it did cover.
+- **Usage profile** (new sensor): charging and discharging per hour of the day; the cluster status carries the group's hours.
+- **Advice for Mode threshold:** `mode_threshold_advice_w` in the controller status, from the meter's own step. Advice only.
+- **Reference and profiles** on the battery dashboard's History tab: the reference figures of the model next to this battery's own, and the efficiency per band of power.
+- **History on the cluster dashboard:** the grid, the group discharging and charging, its state of charge and each battery's over 30 minutes, 4 hours, 24 hours and 30 days, in the colours of the battery dashboard (each battery's state of charge in a shade of its purple), and drawn as there: 30 minutes and 4 hours with straight lines through the samples averaged per 10 s and per minute, 24 hours from the statistics per 5 minutes, and 30 days as bars of energy charged and discharged per day, the batteries stacked (power per hour for a Virtual cluster, whose copies have no energy counters). The chart of today and tomorrow leaves the *Cluster* tab: it is on the *Price Control* tab, or on top of *History* when the cluster has no Price Control of its own.
+- **A limit left behind in standby:** after five minutes a repair, which stops the battery once when submitted. Standby itself still writes nothing.
+- **Phantom peaks** of the virtual P1 meter counted on its *House load* sensor.
+- **Reset settings** names no numbers any more, in any language: the defaults are in the documentation.
+- **Energy tax 2027** in the tariff tables: the import surcharge per supplier for 2026 and 2027. The default stays the 2026 value; set your own from 1 January.
+- **Documentation:** *Tested setups* names a level per device (Validated, Family-supported, User-reported); a note on models with panels on the device.
+- **Tests on every release:** what goes to GitHub, adding an entry, one source for the defaults, the profiles; a charge limit of the integration's own at the lower bound goes to 0, for a single battery and for a battery of a cluster, while the device's own stays.
+
 ### v1.8.6 — SOC protection leaves the device's own drop alone
 
 **An empty battery no longer charges from the grid just because the device reports one point under its lower bound at rest.**
@@ -1652,7 +1690,7 @@ See [SoC balance](./docs/cluster.md#how-it-regulates).
 **Price control can steer a battery cluster or a Virtual cluster: one day plan for all its batteries together.** Nothing changes for a battery that has its own Price control.
 
 - **Price control for a cluster:** when you add Price control you can choose a battery cluster or a Virtual cluster as well as a battery. The day plan adds up the usable and stored energy of the batteries taking part and the power the cluster may ask of each, and Price control writes the cluster's Operation mode; the cluster divides it over its batteries. On a Virtual cluster this gives a day plan for batteries you do not own; it leaves *Follow source* the moment Price control writes a mode. See [For a battery cluster or a Virtual cluster](#for-a-battery-cluster-or-a-virtual-cluster).
-- **PV on the cluster dashboard:** the chart of today and tomorrow shows the solar power as the amber *PV* series of the battery dashboard, from the source each battery uses there: the solar sensor chosen under its **Configure**, otherwise its own PV once that has produced something. A Virtual cluster shows the PV of your battery; the copies have none. Display only. Tick *Rebuild dashboard* on the cluster.
+- **PV on the cluster dashboard:** the chart of today and tomorrow and every span of the *History* tab show the solar power as the amber *PV* series of the battery dashboard, from the source each battery uses there: the solar sensor chosen under its **Configure**, otherwise its own PV once that has produced something. A Virtual cluster shows the PV of your battery; the copies have none. Display only. Tick *Rebuild dashboard* on the cluster.
 - **Docs: in the HACS default list.** Install by searching for *Zendure RestAPI* in the Marketplace (Home Assistant 2026.11 or later) or in HACS; no custom repository needed.
 - **Disclaimer:** spelled out: what the integration writes to the battery, that a written limit keeps running when Home Assistant stops, and who is responsible for the installation and its settings.
 - **Docs: supported products and tested setups.** The DC solar inputs per model, the 800 Plus and the 2400 Pro on a line of their own, and the setups users reported since.

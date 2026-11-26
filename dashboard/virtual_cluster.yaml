@@ -1,5 +1,5 @@
 # ============================================================
-# VIRTUAL CLUSTER DASHBOARD - v1.8.6
+# VIRTUAL CLUSTER DASHBOARD - v1.8.7
 # ============================================================
 #
 # The dashboard "Virtual Cluster" as the integration builds it
@@ -372,209 +372,6 @@ views:
       grid_options:
         columns: 6
         rows: 2
-  - type: grid
-    column_span: 4
-    cards:
-    - type: heading
-      heading: Today and tomorrow
-      heading_style: title
-      icon: mdi:chart-line
-    - type: custom:apexcharts-card
-      graph_span: 48h
-      span:
-        start: day
-      now:
-        show: true
-        label: Now
-      header:
-        show: false
-      yaxis:
-      - id: power
-        min: '~0'
-        decimals: 0
-        align_to: 1500
-        apex_config:
-          stepSize: 1500
-          labels:
-            formatter: 'EVAL:function (v) { return Math.round(v) % 3000 === 0 ? Math.round(v) : ""; }'
-      - id: soc
-        opposite: true
-        min: 0
-        max: 100
-        decimals: 0
-        apex_config:
-          tickAmount: 4
-          labels:
-            style:
-              fontSize: 10px
-      apex_config:
-        chart:
-          height: 240
-        legend:
-          show: true
-        tooltip:
-          x:
-            format: dd-MM HH:mm
-        grid:
-          borderColor: rgba(127, 127, 127, 0.25)
-          strokeDashArray: 0
-        fill:
-          type: solid
-      series:
-      - entity: sensor.virtual_p1_meter_grid_power
-        name: Virtual P1
-        type: area
-        unit: W
-        color: '#1E88E5'
-        stroke_width: 1
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        opacity: 0.3
-      - entity: sensor.virtual_cluster_battery_power
-        name: Discharging
-        type: area
-        unit: W
-        color: '#4CAF50'
-        stroke_width: 1
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        opacity: 0.3
-        transform: 'return x > 0 ? x : 0;'
-      - entity: sensor.virtual_cluster_battery_power
-        name: Charging
-        type: area
-        unit: W
-        color: '#E53935'
-        stroke_width: 1
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        opacity: 0.3
-        transform: 'return x < 0 ? x : 0;'
-      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
-        name: PV
-        type: area
-        unit: W
-        color: '#FFB300'
-        stroke_width: 1
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        opacity: 0.3
-      - entity: sensor.zendure_solarflow_3000_mix_ac_battery_power
-        name: Real battery
-        type: line
-        unit: W
-        color: '#757575'
-        stroke_width: 1.5
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-      - entity: sensor.price_control_virtual_cluster_plan
-        name: Plan (cluster)
-        type: line
-        unit: W
-        stroke_width: 1.5
-        curve: stepline
-        float_precision: 0
-        color: '#757575'
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: power
-        data_generator: |
-          const a = entity.attributes;
-          const now = Date.now();
-          const pts = [[now, 0, 0]];
-          [...(a.charge_periods || []), ...(a.discharge_periods || [])].forEach(r => {
-            pts.push([Math.max(new Date(r.start).getTime(), now), r.power, 1]);
-            pts.push([new Date(r.end).getTime(), 0, 0]);
-          });
-          if (a.plan_until) pts.push([new Date(a.plan_until).getTime(), 0, 0]);
-          pts.sort((x, y) => x[0] - y[0] || x[2] - y[2]);
-          return pts.map(p => [p[0], p[1]]);
-      - entity: sensor.virtual_cluster_state_of_charge
-        name: SoC cluster
-        type: line
-        unit: '%'
-        color: '#9575CD'
-        stroke_width: 2
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: soc
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        stroke_dash: 4
-      - entity: sensor.zendure_solarflow_3000_mix_ac_state_of_charge
-        name: SoC real
-        type: line
-        unit: '%'
-        color: '#757575'
-        stroke_width: 1.5
-        curve: monotoneCubic
-        float_precision: 0
-        extend_to: now
-        show:
-          in_header: false
-          legend_value: false
-        yaxis_id: soc
-        statistics:
-          type: mean
-          period: 5minute
-          align: middle
-        stroke_dash: 2
-      grid_options:
-        columns: full
-        rows: auto
-      hours_12: false
 - title: Price Control
   path: price-control
   icon: mdi:cash-clock
@@ -1187,6 +984,740 @@ views:
       - condition: state
         entity: select.price_control_virtual_cluster_decision
         state: day_plan
+- title: History
+  path: history
+  icon: mdi:chart-areaspline
+  type: sections
+  max_columns: 4
+  sections:
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 30 minutes
+      heading_style: title
+      icon: mdi:chart-line
+    - type: custom:apexcharts-card
+      graph_span: 30min
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
+        tooltip:
+          x:
+            format: HH:mm:ss
+      series:
+      - entity: sensor.virtual_p1_meter_grid_power
+        name: Virtual P1
+        type: area
+        unit: W
+        color: '#1E88E5'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_cluster_battery_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        transform: 'return x > 0 ? x : 0;'
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_cluster_battery_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        transform: 'return x < 0 ? x : 0;'
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_cluster_state_of_charge
+        name: SoC cluster
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        stroke_dash: 4
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_copy_1_state_of_charge
+        name: SoC Virtual copy 1
+        type: line
+        unit: '%'
+        color: '#B39DDB'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_copy_2_state_of_charge
+        name: SoC Virtual copy 2
+        type: line
+        unit: '%'
+        color: '#7E57C2'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      - entity: sensor.virtual_copy_3_state_of_charge
+        name: SoC Virtual copy 3
+        type: line
+        unit: '%'
+        color: '#5E35B1'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 10s
+          fill: last
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+      update_interval: 10s
+      now:
+        show: true
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 4 hours
+      heading_style: title
+      icon: mdi:chart-line
+    - type: custom:apexcharts-card
+      graph_span: 4h
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
+        tooltip:
+          x:
+            format: HH:mm
+      series:
+      - entity: sensor.virtual_p1_meter_grid_power
+        name: Virtual P1
+        type: area
+        unit: W
+        color: '#1E88E5'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_cluster_battery_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        transform: 'return x > 0 ? x : 0;'
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_cluster_battery_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        transform: 'return x < 0 ? x : 0;'
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        opacity: 0.3
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_cluster_state_of_charge
+        name: SoC cluster
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 2
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        stroke_dash: 4
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_copy_1_state_of_charge
+        name: SoC Virtual copy 1
+        type: line
+        unit: '%'
+        color: '#B39DDB'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_copy_2_state_of_charge
+        name: SoC Virtual copy 2
+        type: line
+        unit: '%'
+        color: '#7E57C2'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      - entity: sensor.virtual_copy_3_state_of_charge
+        name: SoC Virtual copy 3
+        type: line
+        unit: '%'
+        color: '#5E35B1'
+        stroke_width: 1
+        curve: straight
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        group_by:
+          func: avg
+          duration: 1min
+          fill: last
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+      update_interval: 1min
+      now:
+        show: true
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 24 hours
+      heading_style: title
+      icon: mdi:chart-line
+    - type: custom:apexcharts-card
+      graph_span: 24h
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
+      series:
+      - entity: sensor.virtual_p1_meter_grid_power
+        name: Virtual P1
+        type: area
+        unit: W
+        color: '#1E88E5'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+      - entity: sensor.virtual_cluster_battery_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+        transform: 'return x > 0 ? x : 0;'
+      - entity: sensor.virtual_cluster_battery_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+        transform: 'return x < 0 ? x : 0;'
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        opacity: 0.3
+      - entity: sensor.virtual_cluster_state_of_charge
+        name: SoC cluster
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 2
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+        stroke_dash: 4
+      - entity: sensor.virtual_copy_1_state_of_charge
+        name: SoC Virtual copy 1
+        type: line
+        unit: '%'
+        color: '#B39DDB'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      - entity: sensor.virtual_copy_2_state_of_charge
+        name: SoC Virtual copy 2
+        type: line
+        unit: '%'
+        color: '#7E57C2'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      - entity: sensor.virtual_copy_3_state_of_charge
+        name: SoC Virtual copy 3
+        type: line
+        unit: '%'
+        color: '#5E35B1'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: 5minute
+          align: middle
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
+  - type: grid
+    column_span: 4
+    cards:
+    - type: heading
+      heading: Last 30 days
+      heading_style: title
+      icon: mdi:chart-line
+    - type: custom:apexcharts-card
+      graph_span: 30d
+      header:
+        show: false
+      yaxis:
+      - id: power
+        decimals: 0
+      - id: soc
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      apex_config:
+        chart:
+          height: 240
+        legend:
+          show: true
+        grid:
+          borderColor: rgba(127, 127, 127, 0.25)
+          strokeDashArray: 0
+        fill:
+          type: solid
+      series:
+      - entity: sensor.virtual_p1_meter_grid_power
+        name: Virtual P1
+        type: area
+        unit: W
+        color: '#1E88E5'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+        opacity: 0.3
+      - entity: sensor.virtual_cluster_battery_power
+        name: Discharging
+        type: area
+        unit: W
+        color: '#4CAF50'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+        opacity: 0.3
+        transform: 'return x > 0 ? x : 0;'
+      - entity: sensor.virtual_cluster_battery_power
+        name: Charging
+        type: area
+        unit: W
+        color: '#E53935'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+        opacity: 0.3
+        transform: 'return x < 0 ? x : 0;'
+      - entity: sensor.zendure_solarflow_3000_mix_ac_pv_input_power
+        name: PV
+        type: area
+        unit: W
+        color: '#FFB300'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: power
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+        opacity: 0.3
+      - entity: sensor.virtual_cluster_state_of_charge
+        name: SoC cluster
+        type: line
+        unit: '%'
+        color: '#9575CD'
+        stroke_width: 2
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+        stroke_dash: 4
+      - entity: sensor.virtual_copy_1_state_of_charge
+        name: SoC Virtual copy 1
+        type: line
+        unit: '%'
+        color: '#B39DDB'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+      - entity: sensor.virtual_copy_2_state_of_charge
+        name: SoC Virtual copy 2
+        type: line
+        unit: '%'
+        color: '#7E57C2'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+      - entity: sensor.virtual_copy_3_state_of_charge
+        name: SoC Virtual copy 3
+        type: line
+        unit: '%'
+        color: '#5E35B1'
+        stroke_width: 1
+        curve: monotoneCubic
+        float_precision: 0
+        extend_to: now
+        show:
+          in_header: false
+          legend_value: false
+        yaxis_id: soc
+        statistics:
+          type: mean
+          period: hour
+          align: middle
+      grid_options:
+        columns: full
+        rows: auto
+      hours_12: false
 - title: Virtual copy 1
   path: virtual_copy_1
   icon: mdi:numeric-1-box-outline

@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Een slimme stekker aan een micro-omvormer of een tweede omvormer. De PV-series van het dashboard tonen hem: in plaats van de eigen PV van de batterij als die niet in gebruik is, anders ernaast. Voor het sturen is hij niet nodig, de netmeter ziet dit vermogen al.",
           "solar_energy_entity": "De kWh-teller ervan, voor de dagtotalen op het tabblad History.",
-          "reset_settings": "Buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Verhogen na 15 s, Min. laadvermogen en Min. ontlaadvermogen 0 W, Drempel modus 10 W, Drempel bijsturen 40 W, Bijstuursterkte 80 %, Wachttijd bij richtingwissel 10 s. Operation mode, Max. laadvermogen en Max. ontlaadvermogen, SOC-bescherming, de meter en Price Control blijven zoals ze zijn. In een cluster gelden de instellingen van de groep."
+          "reset_settings": "Buffers, drempels, wachttijden, minimale vermogens en bijstuursterkte terug naar hun standaardwaarde (zie de documentatie). Operation mode, Max. laadvermogen en Max. ontlaadvermogen, SOC-bescherming, de meter en Price Control blijven zoals ze zijn. In een cluster gelden de instellingen van de groep."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "De kopieën stoppen, beide limieten gaan naar 0, en elke kopie begint opnieuw op de laadtoestand van je batterij plus zijn SoC-afwijking.",
-          "reset_settings": "Kopieën 3, Load factor 1, SoC-afwijkingen 0 / -20 / 15 %, extra responstijd 0 / 1 / 3 s, Max share 0, Operation mode Follow source, buffers en startdrempels 5 W, Laden stoppen onder 50 W, Ontladen stoppen onder 50 W, Stoppen na 30 s, Starten na 30 s, Verhogen na 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. De kopieën blijven doorlopen; vink ook Kopieën resetten aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
+          "reset_settings": "Elke instelling van het Virtual cluster en zijn kopieën terug naar de standaardwaarde (zie de documentatie). De kopieën blijven doorlopen; vink ook Kopieën resetten aan om ze met de nieuwe afwijkingen te starten. Je eigen batterij en Price Control blijven ongemoeid."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Relaisschakelingen"
       },
+      "house_load_profile": {
+        "name": "Huislastprofiel"
+      },
+      "usage_profile": {
+        "name": "Gebruiksprofiel"
+      },
       "group_power": {
         "name": "Batterijvermogen"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} meldt nieuwe eigenschappen",
       "description": "{device} meldt {keys}, die hij eerder niet meldde. Meestal komt dat na een firmware-upgrade. Deze versie heeft er nog geen entiteit voor. Download de diagnostiek (apparaatpagina → Diagnostiek downloaden) en meld ze in een issue, zodat ze kunnen worden toegevoegd. Negeer deze melding om haar weg te halen."
+    },
+    "stale_limit": {
+      "title": "{device} houdt een limiet vast in standby",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device} stoppen",
+            "description": "Operation mode staat op standby, maar {device} houdt laden {input} W, ontladen {output} W vast, gezet door iets anders dan deze integratie: een andere automatisering, de Zendure-app, een regelaar op het apparaat of een andere Home Assistant. In standby zet deze integratie zelf geen limieten: overschakelen naar standby stuurt één stop, en een start van Home Assistant in standby schrijft helemaal niets. De batterij houdt dus de limiet die ze kreeg. Bevestig om de batterij één keer te stoppen, zoals opnieuw standby kiezen doet. Komt de limiet terug, dan stuurt iets anders mee: zie de documentatie over een tweede regelaar."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

@@ -72,6 +72,30 @@ def test_the_devices_own_charge_limit_at_empty_is_left_alone():
     assert c._rest_limits(data(50, soc_limit=0, input_limit=27)) == [("inputLimit", 0), ("outputLimit", 0)]
 
 
+def test_its_own_small_charge_limit_at_empty_goes_to_zero():
+    """A limit this integration wrote is not the device's own (v1.8.7)."""
+    c = controller()
+    c._last_written["inputLimit"] = C.deque([(50, "mode")], maxlen=C.WRITE_HISTORY)
+    assert c._rest_limits(data(4, soc_limit=2, min_soc=50, input_limit=50)) == [("inputLimit", 0), ("outputLimit", 0)]
+
+
+def test_a_device_limit_of_another_size_stays_after_an_own_write():
+    c = controller()
+    c._last_written["inputLimit"] = C.deque([(50, "mode")], maxlen=C.WRITE_HISTORY)
+    assert c._rest_limits(data(4, soc_limit=2, min_soc=50, input_limit=27)) == [("outputLimit", 0)]
+    assert c._rest_limits(data(50, soc_limit=0, input_limit=50)) == [("inputLimit", 0), ("outputLimit", 0)]
+
+
+def test_a_secondary_at_empty_stops_the_charge_its_cluster_ended():
+    """Cluster gave 50 W, then rest: the secondary writes the limit back to 0 (v1.8.7)."""
+    c = controller()
+    c._set_state = lambda *a, **k: None
+    c._last_written["inputLimit"] = C.deque([(50, "follow")], maxlen=C.WRITE_HISTORY)
+    c.follow_direction, c.follow_limit = "none", 0
+    asyncio.run(c._apply_follow(data(4, soc_limit=2, min_soc=50, input_limit=50)))
+    assert any(("inputLimit", 0) in request for request in sent(c))
+
+
 def test_soc_protection_charges_on_to_min_soc_plus_five(monkeypatch):
     c = controller()
     c._cap = lambda d, charging: 800

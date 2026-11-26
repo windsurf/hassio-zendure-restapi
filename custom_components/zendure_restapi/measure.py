@@ -53,6 +53,7 @@ from statistics import median
 from typing import Any
 
 from .const import DEVICE_SELF_CHARGE_W
+from .profiles import EfficiencyCurve, HouseProfile, UsageProfile
 
 # ── Thresholds ───────────────────────────────────────────────────────────
 
@@ -334,6 +335,14 @@ class BatteryMeasure:
     margin: MarginDay | None = None
     margin_yesterday: dict[str, Any] | None = None
     price_source: Callable[[], Prices | None] | None = None
+    # Profiles of the battery's own use (v1.8.7): see profiles.py.
+    curve: EfficiencyCurve = field(default_factory=EfficiencyCurve)
+    house: HouseProfile = field(default_factory=HouseProfile)
+    usage: UsageProfile = field(default_factory=UsageProfile)
+    # Local time for the profiles, and the stop threshold and Start after the
+    # house load is judged against; set by the controller.
+    local: Callable[[datetime], datetime] | None = None
+    house_settings: Callable[[], tuple[float, float]] | None = None
 
     # Transient: not stored.
     _last: Sample | None = None
@@ -362,6 +371,7 @@ class BatteryMeasure:
         self._standby(s, seconds if 0 < seconds <= GAP_SECONDS else 0.0)
         self._bounds(s)
         self._response(s)
+        self.curve.add(s.now, s.ac_w, s.dc_w)
 
     def _integrate(self, a: Sample, b: Sample, seconds: float) -> None:
         ac = (a.ac_w + b.ac_w) / 2
@@ -378,6 +388,7 @@ class BatteryMeasure:
         self.dc_out += dc_out
         self._blocks(b, ac_in, ac_out, dc_in, dc_out, seconds)
         self._margin(a, b, seconds, ac_in, ac_out, dc_in, dc_out)
+        self.usage.add(self._local(b.now), ac_in, ac_out)
 
     # ── Block efficiency ─────────────────────────────────────────────
 
@@ -629,11 +640,41 @@ class BatteryMeasure:
         balancing (None otherwise)."""
         if grid_w is not None:
             self._response_grid(now, grid_w)
+            self._house(now, grid_w)
         last, self._last_grid_at = self._last_grid_at, now
         if error_w is None or last is None:
             return
         seconds = min(TRACKING_MAX_WEIGHT, (now - last).total_seconds())
         self.tracking.add(now, error_w, seconds)
+
+    def _house(self, now: datetime, grid_w: float) -> None:
+        """The house load is the grid plus what the battery gives (v1.8.7)."""
+        battery = self._last
+        if battery is None or (now - battery.now).total_seconds() > GAP_SECONDS:
+            return
+        threshold, min_s = self.house_settings() if self.house_settings else (0.0, 0.0)
+        self.house.add(self._local(now), grid_w + battery.ac_w, battery.ac_w, threshold, min_s)
+
+    def _local(self, moment: datetime) -> datetime:
+        return self.local(moment) if self.local else moment
+
+    def expected_house_load(self) -> float | None:
+        """The house load the profile expects for this quarter, W."""
+        return self.house.expected(self._local(datetime.now(timezone.utc)))
+
+    def expected_house_from(self) -> str | None:
+        """Where the expected house load comes from (see HouseProfile.lookup)."""
+        return self.house.lookup(self._local(datetime.now(timezone.utc)))[1]
+
+    def average_power(self, direction: str) -> float | None:
+        """The average AC power of the recent blocks of one direction."""
+        powers = [b["average_w"] for b in self.blocks[direction] if b.get("average_w")]
+        return sum(powers) / len(powers) if powers else None
+
+    def curve_attributes(self, direction: str) -> dict[str, Any]:
+        return self.curve.attributes(
+            direction, list(self.cycles), self.average_power("charge"), self.average_power("discharge")
+        )
 
     @property
     def tracking_error(self) -> int | None:
@@ -877,6 +918,9 @@ class BatteryMeasure:
             "switching": self.switching,
             "margin": self.margin.to_dict() if self.margin else None,
             "margin_yesterday": self.margin_yesterday,
+            "curve": self.curve.to_dict(),
+            "house": self.house.to_dict(),
+            "usage": self.usage.to_dict(),
         }
 
     def load(self, data: Any) -> None:
@@ -924,6 +968,9 @@ class BatteryMeasure:
         self.margin = MarginDay.from_dict(data.get("margin"))
         yesterday = data.get("margin_yesterday")
         self.margin_yesterday = yesterday if isinstance(yesterday, dict) else None
+        self.curve.load(data.get("curve"))
+        self.house.load(data.get("house"))
+        self.usage.load(data.get("usage"))
 
     def diagnostics(self) -> dict[str, Any]:
         """The figures and their basis, for the diagnostics download."""
@@ -957,6 +1004,9 @@ class BatteryMeasure:
             "blocks": {k: list(v) for k, v in self.blocks.items()},
             "cycles": list(self.cycles),
             "capacities": list(self.capacities),
+            "efficiency_curve": {d: self.curve_attributes(d) for d in ("charge", "discharge")},
+            "house_profile": self.house.attributes(),
+            "usage_profile": self.usage.attributes(),
         }
 
 

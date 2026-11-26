@@ -60,6 +60,7 @@ from .energy import WriteGate
 from .entity import TranslatedName
 from .cluster.runtime import ClusterCoordinator
 from .settings import ZendureSettings
+from .profiles import sum_usage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -284,7 +285,7 @@ class ClusterStatus(ClusterEntity, SensorEntity):
     _signature: Any = None
     _written_at = 0.0
     # The version is for the dashboard tile, not for the history (v1.7.3).
-    _unrecorded_attributes = frozenset({"integration_version"})
+    _unrecorded_attributes = frozenset({"integration_version", "charge_share_by_hour", "discharge_share_by_hour"})
 
     def _due(self) -> bool:
         attributes = self._cluster.attributes
@@ -301,7 +302,10 @@ class ClusterStatus(ClusterEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {**self._cluster.attributes, **peak_totals(self._cluster), "integration_version": INTEGRATION_VERSION}
+        return {
+            **self._cluster.attributes, **peak_totals(self._cluster), **usage_totals(self._cluster),
+            "integration_version": INTEGRATION_VERSION,
+        }
 
 
 def peak_totals(cluster: Any) -> dict[str, int]:
@@ -323,6 +327,17 @@ def peak_totals(cluster: Any) -> dict[str, int]:
         for key in keys:
             totals[key] += int(summary.get(key, 0))
     return totals
+
+
+def usage_totals(cluster: Any) -> dict[str, Any]:
+    """Charging and discharging per hour of the group: its batteries added up (v1.8.7)."""
+    runtime = getattr(cluster, "cluster", cluster)
+    members = getattr(runtime, "members", None) or {}
+    profiles = [
+        member.controller.measure.usage for member in members.values()
+        if getattr(getattr(member, "controller", None), "measure", None) is not None
+    ]
+    return sum_usage(profiles) if profiles else {}
 
 
 class ClusterValue(ClusterEntity, SensorEntity):

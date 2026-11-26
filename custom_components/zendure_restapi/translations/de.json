@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Eine smarte Steckdose an einem Mikrowechselrichter oder ein zweiter Wechselrichter. Die PV-Reihen des Dashboards zeigen sie: statt der eigenen PV des Speichers, wenn diese nicht genutzt wird, sonst daneben. Für die Regelung ist sie nicht nötig, der Netzzähler sieht diese Leistung bereits.",
           "solar_energy_entity": "Ihr kWh-Zähler, für die Tagessummen im Tab History.",
-          "reset_settings": "Puffer und Startschwellen 5 W, Laden stoppen unter 50 W, Entladen stoppen unter 50 W, Stoppen nach 30 s, Starten nach 30 s, Erhöhen nach 15 s, Min. Ladeleistung und Min. Entladeleistung 0 W, Schwelle Modus 10 W, Schwelle Nachregelung 40 W, Nachregelstärke 80 %, Wartezeit bei Richtungswechsel 10 s. Operation mode, Max. Ladeleistung und Max. Entladeleistung, SOC-Schutz, der Zähler und Price Control bleiben, wie sie sind. In einem Cluster gelten die Einstellungen der Gruppe."
+          "reset_settings": "Puffer, Schwellen, Wartezeiten, Mindestleistungen und Nachregelstärke zurück auf ihre Standardwerte (siehe Dokumentation). Operation mode, Max. Ladeleistung und Max. Entladeleistung, SOC-Schutz, der Zähler und Price Control bleiben, wie sie sind. In einem Cluster gelten die Einstellungen der Gruppe."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "Die Kopien halten an, beide Limits gehen auf 0, und jede beginnt neu beim Ladezustand deiner Batterie plus ihrer SoC-Abweichung.",
-          "reset_settings": "Kopien 3, Load factor 1, SoC-Abweichungen 0 / -20 / 15 %, zusätzliche Reaktionszeit 0 / 1 / 3 s, Max. Anteil 0, Operation mode Follow source, Puffer und Startschwellen 5 W, Laden stoppen unter 50 W, Entladen stoppen unter 50 W, Stoppen nach 30 s, Starten nach 30 s, Erhöhen nach 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Die Kopien laufen weiter; hake auch Kopien zurücksetzen an, um sie mit den neuen Abweichungen zu starten. Deine eigene Batterie und Price Control bleiben unberührt."
+          "reset_settings": "Jede Einstellung des Virtual cluster und seiner Kopien zurück auf ihren Standardwert (siehe Dokumentation). Die Kopien laufen weiter; hake auch Kopien zurücksetzen an, um sie mit den neuen Abweichungen zu starten. Deine eigene Batterie und Price Control bleiben unberührt."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Relaisschaltungen"
       },
+      "house_load_profile": {
+        "name": "Hauslastprofil"
+      },
+      "usage_profile": {
+        "name": "Nutzungsprofil"
+      },
       "group_power": {
         "name": "Batterieleistung"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} meldet neue Eigenschaften",
       "description": "{device} meldet {keys}, die es vorher nicht meldete. Meist folgt das auf ein Firmware-Update. Diese Version hat dafür noch keine Entität. Lade die Diagnose herunter (Geräteseite → Diagnose herunterladen) und melde sie in einem Issue, damit sie ergänzt werden können. Ignoriere diese Meldung, um sie zu schließen."
+    },
+    "stale_limit": {
+      "title": "{device} hält im Standby ein Limit",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device} stoppen",
+            "description": "Operation mode steht auf Standby, aber {device} hält Laden {input} W, Entladen {output} W, gesetzt von etwas anderem als dieser Integration: einer anderen Automation, der Zendure-App, einem Regler auf dem Gerät oder einem anderen Home Assistant. Im Standby setzt diese Integration keine eigenen Limits: Der Wechsel zu Standby sendet einen Stopp, ein Start von Home Assistant im Standby schreibt gar nichts. Der Akku behält also das Limit, das er bekam. Bestätigen, um den Akku einmal zu stoppen, wie es eine erneute Wahl von Standby tut. Kommt das Limit zurück, steuert noch etwas anderes: siehe die Dokumentation zu einem zweiten Regler."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

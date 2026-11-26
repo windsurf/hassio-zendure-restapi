@@ -65,8 +65,10 @@ def test_the_cluster_samples_carry_the_version_of_the_manifest():
 def test_both_clusters_have_their_own_price_control_tab():
     script = load_script()
     cluster, virtual = script.build_cluster(), script.build_virtual()
-    assert [v["title"] for v in cluster["views"]] == ["Cluster", "Price Control", "Zendure SolarFlow 3000 Mix AC+"]
+    # History follows Cluster and Price Control (v1.8.7).
+    assert [v["title"] for v in cluster["views"]] == [
+        "Cluster", "Price Control", "History", "Zendure SolarFlow 3000 Mix AC+"]
     assert [v["title"] for v in virtual["views"]] == [
-        "Cluster", "Price Control", "Virtual copy 1", "Virtual copy 2", "Virtual copy 3"]
+        "Cluster", "Price Control", "History", "Virtual copy 1", "Virtual copy 2", "Virtual copy 3"]
     assert "switch.price_control_battery_cluster" in json.dumps(cluster["views"][1])
     assert "switch.price_control_virtual_cluster" in json.dumps(virtual["views"][1])

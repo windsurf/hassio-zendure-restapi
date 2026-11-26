@@ -102,9 +102,15 @@ def test_a_dashboard_per_kind_with_the_first_tab_named_alike():
     assert [v["path"] for v in virtual_views()[1:]] == ["virtual_copy_1", "virtual_copy_2", "virtual_copy_3"]
 
 
-def test_real_battery_shows_on_the_cluster_tab_only():
+def test_real_battery_shows_in_the_chart_of_today_and_tomorrow_only():
+    # v1.8.7: with the chart off the Cluster tab, the real battery shows in
+    # that chart (Price Control tab or History), not on the tabs of the copies.
     cluster, *clones = virtual_views()
-    assert REAL_POWER in text(cluster) and REAL_SOC in text(cluster)
+    day = virtual_day()
+    assert REAL_POWER in text(day) and REAL_SOC in text(day)
+    # The Cluster tab keeps the real battery's power only in the lookup of the
+    # distribution table, which lists the copies; its state of charge is gone.
+    assert REAL_SOC not in text(cluster)
     assert all(REAL_POWER not in text(v) for v in clones)
 
 
@@ -173,8 +179,7 @@ def test_battery_cluster_member_tab_is_headed_with_its_name():
 def test_cluster_tab_order():
     cluster = virtual_views()[0]
     assert [s["cards"][0]["heading"] for s in cluster["sections"]] == [
-        "Virtual Cluster (simulated)", "Operation mode", "Overview", "Distribution", "Cluster settings",
-        "Today and tomorrow"]
+        "Virtual Cluster (simulated)", "Operation mode", "Overview", "Distribution", "Cluster settings"]
     real = CD.cluster_view(group(), [], [], False)
     assert real["sections"][0]["cards"][0]["heading"] == "Cluster"
 
@@ -207,27 +212,37 @@ def test_gauges_as_on_the_battery_dashboard():
 
 
 def chart(view: dict) -> dict:
+    if view.get("type") == "custom:apexcharts-card":
+        return view
     return next(c for c in cards(view) if c.get("type") == "custom:apexcharts-card")
 
 
+def virtual_day() -> dict:
+    """The chart of today and tomorrow of the Virtual cluster of virtual_views (v1.8.7: off the Cluster tab)."""
+    batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
+    grids = [{"entity": "sensor.virtual_p1_meter_grid_power", "name": "Virtual P1"}]
+    return CD.today_and_tomorrow(group(), batteries, grids, True, CLONES)
+
+
 def test_chart_grid_lines_per_battery():
-    axis = chart(virtual_views()[0])["yaxis"][0]
+    axis = chart(virtual_day())["yaxis"][0]
     assert axis["apex_config"]["stepSize"] == 1500 and "% 3000" in axis["apex_config"]["labels"]["formatter"]
 
 
 def test_chart_plan_only_when_given():
     batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
     grids = [{"entity": "sensor.virtual_p1_meter_grid_power", "name": "Virtual P1"}]
-    without = chart(CD.cluster_view(group(), batteries, grids, True, CLONES))
-    with_plan = chart(CD.cluster_view(group(), batteries, grids, True, CLONES, None, "sensor.price_control_plan"))
+    without = chart(CD.today_and_tomorrow(group(), batteries, grids, True, CLONES))
+    with_plan = chart(CD.today_and_tomorrow(group(), batteries, grids, True, CLONES, None, "sensor.price_control_plan"))
     assert "Plan (real battery)" not in [s["name"] for s in without["series"]]
     assert "Plan (real battery)" in [s["name"] for s in with_plan["series"]]
 
 
 def test_without_apexcharts_a_history_graph():
+    day = CD.today_and_tomorrow(group(), [], [], True, CLONES, set())
+    assert day["type"] == "history-graph" and day["hours_to_show"] == 24
     cluster = CD.cluster_view(group(), [], [], True, CLONES, set())
-    assert not any(c.get("type") == "custom:apexcharts-card" for c in cards(cluster))
-    assert any(c.get("type") == "history-graph" for c in cards(cluster))
+    assert not any(c.get("type") in ("custom:apexcharts-card", "history-graph") for c in cards(cluster))
 
 
 def test_integration_version_and_meter_source_on_the_cluster_tab():
@@ -281,11 +296,11 @@ def group_price_view() -> dict:
 def test_the_cluster_plan_in_the_chart_when_the_cluster_has_price_control():
     batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
     grids = [{"entity": "sensor.virtual_p1_meter_grid_power", "name": "Virtual P1"}]
-    view = CD.cluster_view(group(), batteries, grids, True, CLONES, None, "sensor.price_control_plan",
-                           f"sensor.{GROUP_PRICE}plan")
+    view = CD.today_and_tomorrow(group(), batteries, grids, True, CLONES, None, "sensor.price_control_plan",
+                                 f"sensor.{GROUP_PRICE}plan")
     names = [s["name"] for s in chart(view)["series"]]
     assert "Plan (real battery)" in names and "Plan (cluster)" in names
-    real = chart(CD.cluster_view(group(), [], [], False, None, None, None, "sensor.price_control_plan"))
+    real = chart(CD.today_and_tomorrow(group(), [], [], False, None, None, None, "sensor.price_control_plan"))
     assert "Plan" in [s["name"] for s in real["series"]]
 
 
@@ -311,7 +326,7 @@ def test_the_price_control_tab_charts_the_cluster():
 def test_without_price_control_the_dashboard_is_as_before():
     # No Price Control for the cluster: the same tabs as in v1.7.6.
     assert [v["title"] for v in virtual_views()] == ["Cluster", "Virtual copy 1", "Virtual copy 2", "Virtual copy 3"]
-    assert "Plan (cluster)" not in [s["name"] for s in chart(virtual_views()[0])["series"]]
+    assert "Plan (cluster)" not in [s["name"] for s in chart(virtual_day())["series"]]
 
 
 def test_the_cluster_tab_shows_who_sets_the_mode():
@@ -336,12 +351,12 @@ def test_the_cluster_plan_shows_on_a_dark_theme():
     plan = next(s for s in chart(group_price_view())["series"] if s["name"] == "Plan")
     assert plan["color"] == "#757575"
     batteries = [{"name": CD.REAL, "power": REAL_POWER, "soc": REAL_SOC}]
-    view = CD.cluster_view(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan",
-                           f"sensor.{GROUP_PRICE}plan")
+    view = CD.today_and_tomorrow(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan",
+                                 f"sensor.{GROUP_PRICE}plan")
     series = {s["name"]: s for s in chart(view)["series"]}
     assert series["Plan (cluster)"]["color"] == "#757575"
     assert series["Plan (real battery)"]["color"] == "#BDBDBD" and series["Plan (real battery)"]["stroke_dash"] == 4
-    alone = CD.cluster_view(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan")
+    alone = CD.today_and_tomorrow(group(), batteries, [], True, CLONES, None, "sensor.price_control_plan")
     assert next(s for s in chart(alone)["series"] if s["name"] == "Plan (real battery)")["color"] == "#757575"
 
 
@@ -357,3 +372,64 @@ def test_a_fault_of_a_battery_shows_on_the_cluster_tab():
     assert faults[0]["visibility"] == [{"condition": "state", "entity": "binary_sensor.mix_a_error", "state": "on"}]
     # A Virtual cluster: the copies have none, so nothing changes.
     assert not any("visibility" in b for b in virtual_views()[0]["sections"][0]["cards"][0]["badges"])
+
+
+# ── Today and tomorrow off the Cluster tab (v1.8.7) ─────────────────────
+
+def test_the_chart_of_today_and_tomorrow_is_off_the_cluster_tab():
+    for virtual in (False, True):
+        view = CD.cluster_view(group(), [], [], virtual)
+        headings = [s["cards"][0]["heading"] for s in view["sections"]]
+        assert "Today and tomorrow" not in headings
+
+
+def test_without_price_control_the_chart_tops_history():
+    chart = CD.today_and_tomorrow(group(), [], [], True, [(1, "Virtual copy 1")], None, None, None)
+    assert chart["type"] == CD.APEX and chart["graph_span"] == "48h"
+    view = CD.history_view(group(), [], [], True, None, chart)
+    assert view["sections"][0]["cards"][0]["heading"] == "Today and tomorrow"
+    plain = CD.history_view(group(), [], [], True, None)
+    assert all(s["cards"][0]["heading"] != "Today and tomorrow" for s in (plain or {"sections": []})["sections"])
+
+
+def history_cards(view: dict) -> dict:
+    """The cards of the History tab per heading."""
+    return {s["cards"][0]["heading"]: s["cards"][1:] for s in view["sections"]}
+
+
+MEMBERS = [
+    {"name": "Battery A", "power": "sensor.a_battery_power", "soc": "sensor.a_state_of_charge",
+     "charged": "sensor.a_energy_charged", "discharged": "sensor.a_energy_discharged"},
+    {"name": "Battery B", "power": "sensor.b_battery_power", "soc": "sensor.b_state_of_charge",
+     "charged": "sensor.b_energy_charged", "discharged": "sensor.b_energy_discharged"},
+]
+
+
+def test_short_history_draws_raw_samples_with_straight_lines():
+    view = CD.history_view(group(), MEMBERS, [{"entity": "sensor.grid", "name": "Grid"}], False)
+    tabs = history_cards(view)
+    for heading, duration in (("Last 30 minutes", "10s"), ("Last 4 hours", "1min")):
+        (card,) = tabs[heading]
+        assert card["update_interval"] == duration
+        for serie in card["series"]:
+            # A smooth curve through raw samples loops back in time at a step.
+            assert serie["curve"] == "straight" and "statistics" not in serie
+            assert serie["group_by"] == {"func": "avg", "duration": duration, "fill": "last"}
+    (day,) = tabs["Last 24 hours"]
+    assert all(s["curve"] == "monotoneCubic" and s["statistics"]["period"] == "5minute" for s in day["series"])
+
+
+def test_thirty_days_as_energy_bars_per_battery():
+    view = CD.history_view(group(), MEMBERS, [], False)
+    charged, discharged = history_cards(view)["Last 30 days"]
+    for card, key in ((charged, "charged"), (discharged, "discharged")):
+        assert card["stacked"] is True and card["graph_span"] == "30d"
+        assert [s["entity"] for s in card["series"]] == [m[key] for m in MEMBERS]
+        assert all(s["type"] == "column" and s["statistics"] == {"type": "change", "period": "day", "align": "middle"}
+                   for s in card["series"])
+
+
+def test_thirty_days_without_energy_counters_stays_power_per_hour():
+    copies = [{k: v for k, v in m.items() if k not in ("charged", "discharged")} for m in MEMBERS]
+    (card,) = history_cards(CD.history_view(group(), copies, [], True))["Last 30 days"]
+    assert all(s["statistics"]["period"] == "hour" for s in card["series"])

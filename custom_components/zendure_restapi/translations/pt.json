@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Uma tomada inteligente num microinversor ou um segundo inversor. As séries PV do painel mostram-no: em vez do PV da própria bateria se não estiver em uso, ao lado caso contrário. O controlo não precisa dele, o contador de rede já vê esta potência.",
           "solar_energy_entity": "O seu contador de kWh, para os totais diários do separador History.",
-          "reset_settings": "Margens e limiares de início 5 W, Parar carga abaixo de 50 W, Parar descarga abaixo de 50 W, Parar após 30 s, Iniciar após 30 s, Aumentar após 15 s, potência de carga e descarga mín. 0 W, Limiar do modo 10 W, Limiar de correção 40 W, força de correção 80 %, Atraso na mudança de sentido 10 s. Operation mode, potência de carga e descarga máx., proteção de SOC, o contador e o Price Control ficam como estão. Num cluster aplicam-se as definições do grupo."
+          "reset_settings": "Margens, limiares, tempos de espera, potências mínimas e intensidade de correção voltam aos valores predefinidos (ver a documentação). Operation mode, potência de carga e descarga máx., proteção de SOC, o contador e o Price Control ficam como estão. Num cluster aplicam-se as definições do grupo."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Cópias 3, Load factor 1, desvios de SoC 0 / -20 / 15 %, tempo de resposta adicional 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margens e limiares de início 5 W, Parar carga abaixo de 50 W, Parar descarga abaixo de 50 W, Parar após 30 s, Iniciar após 30 s, Aumentar após 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. As cópias continuam a funcionar; marque também Repor cópias para as arrancar com os novos desvios. A sua própria bateria e o Price Control não são alterados."
+          "reset_settings": "Cada definição do Virtual cluster e das suas cópias volta ao valor predefinido (ver a documentação). As cópias continuam a funcionar; marque também Repor cópias para as arrancar com os novos desvios. A sua própria bateria e o Price Control não são alterados."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Comutações do relé"
       },
+      "house_load_profile": {
+        "name": "Perfil de carga da casa"
+      },
+      "usage_profile": {
+        "name": "Perfil de utilização"
+      },
       "group_power": {
         "name": "Potência da bateria"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} reporta novas propriedades",
       "description": "{device} reporta {keys}, que antes não reportava. Normalmente acontece após uma atualização de firmware. Esta versão ainda não tem entidade para elas. Descarregue os diagnósticos (página do dispositivo → Descarregar diagnósticos) e reporte-as num issue para que possam ser adicionadas. Ignore esta mensagem para a fechar."
+    },
+    "stale_limit": {
+      "title": "{device} mantém um limite em espera",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Parar {device}",
+            "description": "Operation mode está em espera, mas {device} mantém carga {input} W, descarga {output} W, definidos por algo que não esta integração: outra automação, a app Zendure, um gestor no dispositivo ou outro Home Assistant. Em espera, esta integração não define limites próprios: passar para espera envia uma única paragem, e um arranque do Home Assistant em espera não escreve nada. A bateria mantém, portanto, o limite que recebeu. Confirme para parar a bateria uma vez, como escolher de novo a espera faria. Se o limite voltar, outra coisa está a controlar: veja a documentação sobre um segundo controlador."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

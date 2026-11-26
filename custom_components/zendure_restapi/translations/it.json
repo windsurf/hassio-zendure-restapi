@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Una presa smart su un microinverter o un secondo inverter. Le serie PV della dashboard la mostrano: al posto del PV della batteria se non è in uso, accanto altrimenti. Il controllo non ne ha bisogno, il contatore di rete vede già questa potenza.",
           "solar_energy_entity": "Il suo contatore kWh, per i totali giornalieri della scheda History.",
-          "reset_settings": "Margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, potenza di carica e scarica min 0 W, Soglia modalità 10 W, Soglia di correzione 40 W, forza di correzione 80 %, Ritardo cambio direzione 10 s. Operation mode, potenza di carica e scarica max, protezione SOC, il contatore e Price Control restano come sono. In un cluster valgono le impostazioni del gruppo."
+          "reset_settings": "Margini, soglie, tempi di attesa, potenze minime e intensità di correzione tornano ai valori predefiniti (vedi la documentazione). Operation mode, potenza di carica e scarica max, protezione SOC, il contatore e Price Control restano come sono. In un cluster valgono le impostazioni del gruppo."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Copie 3, Load factor 1, scostamenti SoC 0 / -20 / 15 %, tempo di risposta aggiuntivo 0 / 1 / 3 s, Max share 0, Operation mode Follow source, margini e soglie di avvio 5 W, Ferma carica sotto 50 W, Ferma scarica sotto 50 W, Ferma dopo 30 s, Avvia dopo 30 s, Aumenta dopo 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
+          "reset_settings": "Ogni impostazione del Virtual cluster e delle sue copie torna al valore predefinito (vedi la documentazione). Le copie continuano a funzionare; spunta anche Reimposta copie per avviarle con i nuovi scostamenti. La tua batteria e Price Control non vengono toccati."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Commutazioni del relè"
       },
+      "house_load_profile": {
+        "name": "Profilo del carico domestico"
+      },
+      "usage_profile": {
+        "name": "Profilo di utilizzo"
+      },
       "group_power": {
         "name": "Potenza batteria"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} segnala nuove proprietà",
       "description": "{device} segnala {keys}, che prima non segnalava. Di solito accade dopo un aggiornamento firmware. Questa versione non ha ancora un'entità per esse. Scarica la diagnostica (pagina del dispositivo → Scarica diagnostica) e segnalale in un issue, così potranno essere aggiunte. Ignora questo messaggio per chiuderlo."
+    },
+    "stale_limit": {
+      "title": "{device} mantiene un limite in standby",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Ferma {device}",
+            "description": "Operation mode è in standby, ma {device} mantiene carica {input} W, scarica {output} W, impostati da qualcosa di diverso da questa integrazione: un'altra automazione, l'app Zendure, un gestore sul dispositivo o un altro Home Assistant. In standby questa integrazione non imposta limiti propri: passare allo standby invia un solo arresto, e un avvio di Home Assistant in standby non scrive nulla. La batteria mantiene quindi il limite che ha ricevuto. Conferma per fermare la batteria una volta, come farebbe scegliere di nuovo lo standby. Se il limite torna, qualcos'altro sta pilotando: vedi la documentazione su un secondo regolatore."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

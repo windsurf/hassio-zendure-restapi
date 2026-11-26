@@ -43,6 +43,17 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Iterable
 
+from .const import (
+    DEFAULTS,
+    OPT_CHARGE_EFFICIENCY,
+    OPT_DISCHARGE_EFFICIENCY,
+    OPT_EXPORT_FACTOR,
+    OPT_EXPORT_SURCHARGE,
+    OPT_HOUSE_LOAD,
+    OPT_IMPORT_FACTOR,
+    OPT_IMPORT_SURCHARGE,
+)
+
 CONTAINS_SPOT = "spot"
 CONTAINS_SPOT_VAT = "spot_vat"
 CONTAINS_IMPORT = "import_price"
@@ -56,12 +67,16 @@ ACTION_IDLE = "idle"
 
 @dataclass(frozen=True)
 class Tariff:
-    """Import price and export value as linear functions of the spot price."""
+    """Import price and export value as linear functions of the spot price.
 
-    import_factor: float = 1.21
-    import_surcharge: float = 0.1308481
-    export_factor: float = 1.00
-    export_surcharge: float = 0.02
+    The defaults are those of the settings (one source, v1.8.7); Price Control
+    always passes the values of its own entities.
+    """
+
+    import_factor: float = DEFAULTS[OPT_IMPORT_FACTOR]
+    import_surcharge: float = DEFAULTS[OPT_IMPORT_SURCHARGE]
+    export_factor: float = DEFAULTS[OPT_EXPORT_FACTOR]
+    export_surcharge: float = DEFAULTS[OPT_EXPORT_SURCHARGE]
     net_metering: bool = False
     contains: str = CONTAINS_SPOT_VAT
 
@@ -92,9 +107,9 @@ class Battery:
     stored_kwh: float           # above the lower limit, now
     charge_kw: float            # AC, from the grid
     discharge_kw: float         # AC, to the house and the grid
-    eta_charge: float = 0.95
-    eta_discharge: float = 0.96
-    house_kw: float = 0.4       # what the house draws while the battery covers it
+    eta_charge: float = DEFAULTS[OPT_CHARGE_EFFICIENCY] / 100
+    eta_discharge: float = DEFAULTS[OPT_DISCHARGE_EFFICIENCY] / 100
+    house_kw: float = DEFAULTS[OPT_HOUSE_LOAD] / 1000  # what the house draws while the battery covers it
     grid_charge: bool = True    # the cheap mode charges from the grid
     sell: bool = False          # the expensive mode discharges at full power
 

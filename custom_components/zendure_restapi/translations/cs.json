@@ -144,7 +144,7 @@
         "data_description": {
           "solar_power_entity": "Chytrá zásuvka na mikroměniči nebo druhý měnič. Řady PV na nástěnce ji ukazují: místo vlastního PV baterie, pokud se nepoužívá, jinak vedle něj. Řízení ji nepotřebuje, síťový elektroměr tento výkon už vidí.",
           "solar_energy_entity": "Její počítadlo kWh, pro denní součty na kartě History.",
-          "reset_settings": "Rezervy a prahy spuštění 5 W, Zastavit nabíjení pod 50 W, Zastavit vybíjení pod 50 W, Zastavit po 30 s, Spustit po 30 s, Zvýšit po 15 s, Min. nabíjecí a vybíjecí výkon 0 W, Práh režimu 10 W, Práh korekce 40 W, síla korekce 80 %, Prodleva změny směru 10 s. Operation mode, Max. nabíjecí a vybíjecí výkon, ochrana SOC, měřič a Price Control zůstávají beze změny. V clusteru platí nastavení skupiny."
+          "reset_settings": "Rezervy, prahy, čekací doby, minimální výkony a síla korekce se vrátí na výchozí hodnoty (viz dokumentace). Operation mode, Max. nabíjecí a vybíjecí výkon, ochrana SOC, měřič a Price Control zůstávají beze změny. V clusteru platí nastavení skupiny."
         }
       },
       "external": {
@@ -198,7 +198,7 @@
         },
         "data_description": {
           "reset_copies": "The copies stop, both limits go to 0, and each starts again at your battery's state of charge plus its SoC offset.",
-          "reset_settings": "Kopie 3, Load factor 1, odchylky SoC 0 / -20 / 15 %, dodatečná doba odezvy 0 / 1 / 3 s, Max share 0, Operation mode Follow source, rezervy a prahy spuštění 5 W, Zastavit nabíjení pod 50 W, Zastavit vybíjení pod 50 W, Zastavit po 30 s, Spustit po 30 s, Zvýšit po 15 s, Concentrate below 300 W, SoC balance 15 %, Redistribute every 30 s. Kopie běží dál; zaškrtněte také Resetovat kopie, aby se spustily s novými odchylkami. Vaše vlastní baterie a Price Control zůstávají beze změny."
+          "reset_settings": "Každé nastavení Virtual cluster a jeho kopií se vrátí na výchozí hodnotu (viz dokumentace). Kopie běží dál; zaškrtněte také Resetovat kopie, aby se spustily s novými odchylkami. Vaše vlastní baterie a Price Control zůstávají beze změny."
         }
       }
     },
@@ -696,6 +696,12 @@
       "relay_switches": {
         "name": "Sepnutí relé"
       },
+      "house_load_profile": {
+        "name": "Profil zátěže domu"
+      },
+      "usage_profile": {
+        "name": "Profil využití"
+      },
       "group_power": {
         "name": "Výkon baterie"
       },
@@ -987,6 +993,17 @@
     "new_property": {
       "title": "{device} hlásí nové vlastnosti",
       "description": "{device} hlásí {keys}, které dříve nehlásil. Obvykle to následuje po aktualizaci firmwaru. Tato verze pro ně zatím nemá entitu. Stáhněte diagnostiku (stránka zařízení → Stáhnout diagnostiku) a nahlaste je v issue, aby mohly být přidány. Ignorujte tuto zprávu, chcete-li ji zavřít."
+    },
+    "stale_limit": {
+      "title": "{device} drží limit v pohotovosti",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Zastavit {device}",
+            "description": "Operation mode je v pohotovosti, ale {device} drží nabíjení {input} W, vybíjení {output} W, nastavené něčím jiným než touto integrací: jinou automatizací, aplikací Zendure, správcem v zařízení nebo jiným Home Assistantem. V pohotovosti tato integrace nenastavuje vlastní limity: přepnutí do pohotovosti pošle jedno zastavení a start Home Assistantu v pohotovosti nezapíše nic. Baterie si tedy drží limit, který dostala. Potvrďte pro jednorázové zastavení baterie, jako by to udělala nová volba pohotovosti. Vrátí-li se limit, řídí ještě něco jiného: viz dokumentace o druhém regulátoru."
+          }
+        }
+      }
     }
   },
   "config_subentries": {

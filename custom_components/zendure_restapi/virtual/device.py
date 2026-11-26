@@ -41,7 +41,7 @@ RAMP_UP_COLD_W_S = 1500.0   # from standstill: 0 to 3 kW in ~2 s, measured (v1.7
 RAMP_DOWN_W_S = 2500.0      # a 3 kW stop in ~1.2 s after the setpoint: ~3 s from the write
 # Conversion as a fixed plus a proportional part (v1.7.4); until then one
 # 95 % both ways, which at 150 W gave ~8 W of loss against ~37 W measured.
-# Discharging: least squares over 33 still pairs on a 3000 Mix AC+ (README2,
+# Discharging: least squares over 33 still pairs on a 3000 Mix AC+ (README2.md, Conversion efficiency,
 # "Separating the fixed and proportional parts"): 37 W at 31 W AC, 39 W at
 # 131 W, ~111 W at 3 kW. Charging: a fixed ~44 W from a second, independent
 # series on the same model (published measurements; at 50 W AC next to nothing reached

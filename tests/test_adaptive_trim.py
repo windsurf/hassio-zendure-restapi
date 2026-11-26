@@ -101,3 +101,17 @@ def test_the_trim_loop_still_follows_a_real_step(monkeypatch):
     c._noise_prev = feed.grid
     trim(c, data)
     assert c.coordinator.api.async_write_properties.await_count + c.coordinator.api.async_write_property.await_count >= 1
+
+
+def test_mode_threshold_advice(monkeypatch):
+    """Advice only (v1.8.7): the upper quartile of the step, rounded up to 5 W,
+    never under the default Mode threshold; nothing is set."""
+    c, _, feed = battery(monkeypatch)
+    assert c.mode_threshold_advice() is None
+    feed_steps(c, feed, [2, 3, 1, 4] * 50)
+    assert c.mode_threshold_advice() == DEFAULTS[C.OPT_MODE_THRESHOLD]
+    c, _, feed = battery(monkeypatch)
+    before = c.settings.get_int(C.OPT_MODE_THRESHOLD)
+    feed_steps(c, feed, [80, 100, 90, 95] * 50)
+    assert c.mode_threshold_advice() == 100
+    assert c.settings.get_int(C.OPT_MODE_THRESHOLD) == before

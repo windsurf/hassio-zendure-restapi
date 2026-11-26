@@ -10,18 +10,19 @@ removes it, and a notification says so.
 
 * Cluster — since v1.7.2 in the layout of the battery dashboard: tiles under
   the title, the operation mode with one status text, gauges, a row per battery
-  with role, direction, limit and power, the group's settings as sliders, and
-  a chart of today and tomorrow (ApexCharts Card, else a history graph). A
-  Virtual cluster adds its Virtual P1 meter, its test settings (Clones, Load
-  factor), and in the chart the real battery and its day plan. Price Control
-  and the device itself stay on the battery dashboard;
+  with role, direction, limit and power, and the group's settings as sliders.
+  A Virtual cluster adds its Virtual P1 meter and its test settings (Clones,
+  Load factor). The chart of today and tomorrow (ApexCharts Card, else a
+  history graph; on a Virtual cluster with the real battery and its day plan)
+  is on the Price Control tab, or without one on top of History (v1.8.7).
+  Price Control and the device itself stay on the battery dashboard;
 * a battery cluster: one tab per member, built from the first page of the
   battery dashboard (dashboard.py, the same template and the same rules for
   missing entities), headed with the member's name;
 * a Virtual cluster: one tab per virtual battery (Virtual copy 1, 2, 3), with
   its own settings as sliders (Max share, SoC offset, extra response time). The real battery is no member and keeps its own
-  dashboard; it gets no tab here and shows on the Cluster tab only, for
-  comparison.
+  dashboard; it gets no tab here and shows in the chart of today and
+  tomorrow only, for comparison.
 
 Every tab carries an icon and its title (v1.7.3): the Cluster tab the
 house with a battery of its heading (mdi:home-battery-outline), the batteries
@@ -58,6 +59,7 @@ from .dashboard import (
     EXISTS,
     EXTERNAL_PV_DASH,
     EXTERNAL_PV_NAME,
+    EXTERNAL_PV_OPACITY,
     FAILED,
     PV_ENERGY,
     PV_POWER,
@@ -295,6 +297,7 @@ def _plan_series(entity_id: str, name: str, color: str, dash: int | None = None)
 # the battery dashboard's PV series. One entry per source: a battery's own PV,
 # or the external solar sensor chosen under Configure for that battery.
 PV_COLOR = "#FFB300"
+PV_ENERGY_OPACITY = 0.5
 
 
 def solar_sources(name: str, prefix: str, args: dict[str, Any], known: set[str]) -> list[dict[str, Any]]:
@@ -346,6 +349,30 @@ def _solar_series(group: dict[str, Any]) -> list[dict[str, Any]]:
     return series
 
 
+def _solar_chart(group: dict[str, Any]) -> dict[str, Any] | None:
+    """PV energy per day over 30 days, a bar per source, as the battery dashboard's PV column."""
+    solars = [s for s in group.get("solar") or [] if s.get("energy")]
+    if not solars:
+        return None
+    every = group.get("solar") or []
+    return {
+        "type": APEX, "graph_span": "30d", "span": {"end": "day"},
+        "header": {"show": True, "title": "PV", "show_states": False},
+        "yaxis": [{"id": "energy", "min": 0, "decimals": 0}],
+        "apex_config": {"chart": {"height": 220}, "legend": {"show": True}, "tooltip": {"x": {"format": "dd-MM"}},
+                        "grid": {"borderColor": "rgba(127, 127, 127, 0.25)", "strokeDashArray": 0}},
+        "series": [
+            {"entity": str(s["energy"]), "name": _solar_name(s, every), "type": "column", "unit": "kWh",
+             "color": PV_COLOR,
+             "opacity": EXTERNAL_PV_OPACITY if s["external"] and len(every) > 1 else PV_ENERGY_OPACITY,
+             "float_precision": 1, "statistics": {"type": "change", "period": "day", "align": "middle"},
+             "show": {"in_header": False, "legend_value": False}, "yaxis_id": "energy", "stroke_width": 1}
+            for s in solars
+        ],
+        "grid_options": {"columns": "full", "rows": "auto"}, "hours_12": False,
+    }
+
+
 def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | None] | None,
               plan: str | None, count: int, group_plan: str | None = None) -> dict[str, Any]:
     """The chart of today and tomorrow, as the day plan chart of the battery
@@ -394,6 +421,153 @@ def day_chart(group: dict[str, Any], grid: str | None, real: dict[str, str | Non
     }
 
 
+# The History tab of a cluster (v1.8.7): the spans of the battery dashboard's
+# History, for the group and every battery in it. 30 minutes and 4 hours draw
+# the raw history averaged per 10 s or 1 min with straight lines, as on the
+# battery dashboard: a smooth curve through raw samples loops back in time at
+# a step. 24 hours and 30 days use the statistics.
+HISTORY_SPANS = (
+    ("Last 30 minutes", "30min", None),
+    ("Last 4 hours", "4h", None),
+    ("Last 24 hours", "24h", "5minute"),
+    ("Last 30 days", "30d", "hour"),
+)
+RAW_GROUP = {"30min": ("10s", "10s", "HH:mm:ss"), "4h": ("1min", "1min", "HH:mm")}
+# History in the colours of the battery dashboard: grid blue, discharging
+# green, charging red, state of charge purple. Each battery's state of charge
+# and its bars per day in shades of those colours, in the order of the tabs.
+SOC_SHADES = ("#B39DDB", "#7E57C2", "#5E35B1", "#D1C4E9", "#673AB7", "#4527A0")
+CHARGED_SHADES = ("#E53935", "#EF9A9A", "#B71C1C", "#E57373", "#FFCDD2", "#C62828")
+DISCHARGED_SHADES = ("#4CAF50", "#A5D6A7", "#1B5E20", "#81C784", "#C8E6C9", "#2E7D32")
+
+
+def today_and_tomorrow(
+    group: dict[str, Any],
+    batteries: list[dict[str, str | None]],
+    grids: list[dict[str, str | None]],
+    virtual: bool,
+    clones: list[tuple[int, str]] | None = None,
+    custom_cards: set[str] | None = None,
+    plan: str | None = None,
+    group_plan: str | None = None,
+) -> dict[str, Any]:
+    """The chart of today and tomorrow of a cluster without a Price Control tab
+    (v1.8.7): the day plan chart, with the real battery and its plan on a
+    Virtual cluster; without ApexCharts Card a history graph of 24 hours."""
+    clones = clones or []
+    real = next((b for b in batteries if b.get("name") == REAL), None) if virtual else None
+    count = len(clones) if virtual else len([b for b in batteries if b is not real])
+    grid = group.get("virtual_grid") if virtual else next((g["entity"] for g in grids if g.get("entity")), None)
+    if custom_cards is None or APEX in custom_cards:
+        return day_chart(group, grid, real, plan if virtual else None, count, group_plan)
+    return {"type": "history-graph", "hours_to_show": 24, "grid_options": {"columns": "full", "rows": 6},
+            "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries),
+                                                 *(s["power"] for s in group.get("solar") or [])) if e]}
+
+
+def _energy_chart(members: list[dict[str, str | None]], key: str, title: str) -> dict[str, Any]:
+    """Energy per day over 30 days for one direction, a bar per battery stacked,
+    in shades of the battery dashboard's red (charged) or green (discharged)."""
+    shades = CHARGED_SHADES if key == "charged" else DISCHARGED_SHADES
+    return {
+        "type": APEX, "graph_span": "30d", "span": {"end": "day"}, "stacked": True,
+        "header": {"show": True, "title": title, "show_states": False},
+        "yaxis": [{"id": "energy", "min": 0, "decimals": 0}],
+        "apex_config": {"chart": {"height": 220}, "legend": {"show": True}, "tooltip": {"x": {"format": "dd-MM"}},
+                        "grid": {"borderColor": "rgba(127, 127, 127, 0.25)", "strokeDashArray": 0}},
+        "series": [
+            {"entity": str(m[key]), "name": str(m["name"]), "type": "column", "unit": "kWh",
+             "color": shades[index % len(shades)], "opacity": 0.5, "float_precision": 1,
+             "statistics": {"type": "change", "period": "day", "align": "middle"},
+             "show": {"in_header": False, "legend_value": False}, "yaxis_id": "energy", "stroke_width": 1}
+            for index, m in enumerate(members)
+        ],
+        "grid_options": {"columns": "full", "rows": "auto"}, "hours_12": False,
+    }
+
+
+def history_view(
+    group: dict[str, Any],
+    batteries: list[dict[str, str | None]],
+    grids: list[dict[str, str | None]],
+    virtual: bool,
+    custom_cards: set[str] | None = None,
+    first: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Group power and state of charge, each battery's power and the grid over
+    30 minutes, 4 hours, 24 hours and 30 days, as on a battery's History tab.
+    `first`, the chart of today and tomorrow, comes on top when the cluster has
+    no Price Control tab to show it (v1.8.7)."""
+    grid = group.get("virtual_grid") if virtual else next((g["entity"] for g in grids if g.get("entity")), None)
+    members = [b for b in batteries if b.get("power") and b.get("name") != REAL]
+    if not group.get("power") and not members and first is None:
+        return None
+    sections: list[dict[str, Any] | None] = []
+    if first is not None:
+        sections.append(_section("Today and tomorrow", "mdi:chart-line", [first], span=4))
+    for heading, span, period in HISTORY_SPANS if (group.get("power") or members) else ():
+        if custom_cards is None or APEX in custom_cards:
+            series: list[dict[str, Any]] = []
+            if grid:
+                series.append(_series(grid, "Virtual P1" if virtual else "Grid", "#1E88E5", "area"))
+            if group.get("power"):
+                series.append(_series(group["power"], "Discharging", "#4CAF50", "area", transform="return x > 0 ? x : 0;"))
+                series.append(_series(group["power"], "Charging", "#E53935", "area", transform="return x < 0 ? x : 0;"))
+            series.extend(_solar_series(group))
+            if group.get("soc"):
+                series.append(_series(group["soc"], "SoC cluster", "#9575CD", axis="soc", stroke_width=2, stroke_dash=4))
+            for index, member in enumerate(members):
+                if member.get("soc"):
+                    series.append(_series(str(member["soc"]), f"SoC {member['name']}", SOC_SHADES[index % len(SOC_SHADES)],
+                                          axis="soc", stroke_width=1))
+            if span == "30d" and members and all(m.get("charged") and m.get("discharged") for m in members):
+                # Energy per day as bars, as on the battery dashboard: one chart
+                # per direction, the batteries stacked.
+                sections.append(_section(heading, "mdi:chart-bar", [
+                    _energy_chart(members, "charged", "Charged"),
+                    _energy_chart(members, "discharged", "Discharged"),
+                    _solar_chart(group),
+                ], span=4))
+                continue
+            for serie in series:
+                if period is None:
+                    serie.pop("statistics", None)
+                    serie["curve"] = "straight"
+                    serie["group_by"] = {"func": "avg", "duration": RAW_GROUP[span][0], "fill": "last"}
+                else:
+                    serie["statistics"]["period"] = period
+            card: dict[str, Any] = {
+                "type": APEX, "graph_span": span, "header": {"show": False},
+                "yaxis": [
+                    {"id": "power", "decimals": 0},
+                    {"id": "soc", "opposite": True, "min": 0, "max": 100, "decimals": 0,
+                     "apex_config": {"tickAmount": 4}},
+                ],
+                "apex_config": {"chart": {"height": 240}, "legend": {"show": True},
+                                "grid": {"borderColor": "rgba(127, 127, 127, 0.25)", "strokeDashArray": 0},
+                                "fill": {"type": "solid"}},
+                "series": series, "grid_options": {"columns": "full", "rows": "auto"}, "hours_12": False,
+            }
+            if period is None:
+                card["update_interval"] = RAW_GROUP[span][1]
+                card["now"] = {"show": True}
+                card["apex_config"]["tooltip"] = {"x": {"format": RAW_GROUP[span][2]}}
+        else:
+            hours = {"30min": 0.5, "4h": 4, "24h": 24, "30d": 720}[span]
+            card = {"type": "history-graph", "hours_to_show": hours, "grid_options": {"columns": "full", "rows": 6},
+                    "entities": [{"entity": e} for e in (grid, group.get("power"), *(m["power"] for m in members),
+                                                         *(s["power"] for s in group.get("solar") or [])) if e]}
+        sections.append(_section(heading, "mdi:chart-line", [card], span=4))
+    return {
+        "title": "History",
+        "path": "history",
+        "icon": "mdi:chart-areaspline",
+        "type": "sections",
+        "max_columns": 4,
+        "sections": [s for s in sections if s],
+    }
+
+
 def cluster_view(
     group: dict[str, Any],
     batteries: list[dict[str, str | None]],
@@ -406,16 +580,18 @@ def cluster_view(
 ) -> dict[str, Any]:
     """The Cluster tab, in the layout of the battery dashboard (v1.7.2): a row
     of tiles under the title, the operation mode with one status text, gauges,
-    the distribution, the settings of the group as sliders, and the chart of
-    today and tomorrow. What is set per battery lives on its own tab; Price
-    Control and the device itself stay on the battery dashboard.
+    the distribution and the settings of the group as sliders. What is set per
+    battery lives on its own tab; Price Control and the device itself stay on
+    the battery dashboard. The chart of today and tomorrow is on the Price
+    Control tab, or without one on top of History (v1.8.7).
 
     `group` holds the entity ids of the group's own entities, `batteries` per
     battery name, power and soc (a Virtual cluster's real battery first, named
     REAL), `grids` the grid sensors with their name, `clones` index and name of
     each virtual battery, `custom_cards` the custom cards installed (None: all),
     `plan` the day plan of the real battery behind a Virtual cluster,
-    `group_plan` the day plan of the cluster's own Price Control (v1.8.0).
+    `group_plan` the day plan of the cluster's own Price Control (v1.8.0);
+    `plan` and `group_plan` are no longer used here (v1.8.7) and kept for callers.
     """
     clones = clones or []
     real = next((b for b in batteries if b.get("name") == REAL), None) if virtual else None
@@ -425,13 +601,6 @@ def cluster_view(
     real_grid = next((g["entity"] for g in grids if g.get("entity") and g.get("entity") != grid), None) if virtual else None
     powers = {b["name"]: b["power"] for b in batteries if b.get("power")}
     cap = 3000 * max(1, count)
-
-    if custom_cards is None or APEX in custom_cards:
-        chart: dict[str, Any] = day_chart(group, grid, real, plan if virtual else None, count, group_plan)
-    else:
-        chart = {"type": "history-graph", "hours_to_show": 24, "grid_options": {"columns": "full", "rows": 6},
-                 "entities": [{"entity": e} for e in (grid, group.get("power"), *(b.get("power") for b in batteries),
-                                                      *(s["power"] for s in group.get("solar") or [])) if e]}
 
     sections = [
         # A Virtual cluster says it is simulated, as its copies do (v1.7.3).
@@ -485,7 +654,6 @@ def cluster_view(
                 "concentrate_below", "soc_balance", "redistribute_every",
             )),
         ]),
-        _section("Today and tomorrow", "mdi:chart-line", [chart], span=4),
     ]
     return {
         "title": "Cluster",
@@ -672,6 +840,9 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
             "name": name,
             "power": f"sensor.{prefix}battery_power" if f"sensor.{prefix}battery_power" in known else None,
             "soc": f"sensor.{prefix}state_of_charge" if f"sensor.{prefix}state_of_charge" in known else None,
+            # The energy counters, for the bars per day on History.
+            "charged": f"sensor.{prefix}energy_charged" if f"sensor.{prefix}energy_charged" in known else None,
+            "discharged": f"sensor.{prefix}energy_discharged" if f"sensor.{prefix}energy_discharged" in known else None,
         })
         if name != REAL:
             # v1.8.1: the faults of a member, flagged on the Cluster tab.
@@ -738,6 +909,13 @@ def cluster_config(hass: HomeAssistant, entry: ConfigEntry, template: dict[str, 
         view = price_view(template, price, group, known, custom_cards, grid, count, virtual)
         if view:
             tabs.append(view)
+    # v1.8.7: the group's history, after Cluster and Price Control; without a
+    # Price Control tab the chart of today and tomorrow goes on top of it.
+    first = None if len(tabs) > 1 else today_and_tomorrow(
+        group, batteries, grids, virtual, clones, custom_cards, plan, group_plan)
+    history = history_view(group, batteries, grids, virtual, custom_cards, first)
+    if history:
+        tabs.append(history)
     return {"title": cluster_title(virtual), "views": [*tabs, *views]}
 
 
