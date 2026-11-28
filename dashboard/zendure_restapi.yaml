@@ -1,5 +1,5 @@
 # ============================================================
-# ZENDURE RESTAPI DASHBOARD - v1.8.7
+# ZENDURE RESTAPI DASHBOARD - v1.8.8
 # ============================================================
 #
 # The dashboard "Zendure RestAPI" in three views, read through
@@ -2211,46 +2211,30 @@ views:
       entity: sensor.zendure_solarflow_3000_mix_ac_measured_charge_efficiency
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 168
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_measured_discharge_efficiency
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 168
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_round_trip_efficiency_ac
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 168
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_round_trip_efficiency_dc
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 168
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
   - type: grid
     column_span: 2
     cards:
@@ -2262,13 +2246,9 @@ views:
       entity: sensor.zendure_solarflow_3000_mix_ac_usable_capacity
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 168
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
     - type: tile
       entity: sensor.zendure_solarflow_3000_mix_ac_full_cycles
       name:
@@ -2284,13 +2264,9 @@ views:
       entity: sensor.zendure_solarflow_3000_mix_ac_standby_draw
       name:
         type: entity
-      features_position: bottom
-      features:
-      - type: trend-graph
-        hours_to_show: 24
       grid_options:
         columns: 12
-        rows: 2
+        rows: 1
   - type: grid
     column_span: 2
     cards:

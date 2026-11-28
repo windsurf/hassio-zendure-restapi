@@ -55,8 +55,8 @@ def test_the_snapshot_keeps_soc_and_stop_memory_per_copy():
     vc = cluster()
     vc.clones = [copy(71.26), copy(99.96, "charge", MODE_SMART_MATCHING)]
     assert vc.snapshot() == {"copies": [
-        {"soc": 71.3, "stopped": None, "stopped_mode": None},
-        {"soc": 100.0, "stopped": "charge", "stopped_mode": MODE_SMART_MATCHING},
+        {"soc": 71.26, "stopped": None, "stopped_mode": None},
+        {"soc": 99.96, "stopped": "charge", "stopped_mode": MODE_SMART_MATCHING},
     ]}
 
 
@@ -125,3 +125,19 @@ def test_nothing_is_written_before_the_copies_run():
     vc._running = False
     vc.save_state()
     assert OPT_VIRTUAL_STATE not in vc.entry.options
+
+
+def test_a_copy_comes_back_at_the_point_it_showed():
+    """4.52 % showed 5 %; kept to one decimal (4.5) and rounded half to even it
+    came back as 4 %, under a floor of 5 % (seen on a restart). Since v1.8.8 two
+    decimals are kept and the report rounds half up."""
+    from custom_components.zendure_restapi.virtual.device import VirtualDevice
+
+    vc = cluster()
+    vc.clones = [copy(4.52)]
+    kept = vc.snapshot()["copies"][0]["soc"]
+    assert kept == 4.52
+    report = {"product": "solarFlow3000MixAC+", "properties": {"messageId": 1, "minSoc": 50, "socSet": 1000}}
+    for soc, shown in ((kept, 5), (4.5, 5), (4.49, 4), (5.5, 6)):
+        device = VirtualDevice(report, "SIMULATED1ABCDEF", soc, 7.973, clock=lambda: 1000.0)
+        assert device.report()["properties"]["electricLevel"] == shown

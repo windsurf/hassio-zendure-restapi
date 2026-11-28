@@ -44,6 +44,13 @@ Three ideas from the community zenSDK automation are kept deliberately:
   and only after a hold of two cycles following a direction change.
 * If the meter stops reporting, everything stops. A closed loop with no
   feedback is worse than no loop at all.
+
+The controller is one class in four files (v1.8.8): this one holds the mode
+loop, the modes, the readings, the writes and the status; ``trim.py`` the trim
+loop and what it learns from the meter; ``protection.py`` SOC protection and
+the device's bounds; ``lowdemand.py`` stopping, starting and raising at low
+demand. The three are mixins of ZendureController, so every method still runs
+on the same object and the same state.
 """
 
 from __future__ import annotations
@@ -51,7 +58,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import logging
-import statistics
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -63,9 +69,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .api import ZendureApiError
-from .cluster.contract import solar_wait
 from .const import (
-    DEFAULTS,
     DOMAIN,
     CLUSTER_KEY,
     PACK_PREFIX,
@@ -73,29 +77,10 @@ from .const import (
     AC_MODE_CHARGE,
     AC_MODE_DISCHARGE,
     CONTROL_DEADBAND,
-    DEVICE_SELF_CHARGE_W,
     RUN_FLOOR_W,
-    FOLLOWED_PEAK_S,
-    OPT_RAISE_AFTER,
-    RAISE_MARGIN_SHARE,
-    RAISE_MARGIN_W,
-    MODE_ADVICE_SHARE,
-    MODE_ADVICE_STEP,
     STALE_LIMIT_S,
-    NOISE_FACTOR,
-    NOISE_MIN_SAMPLES,
-    NOISE_WINDOW,
-    RISE_MIN_W,
-    SOC_REARM_POINTS,
-    SOC_PROTECT_HARD_POINTS,
-    SOC_PROTECT_START_POINTS,
-    SOC_PROTECT_PRICE,
-    SOC_PROTECT_WINDOW_H,
-    START_GAP_MIN_W,
-    START_GAP_SHARE,
     CONTROL_FACTOR_BALANCE,
     CONTROL_FACTOR_START,
-    CONTROL_MIN_STEP,
     CONTROL_REST_MIN_SECONDS,
     METER_FALLBACK_AGE,
     METER_MAX_AGE,
@@ -116,31 +101,45 @@ from .const import (
     OPT_MANUAL_POWER,
     OPT_MIN_CHARGE_POWER,
     OPT_MIN_DISCHARGE_POWER,
-    OPT_MODE_THRESHOLD,
-    OPT_TRIM_THRESHOLD,
     OPT_MAX_CHARGE_POWER,
     OPT_MAX_DISCHARGE_POWER,
     OPT_METER_SOURCE,
     OPT_OPERATION_MODE,
-    OPT_SOC_PROTECTION,
-    SOC_PROTECT_OFF,
-    soc_protection_choice,
     OPT_START_CHARGE_AT,
     OPT_START_DISCHARGE_AT,
     OPT_START_AFTER,
-    OPT_STOP_AFTER,
-    OPT_STOP_CHARGE_BELOW,
     OPT_STOP_DISCHARGE_BELOW,
-    OPT_CONCENTRATE_BELOW,
-    OPT_TRIM_FACTOR,
     SMART_MODES,
 )
 from .coordinator import RESTART_KEYS, ZendureCoordinator
 from .measure import BatteryMeasure, Sample
 from .p1meter import ExternalMeter
 from .registry import pack_model
-from .settings import ROLE_PROTECT, SettingsView, ZendureSettings
+from .settings import SettingsView, ZendureSettings
 from .trace import ZendureTrace
+# Names the controller module has always offered, kept for code and tests
+# that read them from here after the split (v1.8.8).
+from .const import (  # noqa: F401
+    OPT_CONCENTRATE_BELOW,
+    OPT_MODE_THRESHOLD,
+    OPT_SOC_PROTECTION,
+    OPT_STOP_AFTER,
+    OPT_STOP_CHARGE_BELOW,
+    OPT_TRIM_FACTOR,
+    OPT_TRIM_THRESHOLD,
+)
+# The controller in parts (v1.8.8): the trim loop, SOC protection and low
+# demand live in their own modules as mixins of ZendureController.
+from .control_util import _as_int, _clamp, _today  # noqa: F401 - _as_int for member.py
+from .lowdemand import LowDemandMixin
+from .protection import (  # noqa: F401 - the SOC reads for member.py
+    ProtectionMixin,
+    _below_floor,
+    _refused,
+    _soc_bounds,
+    _soc_percent,
+)
+from .trim import TrimMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,23 +157,6 @@ class ControllerState:
     last_run: Any = None
     blocked: bool = False
     attributes: dict[str, Any] = field(default_factory=dict)
-
-
-def _clamp(value: float, low: float, high: float) -> float:
-    return max(low, min(high, value))
-
-
-def _today(now: datetime) -> str:
-    """The local date of a moment, for the counters that start again every day."""
-    return dt_util.as_local(now).date().isoformat()
-
-
-def _as_int(value: Any) -> int | None:
-    """Best-effort integer, for recording rather than steering."""
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return None
 
 
 
@@ -230,7 +212,7 @@ GRID_OWNER_KEY = "_grid_owner"
 CLUSTER_OWNER = "battery cluster"
 
 
-class ZendureController:
+class ZendureController(TrimMixin, ProtectionMixin, LowDemandMixin):
     """Turns an operation mode into device writes."""
 
     # Held past the device's own SOC flags (v1.7.5), and SOC protection
@@ -743,202 +725,6 @@ class ZendureController:
         if mode != MODE_STANDBY:
             await self._rest_step(data)
 
-    # ── Trim loop ────────────────────────────────────────────────────────
-
-    async def async_sample(self) -> None:
-        """Handle one meter sample: record it, then trim on it.
-
-        Recording comes first and runs in every mode, including standby, where
-        this controller writes nothing and whatever else steers the device is
-        the only thing moving. The row therefore describes the situation the
-        trim step is about to act on, and the write it makes appears on the
-        next row — cause before effect, which is what a trace is read for.
-        """
-        self._watch_writers()
-        await self._record()
-        await self.async_trim()
-        try:
-            self._tracking(self._meter_reading()[0])
-        except Exception:  # noqa: BLE001 - measuring must never stop the loop
-            _LOGGER.exception("Measured diagnostics: meter sample failed")
-
-    async def async_trim(self) -> None:
-        """Execute one trim step, once per meter sample. Never raises."""
-        if self._trim_busy or self._busy:
-            # The mode loop is authoritative; a trim that interleaved with it
-            # would write against a half-applied decision.
-            return
-        self._trim_busy = True
-        try:
-            await self._trim()
-        except ZendureApiError as err:
-            _LOGGER.warning("Trim write failed: %s", err)
-        except Exception:  # noqa: BLE001 - a control loop must not kill the poll
-            _LOGGER.exception("Unexpected trim failure")
-        finally:
-            self._trim_busy = False
-
-    def _sample_noise(self) -> None:
-        """Note the step of the meter since its last sample (v1.8.4).
-
-        Every sample, running or not, so the threshold is ready when a direction
-        starts. A step between two meters is their offset, not noise: a change
-        of source empties the window.
-        """
-        grid, source = self._meter_reading()
-        if grid is None:
-            return
-        if self._noise is None or source != self._noise_source:
-            self._noise = deque(maxlen=NOISE_WINDOW)
-            self._noise_prev = None
-            self._noise_source = source
-        if self._noise_prev is not None:
-            self._noise.append(abs(grid - self._noise_prev))
-        self._noise_prev = grid
-
-    def meter_noise(self) -> float | None:
-        """Median step of the meter per sample, once enough samples are in."""
-        if self._noise is None or len(self._noise) < NOISE_MIN_SAMPLES:
-            return None
-        return float(statistics.median(self._noise))
-
-    def mode_threshold_advice(self) -> int | None:
-        """A Mode threshold for this meter (v1.8.7): the upper quartile of its step
-        per sample, rounded up to MODE_ADVICE_STEP, never under the default.
-
-        Advice only: the setting is the user's. A quiet meter gets the default.
-        """
-        if self._noise is None or len(self._noise) < NOISE_MIN_SAMPLES:
-            return None
-        steps = sorted(self._noise)
-        upper = steps[min(len(steps) - 1, int(MODE_ADVICE_SHARE * len(steps)))]
-        rounded = -(-int(round(upper)) // MODE_ADVICE_STEP) * MODE_ADVICE_STEP
-        return max(int(DEFAULTS[OPT_MODE_THRESHOLD]), rounded)
-
-    async def _trim(self) -> None:
-        """Adjust the running limit against the meter, within one direction."""
-        self._sample_noise()
-        self._write_source = "trim"
-        direction = self._trim_direction
-        if direction is None:
-            return
-
-        data = self.coordinator.data or {}
-        if not data:
-            return
-
-        grid = self._meter_power()
-        if grid is None:
-            # No trustworthy feedback. A closed loop with no feedback is worse
-            # than no loop, so the battery is stopped rather than steered on a
-            # guess. Releasing to zero is always safe: it is the direction the
-            # clamp already allows, and it cannot reverse anything.
-            await self._fail_safe(data, "no valid meter reading")
-            return
-
-        charging = direction == "charge"
-        full, empty = self._bounds(data)
-        if (charging and full) or (not charging and empty):
-            # The device has closed this direction. Adjusting a limit it
-            # ignores is the write traffic the bound check exists to stop;
-            # the mode loop clears the limit on its next cycle.
-            return
-        key = "inputLimit" if charging else "outputLimit"
-        try:
-            current = int(data.get(key) or 0)
-        except (TypeError, ValueError):
-            return
-        if current <= 0:
-            # Nothing is running any more; the mode loop decides what is next.
-            self._trim_direction = None
-            return
-
-        if self._source_used != self._trim_source:
-            # The first source seen is not a switch: resetting there would make
-            # the default `zendure` behave differently from v1.4.3 on the first
-            # trim after every start.
-            if self._trim_source != "none":
-                self._prev_grid = None
-            self._trim_source = self._source_used
-
-        self._track_follow(charging, current, grid)
-
-        # ── What has arrived since the last look ─────────────────────
-        # Movement in the direction the outstanding order predicted counts as
-        # that order landing. Movement the other way is the house, and must
-        # not be credited: over-crediting would let the loop order the same
-        # watts twice, which is the whole thing this avoids.
-        if self._prev_grid is not None and self._pending != 0.0:
-            moved = grid - self._prev_grid
-            if (self._pending < 0 < -moved) or (self._pending > 0 < moved):
-                if abs(moved) >= abs(self._pending):
-                    self._pending = 0.0
-                else:
-                    self._pending -= moved
-        self._prev_grid = grid
-
-        buffer = self.settings.get_int(
-            OPT_CHARGE_BUFFER if charging else OPT_DISCHARGE_BUFFER
-        )
-
-        # Every sample is a fresh measurement, but not a fresh error: the part
-        # already ordered and still on its way is subtracted before correcting.
-        effective = (grid - buffer) + self._pending
-        step = effective * self._trim_factor()
-
-        # A discharge limit removes watts from the grid, a charge limit adds
-        # them, so the same intent moves the two the opposite way.
-        target = int(_clamp(
-            current - step if charging else current + step,
-            0,
-            self._cap(data, charging),
-        ))
-
-        # The floor keeps the direction alive at at least this much, and blocks
-        # the hand-back at zero: letting the trim loop release a limit the
-        # setting demands would only have the mode loop restore it next poll.
-        floor = self.settings.get_int(
-            OPT_MIN_CHARGE_POWER if charging else OPT_MIN_DISCHARGE_POWER
-        )
-        if floor > 0 and target < floor:
-            target = int(min(floor, self._cap(data, charging)))
-        # The trim loop does not end a direction either (v1.7.5): ending is
-        # the mode loop's, after two cycles in a row with nothing to do, or the
-        # stop rule's. Seen after short peaks: a trim step on a lagging reading
-        # took the limit to 0 and the next demand needed a new start.
-        if current > 0 and target < min(RUN_FLOOR_W, current):
-            target = min(RUN_FLOOR_W, current)
-        # A higher demand waits Raise after before a running discharge goes up
-        # for it (v1.8.3); lower goes at once.
-        if not charging:
-            target = self._hold_raise(current, target, grid)
-
-        delta = target - current
-        # Adjustments only. This loop never opens a direction — it is entered
-        # solely while _trim_direction is set, which the mode loop clears the
-        # moment the running limit reaches zero. A threshold above the day's
-        # surplus therefore cannot leave the battery idle: starting is the mode
-        # loop's business, and there the threshold is skipped while starting.
-        if abs(delta) < self._trim_threshold():
-            return
-
-        await self._write(key, target, data)
-        # Record it as ordered, in grid watts: a larger discharge limit means
-        # the grid still has that much further to fall.
-        self._pending += delta if charging else -delta
-        self._fast_write_at = dt_util.utcnow()
-        self._trim_writes += 1
-
-        if target <= 0:
-            self._owns_limits = False
-            self._trim_direction = None
-
-        self.state.meter_power = grid
-        _LOGGER.debug(
-            "trim | %s %sW -> %sW | grid=%.0fW buffer=%sW pending=%.0fW",
-            direction, current, target, grid, buffer, self._pending,
-        )
-
     async def _fail_safe(self, data: dict[str, Any], reason: str) -> None:
         """Stop the battery. Used when the meter cannot be believed."""
         self._trim_direction = None
@@ -954,251 +740,6 @@ class ZendureController:
         self._last_direction = "none"
         self._set_state("blocked", reason, blocked=True)
         _LOGGER.warning("Battery stopped: %s", reason)
-
-    def _trim_factor(self) -> float:
-        """How much of each trim correction to apply, as a fraction.
-
-        This damps the trim loop only; the mode loop keeps its full correction.
-        The difference is dead time relative to loop period: one second of
-        meter delay is a whole period here and a tenth of one there.
-
-        Stored as whole percent so it travels the same integer path as every
-        other setting.
-        """
-        percent = self.settings.get_int(OPT_TRIM_FACTOR)
-        return _clamp(percent, 1, 100) / 100.0
-
-    # ── Safety ───────────────────────────────────────────────────────────
-
-    async def _handle_soc_protection(self, data: dict[str, Any], mode: str) -> bool:
-        """Charge from under the lower SOC bound to that bound + SOC_REARM_POINTS. Returns True when it acted."""
-        if getattr(self.settings, "coordinated", False):
-            self._stand_down()
-            if getattr(self.settings, "role", None) == ROLE_PROTECT:
-                return await self._protect_for_group(data)
-            # In a battery cluster the group decides (v1.7.0): a battery
-            # under its floor stops discharging there (see _bounds) instead of
-            # charging from the grid on its own while the others discharge —
-            # measured as 2400 W from one battery into the other for 55 s.
-            # With every battery under its floor the cluster charges them all
-            # (v1.7.6, role protect).
-            return False
-        if self._soc_protection() == SOC_PROTECT_OFF:
-            self._stand_down()
-            return False
-        if mode in (MODE_QUICK_DISCHARGE, MODE_MANUAL):
-            # Explicit user intent; protection would fight the operator.
-            self._stand_down()
-            return False
-        if mode == MODE_STANDBY:
-            # Standby means hands off, and a protection that still writes would
-            # make that a lie. The device guards its own floor regardless.
-            self._stand_down()
-            return False
-
-        soc = _soc_percent(data, "electricLevel", 1.0)
-        floor = _soc_percent(data, "minSoc", 0.1)  # minSoc is stored in tenths
-        if soc is None or floor is None:
-            self._stand_down()
-            return False
-        # Charge from under the floor to the floor + SOC_REARM_POINTS (v1.7.5):
-        # stopping at the floor itself left the battery on the edge, where it
-        # swings across it. The planner does the same with a quarter at full
-        # power. Once charging it carries on to the margin.
-        target = floor + SOC_REARM_POINTS
-        # A start needs the battery SOC_PROTECT_START_POINTS under its floor
-        # (v1.8.6): the point the device drops at rest after closing is no reason.
-        if soc >= target or (not self._protecting and soc > floor - SOC_PROTECT_START_POINTS):
-            self._stand_down()
-            return False
-
-        if not self._protecting:
-            # With Price Control (v1.7.6) the start may wait for the
-            # cheapest quarter; once charging it carries on to the margin.
-            self.protect_note = self._protect_waits(data, soc, floor)
-            if self.protect_note is not None:
-                return False
-
-        if await self._reverse_guard(data, "charge"):
-            return True
-
-        self._protecting = True
-        self.protect_note = None
-        limit = self._cap(data, charging=True)
-        await self._write_direction(data, AC_MODE_CHARGE, limit)
-        self._set_state(
-            "protecting",
-            f"SOC {soc:g}% under {target:g}% (floor {floor:g}% + {SOC_REARM_POINTS}), charging"
-            + (f"; {self._protect_why}" if self._protect_why else ""),
-            target=limit,
-            direction="charge",
-        )
-        return True
-
-    def _soc_protection(self) -> str:
-        """off, direct or price_control (v1.7.6); a stored switch value reads as before."""
-        return soc_protection_choice(self.settings.get(OPT_SOC_PROTECTION))
-
-    def _stand_down(self) -> None:
-        """SOC protection does not act: forget a run and a wait."""
-        self._protecting = False
-        self._protect_since = None
-        self._protect_why = None
-        self.protect_note = None
-
-    def _protect_waits(self, data: dict[str, Any], soc: float, floor: float) -> str | None:
-        """With Price Control: why the charge waits, or None to charge now (v1.7.6).
-
-        The battery waits for the cheapest period of the Price Control price
-        list within SOC_PROTECT_WINDOW_H of the moment it fell under its
-        floor. One period is enough: from just under the floor to 5 points
-        above it is a few minutes at full power. Meanwhile it charges from
-        surplus as usual and the device keeps it from discharging. Direct,
-        with the reason in the status, when there is no Price Control or no
-        price list, when the window is over, or when the battery sits
-        SOC_PROTECT_HARD_POINTS or more under its floor. Under the fixed tariff
-        (v1.8.2) every quarter costs the same, so it waits for the sun instead:
-        solar surplus by day, the grid at the end of the day or after the window.
-        """
-        self._protect_why = None
-        if self._soc_protection() != SOC_PROTECT_PRICE:
-            return None
-        now = dt_util.utcnow()
-        if self._protect_since is None:
-            self._protect_since = now
-        if soc <= floor - SOC_PROTECT_HARD_POINTS:
-            self._protect_why = f"direct: {SOC_PROTECT_HARD_POINTS} points or more under the floor"
-            return None
-        deadline = self._protect_since + timedelta(hours=SOC_PROTECT_WINDOW_H)
-        if now >= deadline:
-            self._protect_why = f"direct: waited {SOC_PROTECT_WINDOW_H} h"
-            return None
-        windows = self._solar_windows()
-        if windows is not None:
-            # Fixed tariff (v1.8.2): every quarter costs the same; wait for the sun.
-            wait = solar_wait(self._protect_since.timestamp(), now.timestamp(), windows,
-                              SOC_PROTECT_WINDOW_H * 3600)
-            if wait.charge_at is None:
-                self._protect_why = wait.why
-                return None
-            at = wait.charge_label or dt_util.as_local(dt_util.utc_from_timestamp(wait.charge_at)).strftime("%H:%M")
-            head = f"SOC {soc:g}% under the floor {floor:g}%"
-            if wait.daylight_at:
-                return f"{head}: waits for daylight at {wait.daylight_at}, from the grid at {at} at the latest"
-            return f"{head}: charges from solar, from the grid at {at} at the latest"
-        periods = [p for p in self._import_periods() if p[0] < deadline and p[1] > now]
-        if not periods:
-            self._protect_why = "direct: no prices from Price Control"
-            return None
-        # The cheapest, and of equal ones the first.
-        best = min(periods, key=lambda p: (round(p[2], 5), p[0]))
-        if best[0] <= now:
-            self._protect_why = f"cheapest price within {SOC_PROTECT_WINDOW_H} h: {best[2]:g} per kWh"
-            return None
-        current = next((p for p in periods if p[0] <= now < p[1]), None)
-        at = dt_util.as_local(best[0]).strftime("%H:%M")
-        text = f"SOC {soc:g}% under the floor {floor:g}%: charges at {at}, {best[2]:g} per kWh"
-        if current is not None:
-            text += f" (now {current[2]:g})"
-        return text
-
-    def _solar_windows(self) -> tuple | None:
-        """The day windows of this battery's Price Control under the fixed tariff (v1.8.2)."""
-        entry = getattr(self.coordinator, "config_entry", None)
-        if entry is None:
-            return None
-        from .pricecontrol import solar_windows_for
-
-        return solar_windows_for(self.coordinator.hass, entry.entry_id, False)
-
-    def _import_periods(self) -> list[tuple[datetime, datetime, float]]:
-        """(start, end, import price) ahead, from the Price Control entry of this battery."""
-        entry = getattr(self.coordinator, "config_entry", None)
-        if entry is None:
-            return []
-        for item in self.coordinator.hass.data.get(DOMAIN, {}).values():
-            if getattr(item, "battery_entry_id", None) == entry.entry_id and hasattr(item, "import_periods"):
-                try:
-                    return list(item.import_periods())
-                except Exception:  # noqa: BLE001 - a price list must not stop protection
-                    _LOGGER.debug("No import periods from price control", exc_info=True)
-                    return []
-        return []
-
-    async def _protect_for_group(self, data: dict[str, Any]) -> bool:
-        """The cluster has every battery under its floor and charges them (v1.7.6)."""
-        if await self._reverse_guard(data, "charge"):
-            return True
-        limit = self._cap(data, charging=True)
-        await self._write_direction(data, AC_MODE_CHARGE, limit)
-        soc = _soc_percent(data, "electricLevel", 1.0)
-        floor = _soc_percent(data, "minSoc", 0.1)
-        to = f" to {floor + SOC_REARM_POINTS:g}%" if floor is not None else ""
-        self._set_state(
-            "protecting",
-            f"cluster: every battery under its SOC floor, SOC {soc if soc is not None else '?'}%, charging{to}",
-            target=limit,
-            direction="charge",
-        )
-        return True
-
-    def _bounds(self, data: dict[str, Any]) -> tuple[bool, bool]:
-        """(full, empty) as this battery must respect them.
-
-        On its own: the device's socLimit, as before. In a battery cluster a
-        battery under its SOC floor counts as empty as well: its own SOC
-        protection stands down there, so the floor is held by not discharging.
-        """
-        full, empty = _soc_bounds(data)
-        # Kept past the device's own flag (v1.7.5): empty until minSoc +
-        # SOC_REARM_POINTS, full until socSet − SOC_REARM_POINTS. The device
-        # reopens a direction one point away from its bound, and the battery
-        # then swings across it every few seconds.
-        soc = _soc_percent(data, "electricLevel", 1.0)
-        floor = _soc_percent(data, "minSoc", 0.1)
-        ceiling = _soc_percent(data, "socSet", 0.1)
-        if empty:
-            self._empty_latch = True
-        elif self._empty_latch and soc is not None and floor is not None and soc >= floor + SOC_REARM_POINTS:
-            self._empty_latch = False
-        if full:
-            self._full_latch = True
-        elif self._full_latch and soc is not None and ceiling is not None and soc <= ceiling - SOC_REARM_POINTS:
-            self._full_latch = False
-        full = full or self._full_latch
-        empty = empty or self._empty_latch
-        if getattr(self.settings, "coordinated", False) and _below_floor(data):
-            empty = True
-        return full, empty
-
-    def _blocked(self, direction: str) -> str:
-        """Why a direction is closed, with where it opens again while held past the device."""
-        text = SOC_BLOCKED[direction]
-        data = self.coordinator.data or {}
-        if direction == "discharge" and self._empty_latch:
-            floor = _soc_percent(data, "minSoc", 0.1)
-            if floor is not None:
-                text += f", discharges again from {floor + SOC_REARM_POINTS:g} %"
-        if direction == "charge" and self._full_latch:
-            ceiling = _soc_percent(data, "socSet", 0.1)
-            if ceiling is not None:
-                text += f", charges again below {ceiling - SOC_REARM_POINTS:g} %"
-        return text
-
-    def _rest_limits(self, data: dict[str, Any], direction: str = "none") -> list[tuple[str, int]]:
-        """Both limits to 0, except a small charge limit the device set itself
-        at its lower bound (its own SOC protection): writing 0 against it every
-        cycle only fights the device (v1.7.5). A limit of that size that this
-        integration wrote itself is not the device's and goes to 0 (v1.8.7):
-        a battery whose small charge was ended by its group would otherwise
-        keep charging at its lower bound."""
-        items = [("inputLimit", 0), ("outputLimit", 0)]
-        if direction != "charge" and _soc_bounds(data)[1]:
-            held = _as_int(data.get("inputLimit")) or 0
-            ours = any(w[0] == held for w in self._last_written.get("inputLimit", ()))
-            if 0 < held <= DEVICE_SELF_CHARGE_W and not ours:
-                items = [("outputLimit", 0)]
-        return items
 
     # ── Modes ────────────────────────────────────────────────────────────
 
@@ -1967,311 +1508,6 @@ class ZendureController:
             target=target,
             direction=direction,
         )
-
-    # ── Stop below (v1.7.4) ──────────────────────────────────────────────
-
-    def _stop_limit(self, charging: bool) -> int:
-        """The demand under which a running direction stops, 0 when off.
-
-        In a battery cluster only the primary runs this loop, and its own demand
-        is the cluster's only while it works alone: below Concentrate below. So
-        the limit is capped there, and with Concentrate below at 0 it is off.
-        """
-        limit = max(0, self.settings.get_int(
-            OPT_STOP_CHARGE_BELOW if charging else OPT_STOP_DISCHARGE_BELOW
-        ))
-        group = getattr(self.settings, "group", None)
-        if limit > 0 and getattr(self.settings, "coordinated", False) and group is not None:
-            limit = min(limit, max(0, group.get_int(OPT_CONCENTRATE_BELOW)))
-        return limit
-
-    def _stop_after(self) -> int:
-        """Seconds the demand must stay under the limit before a direction stops."""
-        return max(0, self.settings.get_int(OPT_STOP_AFTER))
-
-    async def _stop_below(self, data: dict[str, Any], direction: str, raw: float) -> bool:
-        """Stop a running direction whose demand stays under its limit; True when stopped.
-
-        The demand is the target before clamp and floor: with the battery
-        running the grid sits near zero and says nothing, the target is what the
-        battery needs to keep it there. Stopping writes both limits to 0 in one
-        request, the state in which the device rests (5 W measured, against
-        ~37 W of conversion loss at 145 W). The trim loop is not touched before:
-        it follows the low demand until the time is up.
-        """
-        limit = self._stop_limit(direction == "charge")
-        if limit <= 0 or raw >= limit:
-            self._below_since = None
-            self._below_dir = None
-            return False
-        now = dt_util.utcnow()
-        if self._below_since is None or self._below_dir != direction:
-            self._below_since = now
-            self._below_dir = direction
-        waited = (now - self._below_since).total_seconds()
-        after = self._stop_after()
-        if waited < after:
-            return False
-        await self._write_many([("inputLimit", 0), ("outputLimit", 0)], data)
-        self._owns_limits = False
-        self._last_direction = "none"
-        self._trim_direction = None
-        self._pending = 0.0
-        self._below_since = None
-        self._below_dir = None
-        self._stopped = direction
-        self._stopped_mode = str(self.settings.get(OPT_OPERATION_MODE))
-        self._start_since = None
-        self._start_dir = None
-        self._set_state(
-            "tracking",
-            f"stopped {direction}: demand {max(0.0, raw):.0f} W under {limit} W for {waited:.0f} s",
-        )
-        return True
-
-    def _start_after(self) -> int:
-        """Seconds the demand must stay past the start threshold before a direction starts."""
-        return max(0, self.settings.get_int(OPT_START_AFTER))
-
-    async def _hold_start(
-        self,
-        grid: float,
-        mode: str,
-        start_discharge: int,
-        start_charge: int,
-        allow_discharge: bool,
-        allow_charge: bool,
-    ) -> bool:
-        """Hold back a start until the demand has stayed past its threshold; True while it holds.
-
-        Only called while no direction runs (since v1.7.4 also not for one
-        that runs under the deadband: that one is balanced, see _apply_smart).
-        The threshold of a direction is
-        the larger of its start threshold and its stop limit plus a gap
-        (v1.7.6, _start_threshold), always (v1.7.4):
-        a start below the stop limit would only stop again after Stop after.
-        Until then this applied only after a stop of its own, which the
-        controller keeps in memory alone, so after a restart of Home Assistant,
-        a reload or a mode change the first start came at the start threshold
-        and stopped again a minute later. A changed mode or a stop limit set
-        back to 0 ends a stop of its own; a start ends it too (_smart_step).
-        With the stop limits at 0 and Start after at 0 this holds nothing, and
-        the start is exactly as in v1.7.3.
-        """
-        stopped = self._stopped
-        if stopped is not None:
-            if self._stop_limit(stopped == "charge") <= 0 or self._stopped_mode != mode:
-                stopped = self._stopped = None
-        discharge_at = self._start_threshold(False, start_discharge)
-        charge_at = self._start_threshold(True, -start_charge)
-        if grid > discharge_at and allow_discharge:
-            wanted, demand, threshold = "discharge", grid, discharge_at
-        elif -grid > charge_at and allow_charge:
-            wanted, demand, threshold = "charge", -grid, charge_at
-        else:
-            # The demand fell back before Start after was up: a skipped peak.
-            self._skipped_peak()
-            self._start_since = None
-            self._start_dir = None
-            if stopped is None:
-                # Past the start threshold but not past the stop limit: a start
-                # here would stop again after Stop after.
-                if grid > start_discharge and allow_discharge:
-                    waiting, demand, limit = "discharge", grid, discharge_at
-                elif grid < start_charge and allow_charge:
-                    waiting, demand, limit = "charge", -grid, charge_at
-                else:
-                    return False
-                self._set_state(
-                    "tracking",
-                    f"{waiting} waits: demand {demand:.0f} W under the start threshold {limit} W",
-                )
-                return True
-            limit = discharge_at if stopped == "discharge" else charge_at
-            demand = grid if stopped == "discharge" else -grid
-            self._set_state(
-                "tracking",
-                f"stopped {stopped}: demand {max(0.0, demand):.0f} W, "
-                f"starts again above {limit} W for {self._start_after()} s",
-            )
-            return True
-        after = self._start_after()
-        if after <= 0:
-            return False
-        now = dt_util.utcnow()
-        if self._start_since is None or self._start_dir != wanted:
-            # The other direction was waiting: that one never came.
-            self._skipped_peak()
-            self._start_since = now
-            self._start_dir = wanted
-            self._start_wh = 0.0
-            self._start_last = now
-        # What the grid gave meanwhile, for the skipped peak should it end so.
-        self._start_wh += demand * max(0.0, (now - self._start_last).total_seconds()) / 3600.0
-        self._start_last = now
-        waited = (now - self._start_since).total_seconds()
-        if waited >= after:
-            return False
-        self._set_state(
-            "tracking",
-            f"{wanted} waits: demand {demand:.0f} W above {threshold} W for {waited:.0f} of {after} s",
-        )
-        return True
-
-    def _raise_after(self) -> int:
-        """Seconds a higher demand lasts before a running discharge goes up for it (v1.8.3)."""
-        return max(0, self.settings.get_int(OPT_RAISE_AFTER))
-
-    @staticmethod
-    def _raise_margin(limit: int) -> int:
-        """How far above a running limit a demand counts as a rise (v1.8.3)."""
-        return max(RAISE_MARGIN_W, int(limit * RAISE_MARGIN_SHARE))
-
-    def _hold_raise(self, current: int, target: int, grid: float) -> int:
-        """The limit a running discharge may go to now: held while a rise waits (v1.8.3).
-
-        Start after keeps a short peak from starting a battery that stands still;
-        a battery that already discharges followed every rise at once until
-        v1.8.2: 4-5 s late on a peak of about 10 s, then exported for as long
-        again while it came back down. Now a demand more than the margin above
-        the running limit waits Raise after; lower and within the margin go at
-        once, so the base load stays covered. A rise that falls back before
-        the wait is over is a skipped peak, while running. Once the wait is
-        over the battery follows that rise freely until the demand is back
-        within the margin. Raise after 0 is the behaviour of v1.8.2.
-        """
-        after = self._raise_after()
-        if after <= 0 or current <= 0:
-            self._reset_raise()
-            return target
-        now = dt_util.utcnow()
-        ref = self._raise_ref if self._raise_since is not None else current
-        if target <= ref + self._raise_margin(ref):
-            if self._raise_since is not None and not self._raise_done and self._raise_peak - ref >= RISE_MIN_W:
-                # The demand fell back in time: a peak the battery did not follow.
-                # Counted from RISE_MIN_W only: a held rise of 120 W on a low
-                # base load is not a peak, and a night gave 52 of those.
-                self.measure.on_skipped_peak(
-                    _today(now), "discharge", (now - self._raise_since).total_seconds(),
-                    self._raise_wh, running=True,
-                )
-            self._reset_raise()
-            return target
-        if self._raise_done:
-            return target
-        if self._raise_since is None:
-            self._raise_since = now
-            self._raise_ref = current
-            self._raise_wh = 0.0
-            self._raise_last = now
-            self._raise_peak = current
-        self._raise_peak = max(self._raise_peak, target)
-        # The grid's share of the rise, for the skipped peak should it end so.
-        excess = max(0.0, grid - self.settings.get_int(OPT_DISCHARGE_BUFFER))
-        self._raise_wh += excess * max(0.0, (now - self._raise_last).total_seconds()) / 3600.0
-        self._raise_last = now
-        if (now - self._raise_since).total_seconds() >= after:
-            self._raise_done = True
-            return target
-        return min(target, max(current, self._raise_ref))
-
-    def _reset_raise(self) -> None:
-        self._raise_since = None
-        self._raise_ref = 0
-        self._raise_wh = 0.0
-        self._raise_last = None
-        self._raise_done = False
-        self._raise_peak = 0
-
-    def _track_follow(self, charging: bool, current: int, grid: float) -> None:
-        """Count a raise of the running direction that is back within a minute (v1.8.3).
-
-        Measured on every meter sample while a discharge runs: the limit before
-        it went up is the base; going at least RISE_MIN_W (and the margin) above
-        it starts a follow, coming back within the margin of the base ends it. Within
-        FOLLOWED_PEAK_S that was a short peak followed: the grid gave the start
-        of it, and took the battery's late way back down. Longer is a load the
-        battery covered, and is not counted.
-        """
-        now = dt_util.utcnow()
-        seconds = max(0.0, (now - self._follow_last).total_seconds()) if self._follow_last else 0.0
-        self._follow_last = now
-        if charging:
-            # Charging follows the sun, not the house: a rise there is a cloud
-            # passing, and a noisy meter made 45 "peaks" of it in 22 minutes.
-            self._follow_since = None
-            self._follow_base = None
-            return
-        if self._follow_since is None:
-            if self._follow_base is not None and current > self._follow_base + max(RISE_MIN_W, self._raise_margin(self._follow_base)):
-                # Up since the previous sample: this sample's grid is already part of it.
-                self._follow_since = now - timedelta(seconds=seconds)
-                self._follow_import = 0.0
-                self._follow_export = 0.0
-            else:
-                self._follow_base = current
-                return
-        # Import is the part of the peak not covered, export the part overdone
-        # while the battery came back down.
-        self._follow_import += max(0.0, grid) * seconds / 3600.0
-        self._follow_export += max(0.0, -grid) * seconds / 3600.0
-        lasted = (now - self._follow_since).total_seconds()
-        base = self._follow_base or 0
-        if current <= base + self._raise_margin(base):
-            if lasted <= FOLLOWED_PEAK_S:
-                self.measure.on_followed_peak(_today(now), lasted, self._follow_import, self._follow_export)
-            self._follow_since = None
-            self._follow_base = current
-        elif lasted > FOLLOWED_PEAK_S:
-            # A load the battery covers, not a peak: start again from here.
-            self._follow_since = None
-            self._follow_base = None
-
-    def _start_threshold(self, charging: bool, start: int) -> int:
-        """Where a direction starts: its start threshold, or past its stop limit (v1.7.6).
-
-        With a stop limit set the start lies START_GAP_SHARE above it, at least
-        START_GAP_MIN_W: 50 W stops, 70 W starts; 80 W stops, 100 W starts.
-        Until v1.7.5 the start lay at the stop limit itself, and a load that
-        hovered there, 55 W on a 50 W limit, started the battery and stopped it
-        again after Stop after, and again. With the stop limit at 0 nothing
-        changes.
-        """
-        stop = self._stop_limit(charging)
-        if stop <= 0:
-            return start
-        return max(start, stop + max(START_GAP_MIN_W, round(stop * START_GAP_SHARE)))
-
-    def _skipped_peak(self) -> None:
-        """File a start that Start after held back and that never came (v1.7.4)."""
-        since, direction = self._start_since, self._start_dir
-        if since is None or direction is None:
-            return
-        now = dt_util.utcnow()
-        self.measure.on_skipped_peak(
-            _today(now), direction, (now - since).total_seconds(), self._start_wh
-        )
-
-    def _mode_threshold(self) -> int:
-        """Smallest adjustment the mode loop bothers to write."""
-        return max(CONTROL_MIN_STEP, self.settings.get_int(OPT_MODE_THRESHOLD))
-
-    def _trim_threshold(self) -> int:
-        """Smallest adjustment the trim loop bothers to write.
-
-        Higher than the mode loop's by design, and measurably so: the trim loop
-        runs once a second and therefore sees every excursion the house makes,
-        including the ones that would have passed on their own. Correcting
-        those does not settle the grid, it moves the battery to where the house
-        no longer is.
-        """
-        floor = max(CONTROL_MIN_STEP, self.settings.get_int(OPT_TRIM_THRESHOLD))
-        # On a noisy meter the threshold follows the noise (v1.8.4): a step the
-        # meter makes by itself every second is no error to correct.
-        noise = self.meter_noise()
-        if noise is None:
-            return floor
-        return max(floor, int(round(NOISE_FACTOR * noise)))
 
     def _cap(self, data: dict[str, Any], charging: bool) -> int:
         """Effective power ceiling: the lower of the setting and the device.
@@ -3136,52 +2372,3 @@ class ZendureController:
             self._idle_flag,
             self._commanded,
         )
-
-
-# ── SOC bounds ───────────────────────────────────────────────────────────
-
-SOC_LIMIT_UPPER = 1
-SOC_LIMIT_LOWER = 2
-
-SOC_BLOCKED = {
-    "charge": "charging blocked: battery full (upper limit)",
-    "discharge": "discharging blocked: battery empty (lower limit)",
-}
-
-
-def _soc_bounds(data: dict[str, Any]) -> tuple[bool, bool]:
-    """(full, empty) from the device's socLimit. Missing or unreadable is
-    neither: a bound is only respected when the device reports one."""
-    try:
-        flag = int(data.get("socLimit"))
-    except (TypeError, ValueError):
-        return False, False
-    return flag == SOC_LIMIT_UPPER, flag == SOC_LIMIT_LOWER
-
-
-def _soc_percent(data: dict[str, Any], key: str, scale: float) -> float | None:
-    """A state of charge in percent: electricLevel as is, minSoc and socSet in tenths."""
-    try:
-        return float(data.get(key)) * scale
-    except (TypeError, ValueError):
-        return None
-
-
-def _below_floor(data: dict[str, Any]) -> bool:
-    """Whether the state of charge is under the battery's lower SOC limit (minSoc, tenths)."""
-    try:
-        return float(data.get("electricLevel")) < float(data.get("minSoc")) / 10.0
-    except (TypeError, ValueError):
-        return False
-
-
-def _refused(data: dict[str, Any], charging: bool) -> str:
-    """Suffix for quick and manual: those modes keep their order at a bound,
-    because the order is the operator's, but the status says it lands nowhere."""
-    full, empty = _soc_bounds(data)
-    if charging and full:
-        return ", refused by device: battery full (upper limit)"
-    if not charging and empty:
-        return ", refused by device: battery empty (lower limit)"
-    return ""
-

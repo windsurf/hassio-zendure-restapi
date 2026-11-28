@@ -31,6 +31,7 @@ the time that has passed.
 from __future__ import annotations
 
 import copy
+import math
 import time
 from typing import Any, Callable
 
@@ -263,7 +264,9 @@ class VirtualDevice:
 
     def _refresh(self) -> None:
         p = self.props
-        p["electricLevel"] = int(round(self.soc))
+        # Half up (v1.8.8): Python's round() takes 4.5 to 4, which put a copy
+        # restored at 4.5 % one point under a floor of 5 %.
+        p["electricLevel"] = int(math.floor(self.soc + 0.5))
         if self.soc >= _int(p.get("socSet"), 1000) / 10:
             p["socLimit"] = SOC_LIMIT_UPPER
         elif self.soc <= _int(p.get("minSoc"), 50) / 10:

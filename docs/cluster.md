@@ -66,6 +66,8 @@ Later, under the cluster in *Devices & services*:
 | **Delete** (on a battery) | the battery leaves the group and stays in standby until you choose a mode |
 | **Configure** (on the cluster) | which external meter the group uses |
 
+The cluster status names the primary and its direction in its reason, for instance *Battery A is primary, discharge*. Since v1.8.8 it adds *winding down* when nothing is asked in that direction any more: after a switch from a quick to a smart mode the primary still holds the quick limit for a moment, until its own loop takes it down.
+
 **Priority** (1–9, default 5) decides which battery is primary. Among equals, since v1.8.5, the one with the most energy for the direction that starts: discharging the fullest, charging the emptiest (see *SoC balance* below); with *SoC balance* at 0, as before, the fastest measured battery (*Response time* in the Measured tab), then the one with the most room. **Max share** caps what a battery takes on in the group, in both directions; 0 is its own maximum.
 
 Removing the cluster returns every battery to its own settings, in standby.

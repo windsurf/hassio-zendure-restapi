@@ -536,6 +536,11 @@ class Distributor:
             roles[r.key] = Role(ROLE_SECONDARY, NONE, 0)
 
         why = self._why(primary, direction)
+        if demand <= 0:
+            # Nothing is asked in this direction any more: the primary still
+            # holds a limit, often the one of the mode before (quick to smart),
+            # and its own loop is taking it down (v1.8.8).
+            why = f"{why}, winding down"
         if held:
             why = (f"{why}; secondaries wait: demand {round(demand)} W above {threshold} W "
                    f"for {round(now - self.above_since)} of {s.start_after} s")

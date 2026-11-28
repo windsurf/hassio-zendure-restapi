@@ -541,11 +541,12 @@ class VirtualCluster:
 
     # ── The copies' state across a restart (v1.8.2) ─────────────────────────
     def snapshot(self) -> dict[str, Any]:
-        """What is kept: per copy the SoC (one decimal) and its stop memory."""
+        """What is kept: per copy the SoC (two decimals since v1.8.8, one before)
+        and its stop memory."""
         return {
             "copies": [
                 {
-                    "soc": round(float(c.device.soc), 1),
+                    "soc": round(float(c.device.soc), 2),
                     "stopped": c.controller._stopped,
                     "stopped_mode": c.controller._stopped_mode,
                 }
@@ -605,7 +606,9 @@ class VirtualCluster:
             return
         snapshot = self.snapshot()
         old = self.entry.options.get(OPT_VIRTUAL_STATE)
-        if isinstance(old, dict) and old.get("copies") == snapshot["copies"]:
+        # Written when a copy changed by a tenth of a point or its stop memory
+        # changed, as before v1.8.8; the SoC itself is kept to two decimals.
+        if isinstance(old, dict) and _tenths(old.get("copies")) == _tenths(snapshot["copies"]):
             return
         self.hass.config_entries.async_update_entry(
             self.entry, options={**self.entry.options, OPT_VIRTUAL_STATE: snapshot})
@@ -674,3 +677,19 @@ class VirtualCluster:
                 for c in self.clones
             ],
         }
+
+
+def _tenths(copies: Any) -> list[tuple[Any, ...]] | None:
+    """The copies as compared for a write: the SoC to a tenth, the stop memory."""
+    if not isinstance(copies, list):
+        return None
+    out = []
+    for c in copies:
+        if not isinstance(c, dict):
+            return None
+        try:
+            soc = round(float(c.get("soc")), 1)
+        except (TypeError, ValueError):
+            soc = None
+        out.append((soc, c.get("stopped"), c.get("stopped_mode")))
+    return out
